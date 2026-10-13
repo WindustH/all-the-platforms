@@ -2,6 +2,7 @@
 //! through the same fingerprinted client as every other request.
 
 use serde_json::Value;
+use wreq::header::OrigHeaderMap;
 use wreq::ws::message::Message;
 
 use crate::error::{Error, Result};
@@ -20,6 +21,9 @@ pub struct Socket {
 impl Http {
   /// Open a websocket. The session cookies go along when `cookies` is set
   /// (gateways that authenticate by cookie); `headers` are added as given.
+  ///
+  /// Header names keep a browser's spelling and order: gateways behind
+  /// Cloudflare (Discord's) refuse handshakes with lowercase names.
   pub async fn websocket(
     &self,
     url: &str,
@@ -27,9 +31,31 @@ impl Http {
     cookies: bool,
   ) -> Result<Socket> {
     let mut rb = self.client().websocket(url);
+    let mut names = OrigHeaderMap::new();
+    for name in [
+      "Host",
+      "Connection",
+      "Pragma",
+      "Cache-Control",
+      "User-Agent",
+      "Upgrade",
+      "Origin",
+    ] {
+      names.insert(name);
+    }
     for (k, v) in headers {
       rb = rb.header(*k, *v);
+      names.insert(k.to_string());
     }
+    for name in [
+      "Sec-WebSocket-Version",
+      "Accept-Language",
+      "Sec-WebSocket-Key",
+      "Cookie",
+    ] {
+      names.insert(name);
+    }
+    rb = rb.orig_headers(names);
     if cookies {
       let cookie = self.cookie_header();
       if !cookie.is_empty() {

@@ -30,6 +30,7 @@ social-mp = { path = "crates/social-mp" }
 social-telegram = { path = "crates/social-telegram" }
 social-weibo = { path = "crates/social-weibo" }
 social-douyin = { path = "crates/social-douyin" }
+social-discord = { path = "crates/social-discord" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -64,6 +65,7 @@ social-mp.workspace = true
 social-telegram.workspace = true
 social-weibo.workspace = true
 social-douyin.workspace = true
+social-discord.workspace = true
 
 [profile.release]
 lto = "thin"
