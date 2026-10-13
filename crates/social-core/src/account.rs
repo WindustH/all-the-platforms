@@ -66,66 +66,18 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
       && args.browser.is_none()
       && args.token.is_none()
       && info.supports(Cap::QrLogin));
-
   let source = if let Some(raw) = args.token {
-    if !info.supports(Cap::TokenLogin) {
-      return Err(Error::unsupported("login --token").with_hint(ctx.login_hint()));
-    }
-    let token = if raw == "-" {
-      std::io::read_to_string(std::io::stdin())?
-    } else {
-      raw
-    };
-    if token.trim().is_empty() {
-      return Err(Error::input("the token is empty"));
-    }
-    p.login_token(token.trim()).await?;
-    "token".to_owned()
+    token_login(p, raw).await?
   } else if let Some(raw) = args.cookie {
-    let cookies = browser::parse_cookie_string(&raw);
-    if cookies.is_empty() {
-      return Err(Error::input(
-        "the cookie string is empty; expected `name=value; name2=value2`",
-      ));
-    }
-    ctx.http.replace_cookies(cookies);
-    "cookie".to_owned()
+    cookie_login(ctx, &raw)?
   } else if use_qr {
     qr_login(p).await?;
     "qrcode".to_owned()
   } else if args.browser.is_none() && !cfg!(feature = "browser") {
     return Err(Error::input("choose how to log in").with_hint(ctx.login_hint()));
   } else {
-    let wanted = args.browser.filter(|b| b != "auto");
-    let found = browser::import(wanted.as_deref(), info.cookie_domains)?;
-    let checked: Vec<&str> = found.iter().map(|(b, _)| b.as_str()).collect();
-    let pick = found.iter().find(|(_, jar)| {
-      info
-        .required_cookies
-        .iter()
-        .all(|c| jar.get(*c).is_some_and(|v| !v.is_empty()))
-    });
-    let Some((name, jar)) = pick else {
-      let seen = if checked.is_empty() {
-        "none had cookies".to_owned()
-      } else {
-        format!("found cookies in {}", checked.join(", "))
-      };
-      return Err(
-        Error::auth(format!(
-          "no logged-in {} session in local browsers ({seen})",
-          info.name
-        ))
-        .with_hint(format!(
-          "log in at {} in a browser first, or use `social {} login --cookie '...'`",
-          info.home, info.id
-        )),
-      );
-    };
-    ctx.http.replace_cookies(jar.clone());
-    format!("browser:{name}")
+    browser_login(ctx, args.browser)?
   };
-
   p.prepare_login().await?;
   if source != "token"
     && let Some(c) = missing_cookie(&info, ctx)
@@ -134,16 +86,7 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
       "login incomplete: cookie `{c}` is missing"
     )));
   }
-  let user = p.whoami().await.map_err(|e| {
-    if e.code != ErrorCode::NotAuthenticated {
-      return e;
-    }
-    match source.as_str() {
-      "token" => e.with_hint("the platform did not accept this token"),
-      "qrcode" => e,
-      _ => e.with_hint("the platform did not accept these cookies"),
-    }
-  })?;
+  let user = p.whoami().await.map_err(|e| refused(e, &source))?;
   let saved_at = Timestamp::now();
   let mut session = ctx.session();
   session.source = Some(source.clone());
@@ -156,6 +99,80 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
     saved_at: Some(saved_at),
     message: None,
   }))
+}
+
+/// `--token` (`-` reads it from stdin), handed to the platform.
+async fn token_login<P: Platform>(p: &P, raw: String) -> Result<String> {
+  if !P::INFO.supports(Cap::TokenLogin) {
+    return Err(Error::unsupported("login --token").with_hint(p.ctx().login_hint()));
+  }
+  let token = if raw == "-" {
+    std::io::read_to_string(std::io::stdin())?
+  } else {
+    raw
+  };
+  if token.trim().is_empty() {
+    return Err(Error::input("the token is empty"));
+  }
+  p.login_token(token.trim()).await?;
+  Ok("token".to_owned())
+}
+
+/// `--cookie 'name=value; ...'`.
+fn cookie_login(ctx: &Ctx, raw: &str) -> Result<String> {
+  let cookies = browser::parse_cookie_string(raw);
+  if cookies.is_empty() {
+    return Err(Error::input(
+      "the cookie string is empty; expected `name=value; name2=value2`",
+    ));
+  }
+  ctx.http.replace_cookies(cookies);
+  Ok("cookie".to_owned())
+}
+
+/// `--browser [NAME]`: the first local browser holding a complete session.
+fn browser_login(ctx: &Ctx, wanted: Option<String>) -> Result<String> {
+  let info = ctx.info;
+  let wanted = wanted.filter(|b| b != "auto");
+  let found = browser::import(wanted.as_deref(), info.cookie_domains)?;
+  let pick = found.iter().find(|(_, jar)| {
+    info
+      .required_cookies
+      .iter()
+      .all(|c| jar.get(*c).is_some_and(|v| !v.is_empty()))
+  });
+  let Some((name, jar)) = pick else {
+    let checked: Vec<&str> = found.iter().map(|(b, _)| b.as_str()).collect();
+    let seen = if checked.is_empty() {
+      "none had cookies".to_owned()
+    } else {
+      format!("found cookies in {}", checked.join(", "))
+    };
+    return Err(
+      Error::auth(format!(
+        "no logged-in {} session in local browsers ({seen})",
+        info.name
+      ))
+      .with_hint(format!(
+        "log in at {} in a browser first, or use `social {} login --cookie '...'`",
+        info.home, info.id
+      )),
+    );
+  };
+  ctx.http.replace_cookies(jar.clone());
+  Ok(format!("browser:{name}"))
+}
+
+/// Say what was refused when the new session does not work.
+fn refused(e: Error, source: &str) -> Error {
+  if e.code != ErrorCode::NotAuthenticated {
+    return e;
+  }
+  match source {
+    "token" => e.with_hint("the platform did not accept this token"),
+    "qrcode" => e,
+    _ => e.with_hint("the platform did not accept these cookies"),
+  }
 }
 
 async fn qr_login<P: Platform>(p: &P) -> Result<()> {

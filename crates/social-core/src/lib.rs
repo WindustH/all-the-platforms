@@ -9,7 +9,9 @@
 mod account;
 pub mod app;
 pub mod browser;
+pub mod chat;
 pub mod cli;
+pub mod credentials;
 pub mod ctx;
 pub mod download;
 pub mod error;
@@ -17,6 +19,7 @@ pub mod file;
 pub mod guide;
 pub mod http;
 pub mod json;
+pub mod live;
 pub mod model;
 pub mod output;
 pub mod paging;
@@ -25,6 +28,7 @@ pub mod qr;
 pub mod socket;
 pub mod store;
 pub mod text;
+pub mod token;
 
 pub use app::App;
 pub use ctx::Ctx;

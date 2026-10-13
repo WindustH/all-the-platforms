@@ -11,6 +11,8 @@ crates/social-<platform>    one crate per platform (social-zhihu, social-telegra
 crates/social-meta          Graph API pieces shared by social-facebook and social-instagram
 ```
 
+Naming, layout and size rules are in [conventions.md](conventions.md).
+
 Dependencies only point downwards: the binary depends on every crate,
 platform crates depend on `social-core` only, and `social-core` knows no
 platform. Adding a platform means adding a crate and one `.platform::<P>()`
@@ -20,22 +22,28 @@ line in `src/main.rs`.
 
 | Module | Role |
 | --- | --- |
-| `platform` | `Platform` trait, `PlatformInfo` (static description), `Cap`, `Choices`, request types (`PageReq`, `Query`, `Draft`, `QrTicket`) |
+| `platform` | `Platform` trait; `cap` (capabilities), `info` (`PlatformInfo`, `Choices`, login ways), `request` (`PageReq`, `Query`, `Draft`, `Reply`, `Message`, `QrTicket`) |
 | `ctx` | `Ctx`: what a platform works with (HTTP client with the session cookies, files, session extras, login hints, `#N` resolution) |
-| `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `Page<T>`, `Action`, `AuthStatus`, `Transcript`, and `Data` (everything a command can print) |
-| `cli` | shared subcommands (`CommonCommand`), per-platform clap command, dispatch to trait methods |
+| `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `Page<T>`, `Action`, `AuthStatus`, `Insights`, `Transcript`, and `Data` (everything a command can print), one file per type |
+| `cli` | the shared commands, one module per area (`account`, `read`, `library`, `write`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options |
 | `app` | top-level program, `social platforms`, multi-call (`bili` symlink) |
-| `account` | `login` (QR / browser / cookie string), `logout`, `status` |
-| `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, retries, streaming download |
+| `account` | `login` (QR / token / browser / cookie string), `logout`, `status` |
+| `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, proxy; `request` (building, sending, retries, streaming), `response` |
 | `store` | session file (0600), TTL cache, `#N` short-index lists |
 | `paging` | `collect`: follow cursors until `--limit` items; `collect_window`: `--since` / `--until` |
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg) |
-| `file` | format detection by magic bytes, images to upload |
+| `file` | format detection by magic bytes, MIME types, files and images to upload |
 | `guide` | `social guide`: topics from `crates/social-core/guide/*.md`, platform topics generated from the command set plus each crate's `GUIDE.md` |
 | `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
 | `text` | counts (`1.2万`), durations, truncation, HTML to text, timestamps |
 | `browser` | import cookies from local browsers (`browser` feature, on by default) |
+| `credentials` | environment variables, `login --token` fields, credentials saved in the session |
+| `token` | `AccessToken`: expiring access tokens cached in memory and in the private cache |
+| `chat` | `CHAT/MESSAGE` ids of messages without permalinks |
+| `live` | `listen` helpers: polling with de-duplication, reconnect back-off |
+| `socket` | websocket connections through the same client |
+| `qr` | login QR codes in the terminal, from a URL or a QR image |
 
 ### The Platform contract
 

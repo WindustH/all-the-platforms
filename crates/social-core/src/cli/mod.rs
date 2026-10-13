@@ -5,16 +5,31 @@
 //! categories ...) are injected into the shared options from
 //! [`Choices`](crate::platform::Choices).
 
+mod account;
 mod args;
-mod dispatch;
+mod chat;
+mod command;
+mod input;
+mod library;
+mod media;
+mod read;
+mod write;
 
 use std::process::ExitCode;
 
 use clap::{ArgMatches, FromArgMatches, Subcommand, builder::PossibleValuesParser};
 
-pub use self::args::*;
-pub use self::dispatch::{check_files, check_images, read_text};
-use crate::account;
+pub use self::account::{AccountCommand, LoginArgs};
+pub use self::args::{GlobalArgs, PageArgs};
+pub use self::chat::ChatCommand;
+pub use self::command::CommonCommand;
+use self::command::{Outcome, Run};
+pub use self::input::{check_files, check_images, read_text};
+pub use self::library::LibraryCommand;
+pub use self::media::{DownloadArgs, MediaCommand};
+pub use self::read::{ReadCommand, SearchArgs, SearchKind};
+pub use self::write::{PublishArgs, WriteCommand};
+
 use crate::ctx::Ctx;
 use crate::error::{Error, Result};
 use crate::http::{Http, HttpConfig};
@@ -156,7 +171,7 @@ async fn execute<P: Platform>(
 ) -> Result<(Data, ExitCode)> {
   let info: PlatformInfo = P::INFO;
   let store = Store::new(info.id);
-  let loaded = account::load_session(&info, &store)?;
+  let loaded = crate::account::load_session(&info, &store)?;
   let config = HttpConfig {
     proxy: global.proxy.clone(),
     timeout: std::time::Duration::from_secs(global.timeout),
@@ -169,24 +184,35 @@ async fn execute<P: Platform>(
   let platform = P::new(Ctx::new(info, http, store, loaded.session.extra.clone()))?;
 
   let name = matches.subcommand_name().unwrap_or_default();
-  let (data, code, persist) = if CommonCommand::has_subcommand(name) {
+  let outcome = if CommonCommand::has_subcommand(name) {
     let cmd = CommonCommand::from_arg_matches(matches).map_err(|e| Error::input(e.to_string()))?;
-    dispatch::common(&platform, cmd, &loaded, global.output_format(), global.raw).await?
+    let run = Run {
+      loaded: &loaded,
+      format: global.output_format(),
+      raw: global.raw,
+    };
+    cmd.run(&platform, &run).await?
   } else {
     let cmd = <P::Extra as FromArgMatches>::from_arg_matches(matches)
       .map_err(|e| Error::input(e.to_string()))?;
-    (platform.run_extra(cmd).await?, ExitCode::SUCCESS, true)
+    Outcome::saved(platform.run_extra(cmd).await?)
   };
 
   let ctx = platform.ctx();
   // Only logged-in sessions are saved; guest cookies are not worth keeping.
-  if persist && platform.logged_in() && !loaded.from_env && ctx.session_changed() {
+  if outcome.persist && platform.logged_in() && !loaded.from_env && ctx.session_changed() {
     let mut session = ctx.session();
     session.source = loaded.session.source.clone();
     session.saved_at = loaded.session.saved_at;
     ctx.store.save_session(&session)?;
   }
-  match &data {
+  remember(ctx, &outcome.data);
+  Ok((outcome.data, outcome.code))
+}
+
+/// Remember the references of a printed list, for `#N` in later commands.
+fn remember(ctx: &Ctx, data: &Data) {
+  match data {
     Data::Posts(page) => ctx.store.remember(
       RefKind::Post,
       page
@@ -213,5 +239,4 @@ async fn execute<P: Platform>(
     ),
     _ => {}
   }
-  Ok((data, code))
 }
