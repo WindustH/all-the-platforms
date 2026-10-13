@@ -2,6 +2,7 @@
 //! are `CHAT/MESSAGE`, with the server's message id (or the client id of a
 //! message this machine sent).
 
+use social_core::chat::split_message_id;
 use social_core::{Error, Result};
 
 pub fn chat(arg: &str) -> Result<String> {
@@ -14,10 +15,11 @@ pub fn chat(arg: &str) -> Result<String> {
 
 /// `(chat, message)` of a `CHAT/MESSAGE` reference.
 pub fn message(arg: &str) -> Result<(String, String)> {
-  match arg.trim().rsplit_once('/') {
-    Some((chat, id)) if !chat.is_empty() && !id.is_empty() => Ok((chat.to_owned(), id.to_owned())),
-    _ => Err(Error::input(format!(
-      "not a WeChat message: {arg:?} (expected CHAT/MESSAGE, as `messages` lists them)"
-    ))),
-  }
+  split_message_id(arg)
+    .map(|(chat, id)| (chat.to_owned(), id.to_owned()))
+    .ok_or_else(|| {
+      Error::input(format!(
+        "not a WeChat message: {arg:?} (expected CHAT/MESSAGE, as `messages` lists them)"
+      ))
+    })
 }

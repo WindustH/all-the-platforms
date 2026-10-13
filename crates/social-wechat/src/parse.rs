@@ -1,12 +1,16 @@
-//! `WeixinMessage` → `Post`.
+//! Upstream payloads → core model: `WeixinMessage` → `Post`, a recorded
+//! contact → a chat `Collection`.
 //!
 //! A message holds an `item_list` of typed items (1 text, 2 image, 3 voice,
 //! 4 file, 5 video), optionally quoting another message (`ref_msg`). Media
 //! items point to encrypted CDN files; their `Media.url` is
 //! `wechat-media:CHAT/MESSAGE/INDEX`, which `download` resolves.
 
+use social_core::chat::message_id;
 use social_core::text::from_millis;
-use social_core::{Media, MediaKind, Post, User, Value, ValueExt, json};
+use social_core::{Collection, Media, MediaKind, Post, User, Value, ValueExt, json};
+
+use crate::archive::Contact;
 
 /// `message_type` of messages from users; the bot's own are 2.
 const FROM_USER: i64 = 1;
@@ -14,7 +18,7 @@ const FROM_USER: i64 = 1;
 pub const SCHEME: &str = "wechat-media:";
 
 /// The conversation a message belongs to: the group, else the other person.
-pub fn chat_of(m: &Value) -> String {
+pub fn chat_id(m: &Value) -> String {
   if let Some(g) = m.str("group_id") {
     return g;
   }
@@ -54,12 +58,12 @@ pub fn summary(m: &Value) -> String {
 }
 
 pub fn post(m: &Value) -> Post {
-  let chat = chat_of(m);
+  let chat = chat_id(m);
   let message = m
     .str("message_id")
     .or_else(|| m.str("client_id"))
     .unwrap_or_default();
-  let id = format!("{chat}/{message}");
+  let id = message_id(&chat, &message);
   let from_user = m.i64("message_type") == Some(FROM_USER);
   let author = if from_user {
     m.str("from_user_id")
@@ -156,4 +160,23 @@ fn media(item: &Value, url: &str) -> Option<Media> {
 /// The text item of an outgoing message, as the record keeps it.
 pub fn text_item(text: &str) -> Value {
   json!({ "type": 1, "text_item": { "text": text } })
+}
+
+/// A conversation on record, as a chat.
+pub fn chat(contact: Contact) -> Collection {
+  let mut chat = Collection {
+    id: contact.id.clone(),
+    kind: "dm".into(),
+    name: contact.id,
+    description: Some(contact.last_text).filter(|t| !t.is_empty()),
+    items: Some(contact.messages),
+    ..Collection::default()
+  };
+  if let Some(at) = from_millis(contact.last_at) {
+    chat.extra.insert("last_at".into(), at.to_string().into());
+  }
+  chat
+    .extra
+    .insert("can_reply".into(), contact.context_token.is_some().into());
+  chat
 }

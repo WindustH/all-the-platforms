@@ -8,16 +8,16 @@
 
 use std::path::Path;
 
-use social_core::file::Image;
+use social_core::file::{Image, Upload};
 use social_core::http::Part;
 use social_core::{Error, Result, ValueExt};
 
-use crate::account::Home;
-use crate::client::Client;
-use crate::web::MP;
+use crate::api::Api;
+use crate::backend::MP;
+use crate::users::Home;
 
 /// URL of an image for an article body, through the API.
-pub async fn api_body_image(c: &Client, path: &Path) -> Result<String> {
+pub async fn api_body_image(api: &Api, path: &Path) -> Result<String> {
   let image = Image::read(path).await?;
   if !matches!(image.mime, "image/jpeg" | "image/png") || image.data.len() >= 1 << 20 {
     return Err(Error::input(format!(
@@ -26,8 +26,9 @@ pub async fn api_body_image(c: &Client, path: &Path) -> Result<String> {
     )));
   }
   let part = Part::file("media", image.data, &image.name, image.mime);
-  let v = c
-    .api_upload("/cgi-bin/media/uploadimg", &[], part, Vec::new())
+  let v = api
+    .official()
+    .upload("/cgi-bin/media/uploadimg", &[], part, Vec::new())
     .await?;
   v.str("url")
     .ok_or_else(|| Error::upstream("uploadimg returned no url"))
@@ -36,37 +37,23 @@ pub async fn api_body_image(c: &Client, path: &Path) -> Result<String> {
 /// A permanent material (`image`, `thumb`, `voice`, `video`): its media id
 /// and, for images, its URL.
 pub async fn api_material(
-  c: &Client,
+  api: &Api,
   path: &Path,
   kind: &str,
   video: Option<(&str, &str)>,
 ) -> Result<(String, Option<String>)> {
-  let data = tokio::fs::read(path)
-    .await
-    .map_err(|e| Error::input(format!("cannot read {}: {e}", path.display())))?;
-  let name = path
-    .file_name()
-    .and_then(|n| n.to_str())
-    .unwrap_or("file")
-    .to_owned();
-  let mime = social_core::file::sniff(&data)
-    .map(|ext| match ext {
-      "jpg" => "image/jpeg",
-      "png" => "image/png",
-      "gif" => "image/gif",
-      _ => "application/octet-stream",
-    })
-    .unwrap_or("application/octet-stream");
+  let file = Upload::read(path).await?;
   let mut fields = Vec::new();
   if let Some((title, intro)) = video {
     let desc = social_core::json!({ "title": title, "introduction": intro });
     fields.push(Part::text("description", desc.to_string()));
   }
-  let v = c
-    .api_upload(
+  let v = api
+    .official()
+    .upload(
       "/cgi-bin/material/add_material",
       &[("type", kind.to_owned())],
-      Part::file("media", data, &name, mime),
+      Part::file("media", file.data, &file.name, file.mime),
       fields,
     )
     .await?;
@@ -78,13 +65,13 @@ pub async fn api_material(
 
 /// Upload an image to the backend's material store: `(file id, CDN URL)`.
 pub async fn web_image(
-  c: &Client,
+  api: &Api,
   home: &Home,
   path: &Path,
   scene: &str,
 ) -> Result<(String, String)> {
   let image = Image::read(path).await?;
-  let token = c.web_token().await?;
+  let token = api.backend().token().await?;
   let ticket = home
     .ticket
     .clone()
@@ -99,30 +86,29 @@ pub async fn web_image(
     Part::text("size", size),
     Part::file("file", image.data, &image.name, image.mime),
   ];
-  let v = c
+  let svr_time = home
+    .time
+    .clone()
+    .unwrap_or_else(|| now.as_second().to_string());
+  let query = [
+    ("action", "upload_material".to_owned()),
+    ("f", "json".into()),
+    ("scene", scene.into()),
+    ("writetype", "doublewrite".into()),
+    ("groupid", "1".into()),
+    ("ticket_id", home.user_name.clone()),
+    ("ticket", ticket),
+    ("svr_time", svr_time),
+    ("token", token.clone()),
+    ("lang", "zh_CN".into()),
+    ("seq", now.as_millisecond().to_string()),
+    ("t", format!("{}", rand::random::<f64>())),
+  ];
+  let v = api
     .ctx
     .http
     .post(format!("{MP}/cgi-bin/filetransfer"))
-    .queries([
-      ("action", "upload_material".to_owned()),
-      ("f", "json".into()),
-      ("scene", scene.into()),
-      ("writetype", "doublewrite".into()),
-      ("groupid", "1".into()),
-      ("ticket_id", home.user_name.clone()),
-      ("ticket", ticket),
-      (
-        "svr_time",
-        home
-          .time
-          .clone()
-          .unwrap_or_else(|| now.as_second().to_string()),
-      ),
-      ("token", token.clone()),
-      ("lang", "zh_CN".into()),
-      ("seq", now.as_millisecond().to_string()),
-      ("t", format!("{}", rand::random::<f64>())),
-    ])
+    .queries(query)
     .header("origin", MP)
     .header(
       "referer",
@@ -132,7 +118,7 @@ pub async fn web_image(
     .timeout(std::time::Duration::from_secs(120))
     .value()
     .await?;
-  let v = crate::web::check(v)?;
+  let v = crate::backend::check(v)?;
   match (v.str("content"), v.str("cdn_url")) {
     (Some(id), Some(url)) => Ok((id, url)),
     _ => Err(Error::upstream(format!("the upload returned no file: {v}"))),

@@ -4,7 +4,9 @@
 //!   (`+86 138 0000 0000`), `me`, or a name the archive knows.
 //! - Messages: `CHAT/MESSAGE_ID`, as `messages` prints them.
 
+use social_core::chat::split_message_id;
 use social_core::{Error, Result};
+use whatsapp_rust::Jid;
 
 use crate::archive::Archive;
 
@@ -45,12 +47,16 @@ pub fn phone(arg: &str) -> Option<String> {
 
 /// `(chat, message id)` of a `CHAT/ID` reference.
 pub fn message(arg: &str) -> Result<(String, String)> {
-  match arg.trim().rsplit_once('/') {
-    Some((chat, id)) if chat.contains('@') && !id.is_empty() => {
-      Ok((chat.to_owned(), id.to_owned()))
-    }
+  match split_message_id(arg) {
+    Some((chat, id)) if chat.contains('@') => Ok((chat.to_owned(), id.to_owned())),
     _ => Err(Error::input(format!(
       "not a message reference: {arg} (expected CHAT/ID as `messages` prints it, or `#N`)"
     ))),
   }
+}
+
+/// A JID as the client library takes it.
+pub fn jid(s: &str) -> Result<Jid> {
+  s.parse()
+    .map_err(|_| Error::input(format!("not a WhatsApp id: {s}")))
 }

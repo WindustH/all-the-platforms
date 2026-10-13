@@ -7,25 +7,26 @@ use std::path::Path;
 use social_core::text::from_secs;
 use social_core::{Action, Error, Media, Page, PageReq, Post, Result, Value, ValueExt, json};
 
-use crate::client::Client;
-use crate::upload;
+use crate::api::Api;
+use crate::uploads;
 
 pub const KINDS: &[&str] = &["image", "video", "voice", "news"];
 
-pub async fn list(c: &Client, kind: &str, req: &PageReq) -> Result<Page<Post>> {
-  c.require_any()?;
-  if !c.has_api() {
+pub async fn list(api: &Api, kind: &str, req: &PageReq) -> Result<Page<Post>> {
+  api.require_any()?;
+  if !api.official().has() {
     if kind != "image" {
       return Err(Error::unsupported(
         "material other than images without API credentials",
       ));
     }
-    return web_images(c, req).await;
+    return web_images(api, req).await;
   }
   let offset = req.number_or(0);
   let count = req.size_within(20);
-  let v = c
-    .api_post(
+  let v = api
+    .official()
+    .post(
       "/cgi-bin/material/batchget_material",
       &json!({ "type": kind, "offset": offset, "count": count }),
     )
@@ -61,11 +62,12 @@ pub async fn list(c: &Client, kind: &str, req: &PageReq) -> Result<Page<Post>> {
   Ok(Page::new(posts, next))
 }
 
-async fn web_images(c: &Client, req: &PageReq) -> Result<Page<Post>> {
+async fn web_images(api: &Api, req: &PageReq) -> Result<Page<Post>> {
   let begin = req.number_or(0);
   let count = req.size_within(20);
-  let v = c
-    .web_get(
+  let v = api
+    .backend()
+    .get(
       "/cgi-bin/filepage",
       vec![
         ("type", "2".into()),
@@ -96,9 +98,10 @@ async fn web_images(c: &Client, req: &PageReq) -> Result<Page<Post>> {
   Ok(Page::new(posts, next))
 }
 
-pub async fn count(c: &Client) -> Result<Value> {
-  let v = c
-    .api_get("/cgi-bin/material/get_materialcount", &[])
+pub async fn count(api: &Api) -> Result<Value> {
+  let v = api
+    .official()
+    .get("/cgi-bin/material/get_materialcount", &[])
     .await?;
   Ok(json!({
     "image": v.u64("image_count"),
@@ -109,7 +112,7 @@ pub async fn count(c: &Client) -> Result<Value> {
 }
 
 pub async fn add(
-  c: &Client,
+  api: &Api,
   path: &Path,
   kind: &str,
   title: Option<&str>,
@@ -124,7 +127,7 @@ pub async fn add(
       intro.unwrap_or_default(),
     )
   });
-  let (id, url) = upload::api_material(c, path, kind, video).await?;
+  let (id, url) = uploads::api_material(api, path, kind, video).await?;
   let mut action = Action::done("upload", path.display().to_string()).with_id(id);
   if let Some(u) = url {
     action = action.with_url(u);
@@ -132,8 +135,10 @@ pub async fn add(
   Ok(action)
 }
 
-pub async fn delete(c: &Client, id: &str) -> Result<Action> {
-  c.api_post("/cgi-bin/material/del_material", &json!({ "media_id": id }))
+pub async fn delete(api: &Api, id: &str) -> Result<Action> {
+  api
+    .official()
+    .post("/cgi-bin/material/del_material", &json!({ "media_id": id }))
     .await?;
   Ok(Action::done("delete-material", id))
 }

@@ -10,46 +10,32 @@
 //! Chats are the other person's id; messages are `CHAT/MESSAGE`.
 
 mod api;
-mod convert;
+mod archive;
+mod chats;
 mod crypto;
 mod extra;
 mod live;
-mod local;
 mod login;
 mod media;
+mod messages;
+mod parse;
 mod refs;
-mod send;
+mod uploads;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use social_core::output::Stream;
-use social_core::text::from_millis;
 use social_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Error, Media, Message, Page, PageReq, Platform,
-  PlatformInfo, Post, QrStatus, QrTicket, Result, User, ValueExt,
+  PlatformInfo, Post, QrStatus, QrTicket, Result, User,
 };
 
-use crate::api::Account;
+use crate::api::Api;
 
 pub struct Wechat {
-  ctx: Ctx,
+  api: Api,
   login: login::Login,
-}
-
-impl Wechat {
-  fn account(&self) -> Result<Account> {
-    Account::require(&self.ctx)
-  }
-}
-
-/// A page of a list kept in memory: the cursor is the offset.
-fn slice<T: Clone>(items: &[T], page: &PageReq) -> Page<T> {
-  let from = page.number_or(0) as usize;
-  let size = page.size_within(100);
-  let end = (from + size).min(items.len());
-  let next = (end < items.len()).then(|| end.to_string());
-  Page::new(items.get(from..end).unwrap_or_default().to_vec(), next)
 }
 
 impl Platform for Wechat {
@@ -79,124 +65,75 @@ impl Platform for Wechat {
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self {
-      ctx,
+      api: Api::new(ctx),
       login: login::Login::default(),
     })
   }
 
   fn ctx(&self) -> &Ctx {
-    &self.ctx
+    &self.api.ctx
   }
 
   fn logged_in(&self) -> bool {
-    Account::from_ctx(&self.ctx).is_some()
+    self.api.account().is_some()
   }
 
-  /// The bot, checked with a short poll (an expired login answers -14);
-  /// messages it brings are recorded like any other.
   async fn whoami(&self) -> Result<User> {
-    let acct = self.account()?;
-    live::fetch(&self.ctx, &acct, Duration::from_secs(2)).await?;
-    let mut user = User {
-      id: acct.bot_id.clone(),
-      name: "ClawBot".into(),
-      ..User::default()
-    };
-    user.extra.insert("owner".into(), acct.owner.into());
-    user.extra.insert("api".into(), acct.base.into());
-    Ok(user)
+    login::whoami(&self.api).await
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {
-    login::start(&self.ctx, &self.login).await
+    login::start(&self.api, &self.login).await
   }
 
   async fn qr_poll(&self, _ticket: &QrTicket) -> Result<QrStatus> {
-    login::poll(&self.ctx, &self.login).await
+    login::poll(&self.api, &self.login).await
   }
 
   async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
     if parent.is_some() {
       return Err(Error::input("WeChat chats have no channels inside them"));
     }
-    let acct = self.account()?;
-    let mut people: Vec<_> = local::contacts(&self.ctx, &acct).into_values().collect();
-    people.sort_by_key(|c| std::cmp::Reverse(c.last_at));
-    let chats: Vec<Collection> = people
-      .into_iter()
-      .map(|c| {
-        let mut chat = Collection {
-          id: c.id.clone(),
-          kind: "dm".into(),
-          name: c.id,
-          description: Some(c.last_text).filter(|t| !t.is_empty()),
-          items: Some(c.messages),
-          ..Collection::default()
-        };
-        if let Some(at) = from_millis(c.last_at) {
-          chat.extra.insert("last_at".into(), at.to_string().into());
-        }
-        chat
-          .extra
-          .insert("can_reply".into(), c.context_token.is_some().into());
-        chat
-      })
-      .collect();
-    Ok(slice(&chats, page))
+    let account = self.api.require_account()?;
+    Ok(chats::chats(&self.api, &account, page))
   }
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
-    let acct = self.account()?;
-    let chat = refs::chat(chat)?;
-    let mut posts: Vec<Post> = local::messages(&self.ctx, &acct, &chat)
-      .iter()
-      .map(convert::post)
-      .collect();
-    posts.reverse();
-    Ok(slice(&posts, page))
+    let account = self.api.require_account()?;
+    chats::messages(&self.api, &account, chat, page)
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    let acct = self.account()?;
-    let (chat, id) = refs::message(post)?;
-    local::messages(&self.ctx, &acct, &chat)
-      .iter()
-      .find(|m| [m.str("message_id"), m.str("client_id")].contains(&Some(id.clone())))
-      .map(convert::post)
-      .ok_or_else(|| {
-        Error::not_found(format!("message {post} is not on record here")).with_hint(
-          "WeChat keeps no history for the bot: only what `listen` / `sync` received is known",
-        )
-      })
+    let account = self.api.require_account()?;
+    chats::read(&self.api, &account, post)
   }
 
   async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
-    let acct = self.account()?;
-    let chat = refs::chat(chat)?;
-    send::send(&self.ctx, &acct, &chat, message).await
+    let account = self.api.require_account()?;
+    messages::send(&self.api, &account, &refs::chat(chat)?, message).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
-    let acct = self.account()?;
+    let account = self.api.require_account()?;
     let chats = chats
       .iter()
       .map(|c| refs::chat(c))
       .collect::<Result<Vec<_>>>()?;
-    live::listen(&self.ctx, &acct, &chats, out).await
+    live::listen(&self.api, &account, &chats, out).await
   }
 
   async fn save_media(&self, media: &Media, dir: &Path, name: &str) -> Option<Result<PathBuf>> {
-    if !media.url.starts_with(convert::SCHEME) {
+    if !media.url.starts_with(parse::SCHEME) {
       return None;
     }
-    let acct = match self.account() {
+    let account = match self.api.require_account() {
       Ok(a) => a,
       Err(e) => return Some(Err(e)),
     };
-    Some(media::save(&self.ctx, &acct, media, dir, name).await)
+    Some(media::save(&self.api, &account, media, dir, name).await)
   }
 
   async fn run_extra(&self, command: extra::Command) -> Result<Data> {
-    extra::run(&self.ctx, command).await
+    extra::run(&self.api, command).await
   }
 }

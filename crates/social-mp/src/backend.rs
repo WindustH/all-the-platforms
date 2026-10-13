@@ -8,12 +8,13 @@
 //! 200013 rate limit), and many fields are JSON encoded once more inside a
 //! string ([`nested`]).
 
+use std::cell::RefCell;
 use std::sync::LazyLock;
 
 use regex::Regex;
-use social_core::{Error, ErrorCode, Result, Value, ValueExt};
+use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 
-use crate::client::{Client, LOGIN_HINT};
+use crate::api::LOGIN_HINT;
 
 pub const MP: &str = "https://mp.weixin.qq.com";
 /// Cookie of a logged-in backend session.
@@ -26,9 +27,29 @@ static HOME_TOKEN: LazyLock<Regex> =
 /// Query pairs, owned so callers can build them freely.
 pub type Params = Vec<(&'static str, String)>;
 
-impl Client {
-  pub fn require_web(&self) -> Result<()> {
-    if self.has_web() {
+/// What the route keeps for the run: the session's backend token.
+#[derive(Default)]
+pub struct State {
+  token: RefCell<Option<String>>,
+}
+
+/// The backend as seen from one call site.
+pub struct Backend<'a> {
+  ctx: &'a Ctx,
+  state: &'a State,
+}
+
+impl<'a> Backend<'a> {
+  pub fn new(ctx: &'a Ctx, state: &'a State) -> Self {
+    Self { ctx, state }
+  }
+
+  pub fn has(&self) -> bool {
+    self.ctx.http.has_cookie(SESSION_COOKIE)
+  }
+
+  pub fn require(&self) -> Result<()> {
+    if self.has() {
       Ok(())
     } else {
       Err(
@@ -40,11 +61,11 @@ impl Client {
 
   /// The session's backend token: remembered for the run, else from the
   /// redirect of `GET /`.
-  pub async fn web_token(&self) -> Result<String> {
-    if let Some(t) = self.web_token.borrow().clone() {
+  pub async fn token(&self) -> Result<String> {
+    if let Some(t) = self.state.token.borrow().clone() {
       return Ok(t);
     }
-    self.require_web()?;
+    self.require()?;
     let resp = self
       .ctx
       .http
@@ -57,12 +78,12 @@ impl Client {
       .map(|m| m[1].to_owned())
       .or_else(|| page_token(&resp.text()))
       .ok_or_else(expired)?;
-    self.set_web_token(&token);
+    self.set_token(&token);
     Ok(token)
   }
 
-  pub fn set_web_token(&self, token: &str) {
-    *self.web_token.borrow_mut() = Some(token.to_owned());
+  pub fn set_token(&self, token: &str) {
+    *self.state.token.borrow_mut() = Some(token.to_owned());
   }
 
   /// A per-session browser fingerprint (32 hex digits) the backend's own
@@ -77,22 +98,22 @@ impl Client {
   }
 
   /// GET a JSON endpoint (`f=json&ajax=1` and the token are added).
-  pub async fn web_get(&self, path: &str, query: Params) -> Result<Value> {
-    self.web_json(path, query, None, true).await
+  pub async fn get(&self, path: &str, query: Params) -> Result<Value> {
+    self.json(path, query, None, true).await
   }
 
   /// POST a form to a JSON endpoint (token, `f=json`, `ajax=1` added to both).
-  pub async fn web_post(&self, path: &str, query: Params, form: Params) -> Result<Value> {
-    self.web_json(path, query, Some(form), true).await
+  pub async fn post(&self, path: &str, query: Params, form: Params) -> Result<Value> {
+    self.json(path, query, Some(form), true).await
   }
 
-  /// Like [`Client::web_post`], but other `ret` codes than an expired
-  /// session come back for the caller to read (multi-step flows).
-  pub async fn web_post_raw(&self, path: &str, query: Params, form: Params) -> Result<Value> {
-    self.web_json(path, query, Some(form), false).await
+  /// Like [`Backend::post`], but other `ret` codes than an expired session
+  /// come back for the caller to read (multi-step flows).
+  pub async fn post_raw(&self, path: &str, query: Params, form: Params) -> Result<Value> {
+    self.json(path, query, Some(form), false).await
   }
 
-  async fn web_json(
+  async fn json(
     &self,
     path: &str,
     query: Params,
@@ -100,7 +121,7 @@ impl Client {
     checked: bool,
   ) -> Result<Value> {
     for attempt in 0..2 {
-      let token = self.web_token().await?;
+      let token = self.token().await?;
       let mut q = query.clone();
       q.extend(standard(&token));
       let req = match &form {
@@ -129,7 +150,7 @@ impl Client {
         .await?;
       match ret(&v) {
         // A token from an older session: look it up again once.
-        200040 if attempt == 0 => *self.web_token.borrow_mut() = None,
+        200040 if attempt == 0 => *self.state.token.borrow_mut() = None,
         200003 | 200040 => return Err(expired()),
         _ if checked => return check(v),
         _ => return Ok(v),
@@ -139,8 +160,8 @@ impl Client {
   }
 
   /// An HTML page of the backend (the token is added).
-  pub async fn web_page(&self, path: &str, query: Params) -> Result<String> {
-    let token = self.web_token().await?;
+  pub async fn page(&self, path: &str, query: Params) -> Result<String> {
+    let token = self.token().await?;
     let resp = self
       .ctx
       .http

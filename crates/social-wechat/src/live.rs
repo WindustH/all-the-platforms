@@ -3,61 +3,72 @@
 
 use std::time::Duration;
 
+use social_core::live::Backoff;
 use social_core::output::Stream;
-use social_core::{Ctx, ErrorCode, Result, Value, ValueExt, json};
+use social_core::{ErrorCode, Page, Post, Result, Value, ValueExt, json};
 
-use crate::api::{self, Account};
-use crate::{convert, local};
+use crate::api::{self, Account, Api};
+use crate::{archive, parse};
 
 /// `message_state` of a reply still being generated (streamed by bots).
 const GENERATING: i64 = 1;
 
-/// One poll: the new messages (recorded), or none when `wait` ran out.
-pub async fn fetch(ctx: &Ctx, acct: &Account, wait: Duration) -> Result<(Vec<Value>, Duration)> {
-  let body = json!({ "get_updates_buf": local::cursor(ctx, acct) });
-  let Some(v) = api::poll(ctx, acct, "ilink/bot/getupdates", body, wait).await? else {
+/// One poll: the new messages (recorded), or none when `wait` ran out; and
+/// how long the server suggests holding the next poll.
+pub async fn fetch(api: &Api, account: &Account, wait: Duration) -> Result<(Vec<Value>, Duration)> {
+  let body = json!({ "get_updates_buf": archive::cursor(&api.ctx, account) });
+  let Some(v) = api
+    .poll(account, "ilink/bot/getupdates", body, wait)
+    .await?
+  else {
     return Ok((Vec::new(), api::LONG_POLL));
   };
   let v = api::check("getupdates", v)?;
-  let msgs: Vec<Value> = v
+  let messages: Vec<Value> = v
     .list("msgs")
     .iter()
     .filter(|m| m.i64("message_state") != Some(GENERATING))
     .cloned()
     .collect();
-  local::record(ctx, acct, &msgs);
+  archive::record(&api.ctx, account, &messages);
   if let Some(next) = v.str("get_updates_buf") {
-    local::set_cursor(ctx, acct, &next);
+    archive::set_cursor(&api.ctx, account, &next);
   }
   let suggested = v
     .u64("longpolling_timeout_ms")
     .filter(|ms| *ms > 0)
     .map_or(api::LONG_POLL, Duration::from_millis);
-  Ok((msgs, suggested))
+  Ok((messages, suggested))
+}
+
+/// `sync`: fetch new messages once, newest first.
+pub async fn sync(api: &Api, account: &Account, wait: Duration) -> Result<Page<Post>> {
+  let (messages, _) = fetch(api, account, wait).await?;
+  let mut posts: Vec<_> = messages.iter().map(parse::post).collect();
+  posts.reverse();
+  Ok(Page::last(posts))
 }
 
 /// Stream messages until interrupted; a lost login ends it, other
-/// failures back off (2 s, then 30 s after three in a row).
-pub async fn listen(ctx: &Ctx, acct: &Account, chats: &[String], out: &Stream) -> Result<()> {
+/// failures back off.
+pub async fn listen(api: &Api, account: &Account, chats: &[String], out: &Stream) -> Result<()> {
   let mut wait = api::LONG_POLL;
-  let mut failures = 0u32;
+  let mut backoff = Backoff::default();
   loop {
-    match fetch(ctx, acct, wait + Duration::from_secs(5)).await {
-      Ok((msgs, next)) => {
-        failures = 0;
+    match fetch(api, account, wait + Duration::from_secs(5)).await {
+      Ok((messages, next)) => {
+        backoff.reset();
         wait = next;
-        for m in &msgs {
-          if chats.is_empty() || chats.iter().any(|c| *c == convert::chat_of(m)) {
-            out.post(&convert::post(m));
+        for m in &messages {
+          if chats.is_empty() || chats.iter().any(|c| *c == parse::chat_id(m)) {
+            out.post(&parse::post(m));
           }
         }
       }
       Err(e) if e.code == ErrorCode::NotAuthenticated => return Err(e),
       Err(e) => {
-        failures += 1;
-        tracing::warn!("getupdates failed ({failures}): {}", e.message);
-        let pause = if failures >= 3 { 30 } else { 2 };
-        tokio::time::sleep(Duration::from_secs(pause)).await;
+        tracing::warn!("getupdates failed: {}", e.message);
+        backoff.wait().await;
       }
     }
   }

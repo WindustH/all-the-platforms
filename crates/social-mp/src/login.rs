@@ -6,18 +6,18 @@
 
 use social_core::{Error, QrStatus, QrTicket, Result, ValueExt};
 
-use crate::client::Client;
-use crate::web::MP;
+use crate::api::Api;
+use crate::backend::MP;
 
 fn session_id() -> String {
   let ms = jiff::Timestamp::now().as_millisecond();
   format!("{ms}{:02}", rand::random::<u8>() % 100)
 }
 
-pub async fn qr_start(c: &Client) -> Result<QrTicket> {
+pub async fn qr_start(api: &Api) -> Result<QrTicket> {
   // Leftovers of an older session would confuse the login page.
-  c.ctx.http.replace_cookies(Default::default());
-  let _ = c.ctx.http.get(format!("{MP}/")).send().await;
+  api.ctx.http.replace_cookies(Default::default());
+  let _ = api.ctx.http.get(format!("{MP}/")).send().await;
   let sid = session_id();
   let form = [
     ("userlang", "zh_CN".to_owned()),
@@ -28,9 +28,9 @@ pub async fn qr_start(c: &Client) -> Result<QrTicket> {
     ("lang", "zh_CN".into()),
     ("f", "json".into()),
     ("ajax", "1".into()),
-    ("fingerprint", c.fingerprint()),
+    ("fingerprint", api.backend().fingerprint()),
   ];
-  let v = c
+  let v = api
     .ctx
     .http
     .post(format!("{MP}/cgi-bin/bizlogin"))
@@ -46,7 +46,7 @@ pub async fn qr_start(c: &Client) -> Result<QrTicket> {
       "could not start the QR login: {v}"
     )));
   }
-  let resp = c
+  let resp = api
     .ctx
     .http
     .get(format!("{MP}/cgi-bin/scanloginqrcode"))
@@ -72,8 +72,8 @@ pub async fn qr_start(c: &Client) -> Result<QrTicket> {
   })
 }
 
-pub async fn qr_poll(c: &Client, _ticket: &QrTicket) -> Result<QrStatus> {
-  let v = c
+pub async fn qr_poll(api: &Api, _ticket: &QrTicket) -> Result<QrStatus> {
+  let v = api
     .ctx
     .http
     .get(format!("{MP}/cgi-bin/scanloginqrcode"))
@@ -83,7 +83,7 @@ pub async fn qr_poll(c: &Client, _ticket: &QrTicket) -> Result<QrStatus> {
       ("lang", "zh_CN".into()),
       ("f", "json".into()),
       ("ajax", "1".into()),
-      ("fingerprint", c.fingerprint()),
+      ("fingerprint", api.backend().fingerprint()),
     ])
     .header("referer", format!("{MP}/"))
     .header("x-requested-with", "XMLHttpRequest")
@@ -98,7 +98,7 @@ pub async fn qr_poll(c: &Client, _ticket: &QrTicket) -> Result<QrStatus> {
     }
     4 | 6 => QrStatus::Scanned,
     1 => {
-      finish(c).await?;
+      finish(api).await?;
       QrStatus::Confirmed
     }
     5 => {
@@ -112,7 +112,7 @@ pub async fn qr_poll(c: &Client, _ticket: &QrTicket) -> Result<QrStatus> {
 }
 
 /// Trade the confirmed scan for the session cookies and the token.
-async fn finish(c: &Client) -> Result<()> {
+async fn finish(api: &Api) -> Result<()> {
   let form = [
     ("userlang", "zh_CN".to_owned()),
     ("redirect_url", String::new()),
@@ -120,13 +120,13 @@ async fn finish(c: &Client) -> Result<()> {
     ("cookie_cleaned", "0".into()),
     ("plugin_used", "0".into()),
     ("login_type", "3".into()),
-    ("fingerprint", c.fingerprint()),
+    ("fingerprint", api.backend().fingerprint()),
     ("token", String::new()),
     ("lang", "zh_CN".into()),
     ("f", "json".into()),
     ("ajax", "1".into()),
   ];
-  let v = c
+  let v = api
     .ctx
     .http
     .post(format!("{MP}/cgi-bin/bizlogin"))
@@ -137,16 +137,16 @@ async fn finish(c: &Client) -> Result<()> {
     .form(form)
     .value()
     .await?;
-  let v = crate::web::check(v)?;
+  let v = crate::backend::check(v)?;
   let redirect = v.str("redirect_url").unwrap_or_default();
   let token = redirect
     .split(['?', '&'])
     .find_map(|p| p.strip_prefix("token="))
     .filter(|t| !t.is_empty())
     .ok_or_else(|| Error::upstream(format!("the login gave no token: {redirect}")))?;
-  c.set_web_token(token);
+  api.backend().set_token(token);
   // Land on the home page like the browser does.
-  let _ = c
+  let _ = api
     .ctx
     .http
     .get(format!("{MP}{redirect}"))

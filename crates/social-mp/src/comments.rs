@@ -10,9 +10,9 @@
 use social_core::text::from_secs;
 use social_core::{Action, Comment, Error, Page, PageReq, Result, User, Value, ValueExt, json};
 
-use crate::client::Client;
+use crate::api::Api;
+use crate::backend::nested;
 use crate::published;
-use crate::web::nested;
 
 /// The keys an article's comments hang on.
 pub struct Target {
@@ -24,9 +24,9 @@ pub struct Target {
 
 /// From an article link (its page has all three), or an id listed by
 /// `user-posts` (`BIZUIN_MID_IDX`, looked up among your recent posts).
-pub async fn target(c: &Client, arg: &str) -> Result<Target> {
+pub async fn target(api: &Api, arg: &str) -> Result<Target> {
   if arg.contains("mp.weixin.qq.com") {
-    let post = crate::page::read(&c.ctx, arg).await?;
+    let post = crate::articles::read(&api.ctx, arg).await?;
     let get = |k: &str| post.extra.get(k).and_then(Value::as_str).map(str::to_owned);
     let mid = get("mid").ok_or_else(|| Error::upstream("the article page names no mid"))?;
     return Ok(Target {
@@ -44,8 +44,8 @@ pub async fn target(c: &Client, arg: &str) -> Result<Target> {
       )));
     }
   };
-  let comment_id = if c.has_web() {
-    published::find_own(c, &mid, idx).await.and_then(|p| {
+  let comment_id = if api.backend().has() {
+    published::find_own(api, &mid, idx).await.and_then(|p| {
       p.extra
         .get("comment_id")
         .and_then(Value::as_str)
@@ -61,12 +61,12 @@ pub async fn target(c: &Client, arg: &str) -> Result<Target> {
   })
 }
 
-pub async fn list(c: &Client, arg: &str, req: &PageReq) -> Result<Page<Comment>> {
-  c.require_any()?;
-  let t = target(c, arg).await?;
-  match (&t.comment_id, c.has_web(), c.has_api()) {
-    (Some(id), true, _) => web_list(c, id, req).await,
-    (_, _, true) => api_list(c, &t, req).await,
+pub async fn list(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Comment>> {
+  api.require_any()?;
+  let t = target(api, arg).await?;
+  match (&t.comment_id, api.backend().has(), api.official().has()) {
+    (Some(id), true, _) => web_list(api, id, req).await,
+    (_, _, true) => api_list(api, &t, req).await,
     (None, true, false) => Err(Error::not_found(
       "the article has no comment id (comments off, or not one of your recent posts)",
     )),
@@ -74,10 +74,11 @@ pub async fn list(c: &Client, arg: &str, req: &PageReq) -> Result<Page<Comment>>
   }
 }
 
-async fn web_list(c: &Client, comment_id: &str, req: &PageReq) -> Result<Page<Comment>> {
+async fn web_list(api: &Api, comment_id: &str, req: &PageReq) -> Result<Page<Comment>> {
   let begin = req.number_or(0);
-  let v = c
-    .web_get(
+  let v = api
+    .backend()
+    .get(
       "/misc/appmsgcomment",
       vec![
         ("action", "list_comment".into()),
@@ -88,7 +89,7 @@ async fn web_list(c: &Client, comment_id: &str, req: &PageReq) -> Result<Page<Co
         ("day", "0".into()),
         ("type", "2".into()),
         ("max_id", "0".into()),
-        ("fingerprint", c.fingerprint()),
+        ("fingerprint", api.backend().fingerprint()),
       ],
     )
     .await?;
@@ -151,11 +152,12 @@ fn author_reply(r: &Value, id_key: &str) -> Comment {
   }
 }
 
-async fn api_list(c: &Client, t: &Target, req: &PageReq) -> Result<Page<Comment>> {
+async fn api_list(api: &Api, t: &Target, req: &PageReq) -> Result<Page<Comment>> {
   let begin = req.number_or(0);
   let count = req.size_within(49);
-  let v = c
-    .api_post(
+  let v = api
+    .official()
+    .post(
       "/cgi-bin/comment/list",
       &json!({
         "msg_data_id": t.mid.parse::<u64>().unwrap_or(0),
@@ -198,7 +200,7 @@ async fn api_list(c: &Client, t: &Target, req: &PageReq) -> Result<Page<Comment>
 }
 
 /// One of the API's comment endpoints on an article (and a comment).
-async fn api_op(c: &Client, path: &str, t: &Target, extra: Value) -> Result<()> {
+async fn api_op(api: &Api, path: &str, t: &Target, extra: Value) -> Result<()> {
   let mut body = json!({
     "msg_data_id": t.mid.parse::<u64>().unwrap_or(0),
     "index": t.idx.saturating_sub(1),
@@ -206,7 +208,7 @@ async fn api_op(c: &Client, path: &str, t: &Target, extra: Value) -> Result<()> 
   if let (Some(b), Some(e)) = (body.as_object_mut(), extra.as_object()) {
     b.extend(e.clone());
   }
-  c.api_post(path, &body).await?;
+  api.official().post(path, &body).await?;
   Ok(())
 }
 
@@ -220,15 +222,15 @@ fn comment_id(id: &str) -> Result<u64> {
 
 /// Answer a comment (one reply per comment). Official accounts cannot post
 /// comments of their own.
-pub async fn reply(c: &Client, arg: &str, text: &str, to: Option<&str>) -> Result<Action> {
+pub async fn reply(api: &Api, arg: &str, text: &str, to: Option<&str>) -> Result<Action> {
   let Some(to) = to else {
     return Err(Error::unsupported("comment without --reply-to").with_hint(
       "an account only answers its readers' comments: `comment ARTICLE TEXT --reply-to COMMENT`",
     ));
   };
-  let t = target(c, arg).await?;
+  let t = target(api, arg).await?;
   api_op(
-    c,
+    api,
     "/cgi-bin/comment/reply/add",
     &t,
     json!({ "user_comment_id": comment_id(to)?, "content": text }),
@@ -237,10 +239,10 @@ pub async fn reply(c: &Client, arg: &str, text: &str, to: Option<&str>) -> Resul
   Ok(Action::done("reply", to))
 }
 
-pub async fn delete(c: &Client, arg: &str, id: &str) -> Result<Action> {
-  let t = target(c, arg).await?;
+pub async fn delete(api: &Api, arg: &str, id: &str) -> Result<Action> {
+  let t = target(api, arg).await?;
   api_op(
-    c,
+    api,
     "/cgi-bin/comment/delete",
     &t,
     json!({ "user_comment_id": comment_id(id)? }),
@@ -249,10 +251,10 @@ pub async fn delete(c: &Client, arg: &str, id: &str) -> Result<Action> {
   Ok(Action::done("delete-comment", id))
 }
 
-pub async fn delete_reply(c: &Client, arg: &str, id: &str) -> Result<Action> {
-  let t = target(c, arg).await?;
+pub async fn delete_reply(api: &Api, arg: &str, id: &str) -> Result<Action> {
+  let t = target(api, arg).await?;
   api_op(
-    c,
+    api,
     "/cgi-bin/comment/reply/delete",
     &t,
     json!({ "user_comment_id": comment_id(id)? }),
@@ -262,26 +264,26 @@ pub async fn delete_reply(c: &Client, arg: &str, id: &str) -> Result<Action> {
 }
 
 /// Feature a comment (精选), or stop featuring it.
-pub async fn elect(c: &Client, arg: &str, id: &str, undo: bool) -> Result<Action> {
-  let t = target(c, arg).await?;
+pub async fn elect(api: &Api, arg: &str, id: &str, undo: bool) -> Result<Action> {
+  let t = target(api, arg).await?;
   let path = if undo {
     "/cgi-bin/comment/unmarkelect"
   } else {
     "/cgi-bin/comment/markelect"
   };
-  api_op(c, path, &t, json!({ "user_comment_id": comment_id(id)? })).await?;
+  api_op(api, path, &t, json!({ "user_comment_id": comment_id(id)? })).await?;
   Ok(Action::done(if undo { "unelect" } else { "elect" }, id))
 }
 
 /// Open or close the comments of an article.
-pub async fn switch(c: &Client, arg: &str, close: bool) -> Result<Action> {
-  let t = target(c, arg).await?;
+pub async fn switch(api: &Api, arg: &str, close: bool) -> Result<Action> {
+  let t = target(api, arg).await?;
   let path = if close {
     "/cgi-bin/comment/close"
   } else {
     "/cgi-bin/comment/open"
   };
-  api_op(c, path, &t, json!({})).await?;
+  api_op(api, path, &t, json!({})).await?;
   Ok(Action::done(
     if close {
       "close-comments"
@@ -293,11 +295,12 @@ pub async fn switch(c: &Client, arg: &str, close: bool) -> Result<Action> {
 }
 
 /// Your articles with their newest comments (backend).
-pub async fn latest(c: &Client, req: &PageReq) -> Result<Page<social_core::Post>> {
-  c.require_web()?;
+pub async fn latest(api: &Api, req: &PageReq) -> Result<Page<social_core::Post>> {
+  api.backend().require()?;
   let begin = req.number_or(0);
-  let v = c
-    .web_get(
+  let v = api
+    .backend()
+    .get(
       "/misc/appmsgcomment",
       vec![
         ("action", "list_latest_comment".into()),

@@ -11,9 +11,10 @@ use std::time::Duration;
 
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
-use social_core::{Ctx, Value, ValueExt};
+use social_core::{Ctx, Page, PageReq, Value, ValueExt};
 
 use crate::api::Account;
+use crate::parse;
 
 const KEEP: Duration = Duration::from_secs(365 * 24 * 3600);
 /// Messages kept per chat.
@@ -44,53 +45,62 @@ fn hash(s: &str) -> String {
 }
 
 /// Cache keys of one bot.
-fn key(acct: &Account, what: &str) -> String {
-  format!("{}-{what}", hash(&acct.bot_id))
+fn key(account: &Account, what: &str) -> String {
+  format!("{}-{what}", hash(&account.bot_id))
 }
 
-pub fn cursor(ctx: &Ctx, acct: &Account) -> String {
+/// A page of a list kept here: the cursor is the offset.
+pub fn page<T: Clone>(items: &[T], req: &PageReq) -> Page<T> {
+  let from = req.number_or(0) as usize;
+  let size = req.size_within(100);
+  let end = (from + size).min(items.len());
+  let next = (end < items.len()).then(|| end.to_string());
+  Page::new(items.get(from..end).unwrap_or_default().to_vec(), next)
+}
+
+pub fn cursor(ctx: &Ctx, account: &Account) -> String {
   ctx
     .store
-    .cache_get::<Cursor>(&key(acct, "cursor"), KEEP)
+    .cache_get::<Cursor>(&key(account, "cursor"), KEEP)
     .map(|c| c.buf)
     .unwrap_or_default()
 }
 
-pub fn set_cursor(ctx: &Ctx, acct: &Account, buf: &str) {
+pub fn set_cursor(ctx: &Ctx, account: &Account, buf: &str) {
   let c = Cursor {
     buf: buf.to_owned(),
   };
-  ctx.store.cache_put(&key(acct, "cursor"), &c);
+  ctx.store.cache_put(&key(account, "cursor"), &c);
 }
 
-pub fn contacts(ctx: &Ctx, acct: &Account) -> BTreeMap<String, Contact> {
+pub fn contacts(ctx: &Ctx, account: &Account) -> BTreeMap<String, Contact> {
   ctx
     .store
-    .cache_get(&key(acct, "contacts"), KEEP)
+    .cache_get(&key(account, "contacts"), KEEP)
     .unwrap_or_default()
 }
 
-pub fn contact(ctx: &Ctx, acct: &Account, chat: &str) -> Option<Contact> {
-  contacts(ctx, acct).remove(chat)
+pub fn contact(ctx: &Ctx, account: &Account, chat: &str) -> Option<Contact> {
+  contacts(ctx, account).remove(chat)
 }
 
 /// Messages of one chat, oldest first.
-pub fn messages(ctx: &Ctx, acct: &Account, chat: &str) -> Vec<Value> {
+pub fn messages(ctx: &Ctx, account: &Account, chat: &str) -> Vec<Value> {
   ctx
     .store
-    .cache_get(&key(acct, &format!("chat-{}", hash(chat))), KEEP)
+    .cache_get(&key(account, &format!("chat-{}", hash(chat))), KEEP)
     .unwrap_or_default()
 }
 
 /// Keep messages (raw `WeixinMessage`s) and what they tell about contacts.
-pub fn record(ctx: &Ctx, acct: &Account, msgs: &[Value]) {
+pub fn record(ctx: &Ctx, account: &Account, msgs: &[Value]) {
   if msgs.is_empty() {
     return;
   }
-  let mut people = contacts(ctx, acct);
+  let mut people = contacts(ctx, account);
   let mut by_chat: BTreeMap<String, Vec<Value>> = BTreeMap::new();
   for m in msgs {
-    let chat = crate::convert::chat_of(m);
+    let chat = parse::chat_id(m);
     if chat.is_empty() {
       continue;
     }
@@ -104,14 +114,14 @@ pub fn record(ctx: &Ctx, acct: &Account, msgs: &[Value]) {
     let at = m.i64("create_time_ms").unwrap_or(0);
     if at >= c.last_at {
       c.last_at = at;
-      c.last_text = crate::convert::summary(m);
+      c.last_text = parse::summary(m);
     }
     c.messages += 1;
     by_chat.entry(chat).or_default().push(m.clone());
   }
-  ctx.store.cache_put(&key(acct, "contacts"), &people);
+  ctx.store.cache_put(&key(account, "contacts"), &people);
   for (chat, new) in by_chat {
-    let mut all = messages(ctx, acct, &chat);
+    let mut all = messages(ctx, account, &chat);
     for m in new {
       let id = m.str("message_id");
       // Updates may repeat a message (edits of a streaming reply): keep the last.
@@ -123,7 +133,7 @@ pub fn record(ctx: &Ctx, acct: &Account, msgs: &[Value]) {
     if all.len() > PER_CHAT {
       all.drain(..all.len() - PER_CHAT);
     }
-    let k = key(acct, &format!("chat-{}", hash(&chat)));
+    let k = key(account, &format!("chat-{}", hash(&chat)));
     ctx.store.cache_put(&k, &all);
   }
 }
