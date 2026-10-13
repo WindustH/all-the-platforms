@@ -184,6 +184,10 @@ impl Http {
   }
 
   /// `a=1; b=2` for the current jar.
+  pub(crate) fn client(&self) -> &wreq::Client {
+    &self.client
+  }
+
   pub fn cookie_header(&self) -> String {
     self
       .jar
