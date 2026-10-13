@@ -28,6 +28,7 @@ social-reddit = { path = "crates/social-reddit" }
 social-youtube = { path = "crates/social-youtube" }
 social-mp = { path = "crates/social-mp" }
 social-telegram = { path = "crates/social-telegram" }
+social-weibo = { path = "crates/social-weibo" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -60,6 +61,7 @@ social-reddit.workspace = true
 social-youtube.workspace = true
 social-mp.workspace = true
 social-telegram.workspace = true
+social-weibo.workspace = true
 
 [profile.release]
 lto = "thin"

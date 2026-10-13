@@ -14,5 +14,6 @@ fn main() -> ExitCode {
   .platform::<social_youtube::YouTube>()
   .platform::<social_mp::Mp>()
   .platform::<social_telegram::Telegram>()
+  .platform::<social_weibo::Weibo>()
   .run()
 }

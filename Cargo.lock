@@ -3811,6 +3811,7 @@ dependencies = [
  "social-reddit",
  "social-telegram",
  "social-twitter",
+ "social-weibo",
  "social-xhs",
  "social-youtube",
  "social-zhihu",
@@ -3913,6 +3914,19 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "social-core",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-weibo"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "serde_json",
+ "social-core",
+ "tokio",
  "tracing",
  "url",
 ]
