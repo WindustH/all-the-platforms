@@ -38,66 +38,111 @@ enum List {
 }
 
 pub fn render(md: &str) -> Markup {
-  let mut m = Markup {
-    html: String::new(),
-    images: Vec::new(),
-    text_len: 0,
-  };
-  let mut list = List::None;
-  let mut quote: Vec<String> = Vec::new();
-  let mut table: Vec<Vec<String>> = Vec::new();
-  let mut code: Option<(String, Vec<String>)> = None;
-
+  let mut r = Renderer::default();
   for raw in md.lines() {
-    if let Some((lang, lines)) = code.as_mut() {
+    r.line(raw);
+  }
+  r.finish()
+}
+
+/// What is open while lines are read: a list, quote lines, table rows or a
+/// fenced code block.
+struct Renderer {
+  m: Markup,
+  list: List,
+  quote: Vec<String>,
+  table: Vec<Vec<String>>,
+  code: Option<(String, Vec<String>)>,
+}
+
+impl Default for Renderer {
+  fn default() -> Self {
+    Self {
+      m: Markup {
+        html: String::new(),
+        images: Vec::new(),
+        text_len: 0,
+      },
+      list: List::None,
+      quote: Vec::new(),
+      table: Vec::new(),
+      code: None,
+    }
+  }
+}
+
+impl Renderer {
+  fn line(&mut self, raw: &str) {
+    if let Some((lang, lines)) = self.code.as_mut() {
       if raw.trim_start().starts_with("```") {
         let body = escape(&lines.join("\n"));
-        m.text_len += body.chars().count();
-        m.html += &format!("<pre lang=\"{}\">{body}</pre>", escape(lang));
-        code = None;
+        self.m.text_len += body.chars().count();
+        self.m.html += &format!("<pre lang=\"{}\">{body}</pre>", escape(lang));
+        self.code = None;
       } else {
         lines.push(raw.to_owned());
       }
-      continue;
+      return;
     }
     let line = raw.trim();
     let bullet = line.strip_prefix("- ").or_else(|| line.strip_prefix("* "));
     let numbered = numbered_item(line);
-    if bullet.is_none() && numbered.is_none() {
-      close_list(&mut m.html, &mut list);
-    }
-    if !line.starts_with('>') && !quote.is_empty() {
-      m.html += &format!("<blockquote>{}</blockquote>", quote.join("<br>"));
-      quote.clear();
-    }
-    if !line.starts_with('|') && !table.is_empty() {
-      m.html += &table_html(&table);
-      table.clear();
-    }
+    self.close_finished(line, bullet.is_some() || numbered.is_some());
     if let Some(lang) = line.strip_prefix("```") {
-      code = Some((lang.trim().to_owned(), Vec::new()));
+      self.code = Some((lang.trim().to_owned(), Vec::new()));
     } else if line.is_empty() {
     } else if let Some(item) = bullet {
-      open_list(&mut m.html, &mut list, List::Bullet);
-      m.html += &format!("<li>{}</li>", inline(item, &mut m.text_len));
+      self.list_item(List::Bullet, item);
     } else if let Some(item) = numbered {
-      open_list(&mut m.html, &mut list, List::Numbered);
-      m.html += &format!("<li>{}</li>", inline(item, &mut m.text_len));
+      self.list_item(List::Numbered, item);
     } else if let Some(text) = line.strip_prefix('>') {
-      quote.push(inline(text.trim(), &mut m.text_len));
+      self.quote.push(inline(text.trim(), &mut self.m.text_len));
     } else if line.starts_with('|') {
-      let cells: Vec<String> = line
-        .trim_matches('|')
-        .split('|')
-        .map(|c| c.trim().to_owned())
-        .collect();
-      let rule = cells
-        .iter()
-        .all(|c| !c.is_empty() && c.chars().all(|ch| matches!(ch, '-' | ':')));
-      if !rule {
-        table.push(cells);
-      }
-    } else if matches!(line, "---" | "***" | "___") {
+      self.table_row(line);
+    } else {
+      self.block(line);
+    }
+  }
+
+  /// Close the list, quote or table this line does not continue.
+  fn close_finished(&mut self, line: &str, list_item: bool) {
+    if !list_item {
+      close_list(&mut self.m.html, &mut self.list);
+    }
+    if !line.starts_with('>') && !self.quote.is_empty() {
+      self.m.html += &format!("<blockquote>{}</blockquote>", self.quote.join("<br>"));
+      self.quote.clear();
+    }
+    if !line.starts_with('|') && !self.table.is_empty() {
+      self.m.html += &table_html(&self.table);
+      self.table.clear();
+    }
+  }
+
+  fn list_item(&mut self, kind: List, item: &str) {
+    open_list(&mut self.m.html, &mut self.list, kind);
+    self.m.html += &format!("<li>{}</li>", inline(item, &mut self.m.text_len));
+  }
+
+  /// A table row; the `|---|` rule under the header is dropped.
+  fn table_row(&mut self, line: &str) {
+    let cells: Vec<String> = line
+      .trim_matches('|')
+      .split('|')
+      .map(|c| c.trim().to_owned())
+      .collect();
+    let rule = cells
+      .iter()
+      .all(|c| !c.is_empty() && c.chars().all(|ch| matches!(ch, '-' | ':')));
+    if !rule {
+      self.table.push(cells);
+    }
+  }
+
+  /// A line standing on its own: rule, image, link card, heading or paragraph.
+  fn block(&mut self, line: &str) {
+    let m = &mut self.m;
+    if matches!(line, "---" | "***" | "___") {
       m.html += "<hr>";
     } else if let Some(path) = image(line) {
       m.html += &placeholder(m.images.len());
@@ -120,21 +165,25 @@ pub fn render(md: &str) -> Markup {
       m.html += &format!("<p>{}</p>", inline(line, &mut m.text_len));
     }
   }
-  if let Some((lang, lines)) = code {
-    m.html += &format!(
-      "<pre lang=\"{}\">{}</pre>",
-      escape(&lang),
-      escape(&lines.join("\n"))
-    );
+
+  /// Close whatever is still open at the end of the text.
+  fn finish(mut self) -> Markup {
+    if let Some((lang, lines)) = self.code.take() {
+      self.m.html += &format!(
+        "<pre lang=\"{}\">{}</pre>",
+        escape(&lang),
+        escape(&lines.join("\n"))
+      );
+    }
+    close_list(&mut self.m.html, &mut self.list);
+    if !self.quote.is_empty() {
+      self.m.html += &format!("<blockquote>{}</blockquote>", self.quote.join("<br>"));
+    }
+    if !self.table.is_empty() {
+      self.m.html += &table_html(&self.table);
+    }
+    self.m
   }
-  close_list(&mut m.html, &mut list);
-  if !quote.is_empty() {
-    m.html += &format!("<blockquote>{}</blockquote>", quote.join("<br>"));
-  }
-  if !table.is_empty() {
-    m.html += &table_html(&table);
-  }
-  m
 }
 
 fn numbered_item(line: &str) -> Option<&str> {

@@ -8,7 +8,7 @@
 
 use social_core::{Collection, Error, Post, Result, User, Value, ValueExt, json};
 
-use crate::api::{Api, Client, MUSIC};
+use crate::api::{Api, ClientType, MUSIC};
 use crate::parse::{self, duration, text};
 
 /// `music search --type`: the param ytmusicapi sends for each kind.
@@ -81,38 +81,7 @@ fn song(r: &Value, owner: Option<&User>) -> Option<Post> {
     raw: Some(r.clone()),
     ..Post::default()
   };
-  let mut artists = Vec::new();
-  for run in byline(r) {
-    let t = run.str("text").unwrap_or_default();
-    match link(run) {
-      Some((bid, _)) if bid.starts_with("UC") => artists.push(User {
-        url: Some(browse_url(&bid)),
-        name: t,
-        id: bid,
-        ..User::default()
-      }),
-      Some((bid, kind)) if kind.ends_with("ALBUM") || bid.starts_with("MPRE") => {
-        post
-          .extra
-          .insert("album".into(), json!({ "id": bid, "name": t }));
-      }
-      _ => {
-        if let Some(secs) = duration(&t) {
-          post.extra.insert("duration".into(), secs.into());
-        } else if t.contains("view") || t.contains("play") {
-          post.metrics.views = parse::count(&t);
-        } else if matches!(t.as_str(), "Song" | "Video" | "Episode") {
-          post.extra.insert("type".into(), t.to_lowercase().into());
-        } else if artists.is_empty() {
-          artists.push(User {
-            id: t.clone(),
-            name: t,
-            ..User::default()
-          });
-        }
-      }
-    }
-  }
+  let mut artists = byline_parts(&mut post, r);
   // Artist pages put the plays ("2.5B plays") in a later column.
   if post.metrics.views.is_none() {
     post.metrics.views = (2..4)
@@ -148,12 +117,99 @@ fn song(r: &Value, owner: Option<&User>) -> Option<Post> {
   Some(post)
 }
 
-/// An album, single, playlist or artist row.
-fn entity(r: &Value) -> Option<(String, String, String, Vec<String>)> {
-  let (id, kind) = link(r)?;
-  let title = column(r, 0).first().and_then(|run| run.str("text"))?;
-  let parts: Vec<String> = byline(r).iter().filter_map(|run| run.str("text")).collect();
-  Some((id, kind, title, parts))
+/// The byline of a song row: artists (returned), the album, the duration,
+/// the plays and the type, put into `post`.
+fn byline_parts(post: &mut Post, r: &Value) -> Vec<User> {
+  let mut artists = Vec::new();
+  for run in byline(r) {
+    let t = run.str("text").unwrap_or_default();
+    match link(run) {
+      Some((bid, _)) if bid.starts_with("UC") => artists.push(User {
+        url: Some(browse_url(&bid)),
+        name: t,
+        id: bid,
+        ..User::default()
+      }),
+      Some((bid, kind)) if kind.ends_with("ALBUM") || bid.starts_with("MPRE") => {
+        post
+          .extra
+          .insert("album".into(), json!({ "id": bid, "name": t }));
+      }
+      _ => byline_text(post, &mut artists, t),
+    }
+  }
+  artists
+}
+
+/// An unlinked byline part: a duration, plays, the type, or an artist name.
+fn byline_text(post: &mut Post, artists: &mut Vec<User>, text: String) {
+  if let Some(secs) = duration(&text) {
+    post.extra.insert("duration".into(), secs.into());
+  } else if text.contains("view") || text.contains("play") {
+    post.metrics.views = parse::count(&text);
+  } else if matches!(text.as_str(), "Song" | "Video" | "Episode") {
+    post.extra.insert("type".into(), text.to_lowercase().into());
+  } else if artists.is_empty() {
+    artists.push(User {
+      id: text.clone(),
+      name: text,
+      ..User::default()
+    });
+  }
+}
+
+/// An album, single, playlist or artist row: its browse id, page type,
+/// title and byline parts.
+struct Entity {
+  id: String,
+  kind: String,
+  title: String,
+  parts: Vec<String>,
+}
+
+impl Entity {
+  fn of(r: &Value) -> Option<Self> {
+    let (id, kind) = link(r)?;
+    let title = column(r, 0).first().and_then(|run| run.str("text"))?;
+    let parts = byline(r).iter().filter_map(|run| run.str("text")).collect();
+    Some(Self {
+      id,
+      kind,
+      title,
+      parts,
+    })
+  }
+
+  fn artist(self) -> User {
+    let mut user = User {
+      url: Some(browse_url(&self.id)),
+      bio: (!self.parts.is_empty()).then(|| self.parts.join(" • ")),
+      id: self.id,
+      name: self.title,
+      ..User::default()
+    };
+    user.stats.followers = self
+      .parts
+      .iter()
+      .find_map(|p| p.contains("subscriber").then(|| parse::count(p)).flatten());
+    user
+  }
+
+  fn album(self) -> Collection {
+    let kind = self
+      .kind
+      .strip_prefix("MUSIC_PAGE_TYPE_")
+      .unwrap_or("playlist")
+      .to_lowercase();
+    Collection {
+      url: Some(browse_url(&self.id)),
+      description: (!self.parts.is_empty()).then(|| self.parts.join(" • ")),
+      id: self.id,
+      kind,
+      name: self.title,
+      ..Collection::default()
+    }
+  }
 }
 
 fn rows(v: &Value) -> Vec<&Value> {
@@ -175,7 +231,7 @@ pub async fn search(api: &Api, query: &str, kind: &str) -> Result<Found> {
     .ok_or_else(|| Error::input(format!("unknown kind `{kind}`")))?;
   let v = api
     .call_as(
-      Client::Music,
+      ClientType::Music,
       "search",
       json!({ "query": query, "params": params }),
     )
@@ -188,43 +244,15 @@ pub async fn search(api: &Api, query: &str, kind: &str) -> Result<Found> {
     "artists" => Found::Artists(
       rows
         .into_iter()
-        .filter_map(entity)
-        .map(|(id, _, name, parts)| {
-          let mut u = User {
-            url: Some(browse_url(&id)),
-            bio: (!parts.is_empty()).then(|| parts.join(" • ")),
-            id,
-            name,
-            ..User::default()
-          };
-          u.stats.followers = parts
-            .iter()
-            .find_map(|p| p.contains("subscriber").then(|| parse::count(p)).flatten());
-          u
-        })
+        .filter_map(Entity::of)
+        .map(Entity::artist)
         .collect(),
     ),
     _ => Found::Albums(
       rows
         .into_iter()
-        .filter_map(entity)
-        .map(|(id, kind, name, parts)| {
-          let kind = kind
-            .strip_prefix("MUSIC_PAGE_TYPE_")
-            .unwrap_or("playlist")
-            .to_lowercase();
-          let mut c = Collection {
-            url: Some(browse_url(&id)),
-            id,
-            kind,
-            name,
-            ..Collection::default()
-          };
-          if !parts.is_empty() {
-            c.description = Some(parts.join(" • "));
-          }
-          c
-        })
+        .filter_map(Entity::of)
+        .map(Entity::album)
         .collect(),
     ),
   })
@@ -239,7 +267,11 @@ pub async fn tracks(api: &Api, id: &str) -> Result<Vec<Post>> {
     id.to_owned()
   };
   let v = api
-    .call_as(Client::Music, "browse", json!({ "browseId": browse_id }))
+    .call_as(
+      ClientType::Music,
+      "browse",
+      json!({ "browseId": browse_id }),
+    )
     .await?;
   let header = parse::first(&v, "musicResponsiveHeaderRenderer")
     .or_else(|| parse::first(&v, "musicImmersiveHeaderRenderer"))
@@ -285,7 +317,7 @@ pub async fn tracks(api: &Api, id: &str) -> Result<Vec<Post>> {
 pub async fn lyrics(api: &Api, video: &str) -> Result<Value> {
   let next = api
     .call_as(
-      Client::Music,
+      ClientType::Music,
       "next",
       json!({ "videoId": video, "isAudioOnly": true }),
     )
@@ -296,7 +328,11 @@ pub async fn lyrics(api: &Api, video: &str) -> Result<Value> {
     .find(|id| id.starts_with("MPLYt"))
     .ok_or_else(|| Error::not_found(format!("no lyrics for {video}")))?;
   let v = api
-    .call_as(Client::Music, "browse", json!({ "browseId": browse_id }))
+    .call_as(
+      ClientType::Music,
+      "browse",
+      json!({ "browseId": browse_id }),
+    )
     .await?;
   let shelf = parse::first(&v, "musicDescriptionShelfRenderer")
     .ok_or_else(|| Error::not_found(format!("no lyrics for {video}")))?;

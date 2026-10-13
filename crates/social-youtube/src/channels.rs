@@ -1,15 +1,19 @@
 //! Channels: resolving handles and links to ids, the profile (page header
 //! plus "about" panel), the tabs (videos, Shorts, live streams, playlists,
-//! community posts, releases, podcasts) and the search inside a channel.
+//! community posts, releases, podcasts), the search inside a channel, and
+//! subscribing with the notification bell (YouTube.js `InteractionManager`).
 
 use std::time::Duration;
 
-use social_core::{Error, ErrorCode, PageReq, Result, User, Value, ValueExt, json};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use social_core::{Action, Error, ErrorCode, PageReq, Result, User, Value, ValueExt, json};
 
 use crate::api::Api;
-use crate::browse;
-use crate::parse::{self, Listing};
-use crate::refs::{self, ChannelRef};
+use crate::parse::Listing;
+use crate::proto::Msg;
+use crate::refs::ChannelRef;
+use crate::{channels, parse, refs};
 
 /// Handles rarely move to another channel.
 const ID_TTL: Duration = Duration::from_secs(30 * 86400);
@@ -55,7 +59,7 @@ pub async fn id(api: &Api, arg: &str) -> Result<String> {
 
 /// The channel page of an id; a missing channel answers 400 / 404.
 async fn page(api: &Api, id: &str, params: Option<&str>) -> Result<Value> {
-  match browse::page(api, id, params, &PageReq::default()).await {
+  match api.browse(id, params, &PageReq::default()).await {
     Err(e) if matches!(e.code, ErrorCode::NotFound | ErrorCode::UpstreamError) => Err(
       Error::not_found(format!("channel {id} not found ({})", e.message)),
     ),
@@ -195,7 +199,7 @@ pub async fn tab(api: &Api, arg: &str, tab: Tab, req: &PageReq) -> Result<Listin
         cursor: Some(token.to_owned()),
         size: req.size,
       };
-      let l = browse::listing(api, "", None, &next).await?;
+      let l = parse::listing(&api.browse("", None, &next).await?);
       (id.to_owned(), l, cached_owner(api, id))
     }
     None => {
@@ -225,7 +229,7 @@ pub async fn search(api: &Api, arg: &str, query: &str, req: &PageReq) -> Result<
       cursor: Some(token.to_owned()),
       size: req.size,
     };
-    let mut l = browse::listing(api, "", None, &next).await?;
+    let mut l = parse::listing(&api.browse("", None, &next).await?);
     l.next = l.next.map(|t| format!("{id}:{t}"));
     return Ok(l);
   }
@@ -257,4 +261,54 @@ pub async fn search(api: &Api, arg: &str, query: &str, req: &PageReq) -> Result<
   }
   l.next = l.next.map(|t| format!("{id}:{t}"));
   Ok(l)
+}
+
+/// Subscribe to (or unsubscribe from) a channel.
+pub async fn follow(api: &Api, user: &str, undo: bool) -> Result<Action> {
+  api.require_login()?;
+  let id = channels::id(api, user).await?;
+  let (path, params, name) = if undo {
+    ("subscription/unsubscribe", "CgIIAhgA", "unfollow")
+  } else {
+    ("subscription/subscribe", "EgIIAhgA", "follow")
+  };
+  api
+    .write(path, json!({ "channelIds": [id], "params": params }))
+    .await?;
+  Ok(Action::done(name, &id).with_url(refs::channel_url(&id)))
+}
+
+pub const BELL: &[&str] = &["all", "personalized", "none"];
+
+/// The bell of a subscription: all, personalized or no notifications.
+/// Params as YouTube.js `setNotificationPreferences` writes them:
+/// `{1: channel, 2: {1: level}, 3: 0, 4: 4}`, base64 then URI-escaped.
+pub async fn bell(api: &Api, user: &str, level: &str) -> Result<Action> {
+  api.require_login()?;
+  let id = channels::id(api, user).await?;
+  let index = match level {
+    "personalized" => 1,
+    "all" => 2,
+    "none" => 3,
+    other => return Err(Error::input(format!("unknown bell setting `{other}`"))),
+  };
+  let raw = Msg::new()
+    .str(1, &id)
+    .msg(2, Msg::new().int(1, index))
+    .int(3, 0)
+    .int(4, 4)
+    .into_bytes();
+  let b64 = STANDARD.encode(raw);
+  let params: String = url::form_urlencoded::byte_serialize(b64.as_bytes()).collect();
+  api
+    .write(
+      "notification/modify_channel_preference",
+      json!({ "params": params }),
+    )
+    .await?;
+  Ok(
+    Action::done("bell", &id)
+      .with_url(refs::channel_url(&id))
+      .with_message(format!("notifications: {level}")),
+  )
 }

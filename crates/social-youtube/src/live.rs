@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use social_core::chat;
 use social_core::output::Stream;
 use social_core::text::from_secs;
 use social_core::{Action, Error, Page, PageReq, Post, Result, User, Value, ValueExt, json};
@@ -169,7 +170,7 @@ fn message(item: &Value, video: &str) -> Option<Post> {
     ..User::default()
   };
   let mut post = Post {
-    id: format!("{video}/{id}"),
+    id: chat::message_id(video, &id),
     kind: kind.into(),
     text: runs(r.at("message"))
       .or_else(|| runs(r.at("headerSubtext")))
@@ -276,7 +277,7 @@ pub async fn listen(api: &Api, videos: &[String], out: &Stream) -> Result<()> {
 pub async fn send(api: &Api, arg: &str, text: &str) -> Result<Action> {
   api.require_login()?;
   let video = refs::video(arg)?;
-  let player = crate::video::player(api, &video).await?;
+  let player = crate::videos::player(api, &video).await?;
   let channel = player
     .str("videoDetails.channelId")
     .ok_or_else(|| Error::not_found(format!("video {video} not found")))?;
@@ -302,7 +303,7 @@ pub async fn send(api: &Api, arg: &str, text: &str) -> Result<Action> {
   let id = parse::first(&v, "liveChatTextMessageRenderer").and_then(|m| m.str("id"));
   let mut action = Action::done("send", &video).with_url(refs::video_url(&video));
   if let Some(id) = id {
-    action = action.with_id(format!("{video}/{id}"));
+    action = action.with_id(chat::message_id(&video, &id));
   }
   Ok(action)
 }

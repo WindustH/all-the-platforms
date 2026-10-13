@@ -10,6 +10,7 @@ mod comment;
 mod items;
 mod post;
 mod video;
+mod watch;
 
 use jiff::{SignedDuration, Timestamp};
 use social_core::text::parse_count;
@@ -20,7 +21,7 @@ use crate::refs::channel_url;
 pub use channel::{about, channel, channel_page};
 pub use comment::{Entities, comment_view, header_count};
 pub use items::{Listing, listing, listing_without, token};
-pub use video::full as full_video;
+pub use watch::full as full_video;
 
 /// Plain text of `simpleText`, `runs`, `content` (view models) or a string.
 pub fn text(v: &Value) -> Option<String> {

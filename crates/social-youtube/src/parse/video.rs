@@ -2,15 +2,12 @@
 //! variants, `lockupViewModel`, Shorts lockups) and the full watch page
 //! (`player` details + `next` primary / secondary info).
 
-use jiff::Timestamp;
-use social_core::{Collection, Media, Metrics, Post, User, Value, ValueExt, json};
+use social_core::{Collection, Media, Post, User, Value, ValueExt};
 
-use super::{
-  byline, count, duration, find, first, image, number_in, owner, put, text, verified, when,
-};
-use crate::refs::{channel_url, playlist_url, short_url, video_url};
+use super::{byline, count, duration, find, first, image, owner, put, text, verified, when};
+use crate::refs::{playlist_url, short_url, video_url};
 
-fn base(id: String, short: bool) -> Post {
+pub(super) fn base(id: String, short: bool) -> Post {
   Post {
     kind: if short { "short" } else { "video" }.into(),
     url: Some(if short {
@@ -23,7 +20,7 @@ fn base(id: String, short: bool) -> Post {
   }
 }
 
-fn thumbnail(post: &mut Post, v: &Value) {
+pub(super) fn thumbnail(post: &mut Post, v: &Value) {
   if let Some(url) = image(v) {
     post.media.push(Media {
       alt: Some("thumbnail".into()),
@@ -33,13 +30,13 @@ fn thumbnail(post: &mut Post, v: &Value) {
 }
 
 /// Published time, keeping YouTube's own wording next to the parsed value.
-fn published(post: &mut Post, t: Option<String>) {
-  if let Some(t) = t {
-    post.created_at = when(&t);
-    if t.starts_with("Streamed") {
+fn published(post: &mut Post, age: Option<String>) {
+  if let Some(age) = age {
+    post.created_at = when(&age);
+    if age.starts_with("Streamed") {
       put(&mut post.extra, "stream", true);
     }
-    put(&mut post.extra, "published", t);
+    put(&mut post.extra, "published", age);
   }
 }
 
@@ -67,7 +64,16 @@ pub fn renderer(r: &Value, reel: bool) -> Option<Post> {
     a.verified = verified(r.at("ownerBadges"));
     a
   });
-  // Playlist entries put views and age into `videoInfo`: `1.2M views • 5 years ago`.
+  views_and_age(&mut p, r);
+  renderer_extra(&mut p, r, &styles);
+  thumbnail(&mut p, r.at("thumbnail"));
+  p.raw = Some(r.clone());
+  Some(p)
+}
+
+/// Views and age, from their own fields or from `videoInfo`, where playlist
+/// entries put them: `1.2M views • 5 years ago`.
+fn views_and_age(p: &mut Post, r: &Value) {
   let info: Vec<String> = r
     .list("videoInfo.runs")
     .iter()
@@ -79,7 +85,11 @@ pub fn renderer(r: &Value, reel: bool) -> Option<Post> {
   p.metrics.views = views.as_deref().and_then(count);
   let age =
     text(r.at("publishedTimeText")).or_else(|| info.iter().find(|t| t.contains("ago")).cloned());
-  published(&mut p, age);
+  published(p, age);
+}
+
+/// Duration, live and upcoming states, playlist position and badges.
+fn renderer_extra(p: &mut Post, r: &Value, styles: &[String]) {
   let length = text(r.at("lengthText"))
     .and_then(|t| duration(&t))
     .or_else(|| r.u64("lengthSeconds"));
@@ -106,9 +116,6 @@ pub fn renderer(r: &Value, reel: bool) -> Option<Post> {
   if !badges.is_empty() {
     put(&mut p.extra, "badges", badges);
   }
-  thumbnail(&mut p, r.at("thumbnail"));
-  p.raw = Some(r.clone());
-  Some(p)
 }
 
 /// `shortsLockupViewModel` (Shorts shelves and the Shorts tab).
@@ -183,48 +190,14 @@ pub fn lockup(l: &Value) -> Option<Lockup> {
   let parts = parts(meta);
   let badges = badges(l);
   if kind != "LOCKUP_CONTENT_TYPE_VIDEO" {
-    let kind = kind
-      .strip_prefix("LOCKUP_CONTENT_TYPE_")
-      .unwrap_or("playlist")
-      .to_lowercase();
-    let mut c = Collection {
-      url: Some(playlist_url(&id)),
-      name: title.unwrap_or_else(|| id.clone()),
-      items: badges.iter().find_map(|b| count(b)),
-      owner: lockup_owner(l),
-      id,
-      kind,
-      raw: Some(l.clone()),
-      ..Collection::default()
-    };
-    if let Some(updated) = parts.iter().find(|(t, _)| t.contains("pdated")) {
-      put(&mut c.extra, "updated", updated.0.clone());
-    }
-    return Some(Lockup::Playlist(c));
+    return Some(Lockup::Playlist(lockup_playlist(
+      l, id, &kind, title, &parts, &badges,
+    )));
   }
   let mut p = base(id, false);
   p.title = title;
   p.author = lockup_owner(l);
-  // Parts are the channel, the views (`1.2M views`, or a bare `1M` in
-  // compact lists) and the age (`3 days ago`, `4y ago`), each optional.
-  let mut name = None;
-  for (t, _) in &parts {
-    let bare_count = !t.contains(' ') && t.starts_with(|c: char| c.is_ascii_digit());
-    if t.ends_with("views") || t.ends_with("view") || t.ends_with("watching") || bare_count {
-      p.metrics.views = count(t);
-    } else if when(t).is_some() {
-      if p.created_at.is_none() {
-        published(&mut p, Some(t.clone()));
-      }
-    } else if name.is_none() {
-      name = Some(t.clone());
-    }
-  }
-  if let (Some(a), Some(n)) = (p.author.as_mut(), name)
-    && (a.name == a.id || a.handle.as_deref() == Some(a.name.trim_start_matches('@')))
-  {
-    a.name = n;
-  }
+  lockup_parts(&mut p, &parts);
   put(
     &mut p.extra,
     "duration",
@@ -238,163 +211,55 @@ pub fn lockup(l: &Value) -> Option<Lockup> {
   Some(Lockup::Video(p))
 }
 
-/// Chapters of a watch page: `[{title, start}]` and whether YouTube made them.
-fn chapters(next: &Value) -> Option<(Value, bool)> {
-  let markers = next.list("playerOverlays.playerOverlayRenderer.decoratedPlayerBarRenderer.decoratedPlayerBarRenderer.playerBar.multiMarkersPlayerBarRenderer.markersMap");
-  let map = markers
-    .iter()
-    .find(|m| m.str("key").is_some_and(|k| k.ends_with("CHAPTERS")))?;
-  let list: Vec<Value> = find(map, "chapterRenderer")
-    .iter()
-    .map(|c| {
-      json!({
-        "title": text(c.at("title")),
-        "start": c.u64("timeRangeStartMillis").map(|ms| ms as f64 / 1000.0),
-      })
-    })
-    .collect();
-  let auto = map.str("key").as_deref() == Some("AUTO_CHAPTERS");
-  (!list.is_empty()).then(|| (Value::from(list), auto))
-}
-
-/// The audience-retention heatmap of a watch page (`macroMarkersListEntity`
-/// of type `MARKER_TYPE_HEATMAP`, as YouTube.js reads it): equal segments
-/// with an intensity between 0 and 1, and the "Most replayed" ranges.
-fn heatmap(next: &Value) -> Option<(Value, Value)> {
-  let list = find(next, "macroMarkersListEntity")
-    .into_iter()
-    .map(|e| e.at("markersList"))
-    .find(|l| l.str("markerType").as_deref() == Some("MARKER_TYPE_HEATMAP"))?;
-  let markers = list.list("markers");
-  let segment = markers.first()?.f64("durationMillis")? / 1000.0;
-  let intensity: Vec<Value> = markers
-    .iter()
-    .map(|m| {
-      let i = m.f64("intensityScoreNormalized").unwrap_or(0.0);
-      json!((i * 1000.0).round() / 1000.0)
-    })
-    .collect();
-  let replayed: Vec<Value> = list
-    .list("markersDecoration.timedMarkerDecorations")
-    .iter()
-    .filter_map(|d| {
-      Some(json!({
-        "start": d.f64("visibleTimeRangeStartMillis")? / 1000.0,
-        "end": d.f64("visibleTimeRangeEndMillis")? / 1000.0,
-        "peak": d.f64("decorationTimeMillis").map(|ms| ms / 1000.0),
-      }))
-    })
-    .collect();
-  Some((
-    json!({ "segment": segment, "intensity": intensity }),
-    Value::from(replayed),
-  ))
-}
-
-/// A watch page: `player` (details, microformat) plus `next` (owner, likes,
-/// chapters). Comments are counted separately.
-pub fn full(player: &Value, next: &Value) -> Option<Post> {
-  let d = player.at("videoDetails");
-  let m = player.at("microformat.playerMicroformatRenderer");
-  let id = d.str("videoId").or_else(|| m.str("externalVideoId"))?;
-  let results = next.at("contents.twoColumnWatchNextResults.results.results");
-  let primary = first(results, "videoPrimaryInfoRenderer").unwrap_or(&Value::Null);
-  let secondary = first(results, "videoSecondaryInfoRenderer").unwrap_or(&Value::Null);
-  let short = m.bool("isShortsEligible") == Some(true);
-  let mut p = base(id, short);
-  p.title = d.str("title").or_else(|| text(m.at("title")));
-  p.text = d
-    .str("shortDescription")
-    .or_else(|| text(m.at("description")));
-  let o = secondary.at("owner.videoOwnerRenderer");
-  let channel = d.str("channelId").or_else(|| m.str("externalChannelId"));
-  p.author = channel.map(|cid| {
-    let handle = m
-      .str("ownerProfileUrl")
-      .and_then(|u| u.rsplit('/').next().map(str::to_owned))
-      .filter(|h| h.starts_with('@'))
-      .map(|h| h.trim_start_matches('@').to_owned());
-    let mut u = User {
-      name: d
-        .str("author")
-        .or_else(|| m.str("ownerChannelName"))
-        .unwrap_or_else(|| cid.clone()),
-      url: Some(channel_url(&cid)),
-      handle,
-      avatar: image(o.at("thumbnail")),
-      verified: verified(o.at("badges")),
-      id: cid,
-      ..User::default()
-    };
-    u.stats.followers = text(o.at("subscriberCountText")).and_then(|t| count(&t));
-    u
-  });
-  p.created_at = m
-    .str("publishDate")
-    .or_else(|| m.str("uploadDate"))
-    .and_then(|s| s.parse::<Timestamp>().ok())
-    .or_else(|| text(primary.at("dateText")).and_then(|t| when(&t)));
-  let like_text = find(primary, "buttonViewModel")
-    .iter()
-    .find(|b| b.str("iconName").as_deref() == Some("LIKE"))
-    .and_then(|b| b.str("accessibilityText"));
-  p.metrics = Metrics {
-    views: d.u64("viewCount").or_else(|| m.u64("viewCount")),
-    likes: m
-      .u64("likeCount")
-      .or_else(|| like_text.and_then(|t| number_in(&t))),
-    ..Metrics::default()
+/// A lockup of anything but a video: a playlist, mix, podcast ...
+fn lockup_playlist(
+  l: &Value,
+  id: String,
+  kind: &str,
+  title: Option<String>,
+  parts: &[(String, Option<&Value>)],
+  badges: &[String],
+) -> Collection {
+  let kind = kind
+    .strip_prefix("LOCKUP_CONTENT_TYPE_")
+    .unwrap_or("playlist")
+    .to_lowercase();
+  let mut c = Collection {
+    url: Some(playlist_url(&id)),
+    name: title.unwrap_or_else(|| id.clone()),
+    items: badges.iter().find_map(|b| count(b)),
+    owner: lockup_owner(l),
+    id,
+    kind,
+    raw: Some(l.clone()),
+    ..Collection::default()
   };
-  p.tags = d
-    .list("keywords")
-    .iter()
-    .filter_map(|k| k.str(""))
-    .collect();
-  thumbnail(&mut p, d.at("thumbnail"));
-  let x = &mut p.extra;
-  put(x, "duration", d.u64("lengthSeconds"));
-  put(x, "category", m.str("category"));
-  put(x, "published", text(primary.at("dateText")));
-  let hashtags: Vec<String> = primary
-    .list("superTitleLink.runs")
-    .iter()
-    .filter_map(|r| r.str("text"))
-    .filter(|t| t.starts_with('#'))
-    .collect();
-  if !hashtags.is_empty() {
-    put(x, "hashtags", hashtags);
+  if let Some(updated) = parts.iter().find(|(t, _)| t.contains("pdated")) {
+    put(&mut c.extra, "updated", updated.0.clone());
   }
-  if let Some((map, replayed)) = heatmap(next) {
-    put(x, "heatmap", map);
-    if replayed.as_array().is_some_and(|r| !r.is_empty()) {
-      put(x, "most_replayed", replayed);
+  c
+}
+
+/// The metadata parts of a video lockup: the channel, the views (`1.2M
+/// views`, or a bare `1M` in compact lists) and the age (`3 days ago`,
+/// `4y ago`), each optional.
+fn lockup_parts(p: &mut Post, parts: &[(String, Option<&Value>)]) {
+  let mut name = None;
+  for (t, _) in parts {
+    let bare_count = !t.contains(' ') && t.starts_with(|c: char| c.is_ascii_digit());
+    if t.ends_with("views") || t.ends_with("view") || t.ends_with("watching") || bare_count {
+      p.metrics.views = count(t);
+    } else if when(t).is_some() {
+      if p.created_at.is_none() {
+        published(p, Some(t.clone()));
+      }
+    } else if name.is_none() {
+      name = Some(t.clone());
     }
   }
-  if let Some((list, auto)) = chapters(next) {
-    put(x, "chapters", list);
-    if auto {
-      put(x, "chapters_auto", true);
-    }
+  if let (Some(a), Some(n)) = (p.author.as_mut(), name)
+    && (a.name == a.id || a.handle.as_deref() == Some(a.name.trim_start_matches('@')))
+  {
+    a.name = n;
   }
-  for (key, flag) in [
-    ("live", d.bool("isLive")),
-    ("live_content", d.bool("isLiveContent")),
-    ("upcoming", d.bool("isUpcoming")),
-    ("private", d.bool("isPrivate")),
-    ("unlisted", m.bool("isUnlisted")),
-  ] {
-    if flag == Some(true) {
-      put(x, key, true);
-    }
-  }
-  put(x, "family_safe", m.bool("isFamilySafe"));
-  if let Some(status) = first(primary, "likeStatusEntity").and_then(|l| l.str("likeStatus")) {
-    match status.as_str() {
-      "LIKE" => put(x, "liked", true),
-      "DISLIKE" => put(x, "disliked", true),
-      _ => {}
-    }
-  }
-  p.raw = Some(json!({ "player": player, "next": next }));
-  Some(p)
 }

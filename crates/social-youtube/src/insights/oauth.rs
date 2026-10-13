@@ -3,12 +3,11 @@
 //! (`YOUTUBE_REFRESH_TOKEN`) granted once with `social youtube oauth`. Access
 //! tokens are cached until shortly before they expire; none are logged.
 
-use std::cell::RefCell;
 use std::net::TcpListener;
 use std::time::{Duration, Instant};
 
-use serde::{Deserialize, Serialize};
-use social_core::{Ctx, Error, Result, Value, ValueExt, json};
+use social_core::token::AccessToken;
+use social_core::{Ctx, Error, Result, Value, ValueExt, credentials, json};
 
 const AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
@@ -16,8 +15,6 @@ const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 const SCOPES: &str = "https://www.googleapis.com/auth/yt-analytics.readonly \
   https://www.googleapis.com/auth/youtube.readonly";
 const CACHE_KEY: &str = "oauth-token";
-const CACHE_TTL: Duration = Duration::from_secs(3600);
-const MARGIN_SECS: i64 = 120;
 /// How long `oauth` waits for the browser to come back.
 const CONSENT_WAIT: Duration = Duration::from_secs(300);
 pub const SETUP_HINT: &str = "creator analytics use the YouTube Analytics API: create an OAuth \
@@ -25,30 +22,19 @@ pub const SETUP_HINT: &str = "creator analytics use the YouTube Analytics API: c
   YouTube Data API v3 enabled, set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET, run \
   `social youtube oauth` and set the YOUTUBE_REFRESH_TOKEN it prints";
 
-fn var(name: &str) -> Option<String> {
-  std::env::var(name)
-    .ok()
-    .map(|v| v.trim().to_owned())
-    .filter(|v| !v.is_empty())
-}
-
 /// The OAuth client from the environment.
 fn client() -> Option<(String, String)> {
-  Some((var("YOUTUBE_CLIENT_ID")?, var("YOUTUBE_CLIENT_SECRET")?))
+  Some((
+    credentials::env("YOUTUBE_CLIENT_ID")?,
+    credentials::env("YOUTUBE_CLIENT_SECRET")?,
+  ))
 }
 
 pub struct Credentials {
   id: String,
   secret: String,
   refresh: String,
-  token: RefCell<Option<String>>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Cached {
-  token: String,
-  /// Unix seconds.
-  expires: i64,
+  token: AccessToken,
 }
 
 impl Credentials {
@@ -57,55 +43,30 @@ impl Credentials {
     Some(Self {
       id,
       secret,
-      refresh: var("YOUTUBE_REFRESH_TOKEN")?,
-      token: RefCell::new(None),
+      refresh: credentials::env("YOUTUBE_REFRESH_TOKEN")?,
+      token: AccessToken::default(),
     })
   }
 
   /// A valid access token: from memory, the cache or a refresh.
   pub async fn token(&self, ctx: &Ctx) -> Result<String> {
-    if let Some(t) = self.token.borrow().clone() {
-      return Ok(t);
-    }
-    let now = jiff::Timestamp::now().as_second();
-    let cached = ctx
-      .store
-      .cache_get::<Cached>(CACHE_KEY, CACHE_TTL)
-      .filter(|c| c.expires - MARGIN_SECS > now && !c.token.is_empty());
-    let token = match cached {
-      Some(c) => c.token,
-      None => {
-        let form = [
-          ("client_id", self.id.as_str()),
-          ("client_secret", self.secret.as_str()),
-          ("refresh_token", self.refresh.as_str()),
-          ("grant_type", "refresh_token"),
-        ];
-        let v = grant(ctx, &form).await?;
-        let token = v.str("access_token").unwrap_or_default();
-        let expires = now + v.i64("expires_in").unwrap_or(3600);
-        ctx.store.cache_put(
-          CACHE_KEY,
-          &Cached {
-            token: token.clone(),
-            expires,
-          },
-        );
-        token
-      }
+    let refresh = async || {
+      let form = [
+        ("client_id", self.id.as_str()),
+        ("client_secret", self.secret.as_str()),
+        ("refresh_token", self.refresh.as_str()),
+        ("grant_type", "refresh_token"),
+      ];
+      let v = grant(ctx, &form).await?;
+      let token = v.str("access_token").unwrap_or_default();
+      Ok((token, v.i64("expires_in").unwrap_or(3600)))
     };
-    *self.token.borrow_mut() = Some(token.clone());
-    Ok(token)
+    self.token.get(ctx, CACHE_KEY, refresh).await
   }
 
   /// Forget a refused token, so the next run refreshes it.
   pub fn forget(&self, ctx: &Ctx) {
-    *self.token.borrow_mut() = None;
-    let empty = Cached {
-      token: String::new(),
-      expires: 0,
-    };
-    ctx.store.cache_put(CACHE_KEY, &empty);
+    self.token.forget(ctx, CACHE_KEY);
   }
 }
 

@@ -13,12 +13,13 @@
 //! bot check) or whose streams are refused falls back to `yt-dlp` when that is
 //! on PATH, which runs YouTube's player code for signatures and tokens.
 
+use std::cmp::Reverse;
 use std::process::Stdio;
 
 use social_core::{Error, ErrorCode, Media, MediaKind, Post, Result, Value, ValueExt};
 
 use crate::api::{self, Api};
-use crate::{parse, refs, video};
+use crate::{parse, refs, videos};
 
 /// googlevideo takes byte ranges as this URL parameter.
 const RANGE_PARAM: &str = "range";
@@ -56,34 +57,10 @@ fn streams(v: &Value, audio_only: bool) -> Result<Vec<Media>> {
     .iter()
     .filter(|f| f.str("url").is_some())
     .collect();
-  let mut audio: Vec<&Value> = adaptive
-    .iter()
-    .copied()
-    .filter(|f| mime(f).starts_with("audio/"))
-    .collect();
-  audio.sort_by_key(|f| {
-    std::cmp::Reverse((
-      f.bool("audioTrack.audioIsDefault").unwrap_or(true),
-      mime(f).starts_with("audio/mp4"),
-      f.u64("bitrate").unwrap_or(0),
-    ))
-  });
-  let mut videos: Vec<&Value> = adaptive
-    .iter()
-    .copied()
-    .filter(|f| mime(f).starts_with("video/"))
-    .collect();
-  videos.sort_by_key(|f| {
-    std::cmp::Reverse((
-      f.u64("height").unwrap_or(0),
-      codec(f),
-      f.u64("bitrate").unwrap_or(0),
-    ))
-  });
   let none = || Error::new(ErrorCode::UpstreamError, "YouTube listed no direct streams");
-  let a = audio.first().copied();
+  let audio = best_audio(&adaptive);
   if audio_only {
-    let a = a.ok_or_else(none)?;
+    let a = audio.ok_or_else(none)?;
     return Ok(vec![Media {
       duration,
       size: size(a),
@@ -91,18 +68,10 @@ fn streams(v: &Value, audio_only: bool) -> Result<Vec<Media>> {
       ..Media::new(MediaKind::Audio, url(a).unwrap_or_default())
     }]);
   }
-  let (f, a) = match (videos.first().copied(), a) {
+  let (f, a) = match (best_video(&adaptive), audio) {
     (Some(f), Some(a)) => (f, Some(a)),
     // No split streams: the best muxed (audio + video) format.
-    _ => {
-      let mut muxed: Vec<&Value> = v
-        .list("streamingData.formats")
-        .iter()
-        .filter(|f| f.str("url").is_some())
-        .collect();
-      muxed.sort_by_key(|f| std::cmp::Reverse(f.u64("height").unwrap_or(0)));
-      (muxed.first().copied().ok_or_else(none)?, None)
-    }
+    _ => (best_muxed(v).ok_or_else(none)?, None),
   };
   Ok(vec![Media {
     audio_url: a.and_then(url),
@@ -116,9 +85,49 @@ fn streams(v: &Value, audio_only: bool) -> Result<Vec<Media>> {
   }])
 }
 
+// `min_by_key(Reverse(..))` keeps the first of equal formats, in YouTube's order.
+
+/// The original language track first, AAC before Opus, then bitrate.
+fn best_audio<'a>(adaptive: &[&'a Value]) -> Option<&'a Value> {
+  adaptive
+    .iter()
+    .copied()
+    .filter(|f| mime(f).starts_with("audio/"))
+    .min_by_key(|f| {
+      Reverse((
+        f.bool("audioTrack.audioIsDefault").unwrap_or(true),
+        mime(f).starts_with("audio/mp4"),
+        f.u64("bitrate").unwrap_or(0),
+      ))
+    })
+}
+
+/// The highest resolution, then the most playable codec, then bitrate.
+fn best_video<'a>(adaptive: &[&'a Value]) -> Option<&'a Value> {
+  adaptive
+    .iter()
+    .copied()
+    .filter(|f| mime(f).starts_with("video/"))
+    .min_by_key(|f| {
+      Reverse((
+        f.u64("height").unwrap_or(0),
+        codec(f),
+        f.u64("bitrate").unwrap_or(0),
+      ))
+    })
+}
+
+/// The highest muxed (audio + video) format.
+fn best_muxed(v: &Value) -> Option<&Value> {
+  v.list("streamingData.formats")
+    .iter()
+    .filter(|f| f.str("url").is_some())
+    .min_by_key(|f| Reverse(f.u64("height").unwrap_or(0)))
+}
+
 pub async fn media(api: &Api, post: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
   let id = refs::video(post)?;
-  let v = video::mobile_player(api, &id).await?;
+  let v = videos::mobile_player(api, &id).await?;
   let mut p = parse::full_video(&v, &Value::Null).unwrap_or_else(|| Post {
     id: id.clone(),
     kind: "video".into(),

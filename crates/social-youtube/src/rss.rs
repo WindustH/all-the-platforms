@@ -10,7 +10,7 @@ use regex::Regex;
 use social_core::{Error, Media, Metrics, Post, Result, User};
 
 use crate::api::{Api, WWW};
-use crate::{channel, refs};
+use crate::{channels, refs};
 
 static ENTRY: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"(?s)<entry>(.*?)</entry>").expect("valid"));
@@ -92,7 +92,7 @@ pub async fn feed(api: &Api, arg: &str, playlist: bool) -> Result<Vec<Post>> {
   let query = if playlist {
     ("playlist_id", refs::playlist(arg)?)
   } else {
-    ("channel_id", channel::id(api, arg).await?)
+    ("channel_id", channels::id(api, arg).await?)
   };
   let resp = api
     .ctx

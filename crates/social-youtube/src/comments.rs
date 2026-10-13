@@ -20,7 +20,7 @@ use crate::api::Api;
 use crate::parse::{self, Entities};
 use crate::proto::Msg;
 use crate::refs::{self, PostRef};
-use crate::video;
+use crate::videos;
 
 pub const SORTS: &[&str] = &["top", "new"];
 
@@ -127,7 +127,7 @@ async fn post_comments(
   let v = match &req.cursor {
     Some(c) => browse(c.clone()).await?,
     None => {
-      let page = video::post_page(api, id).await?;
+      let page = videos::post_page(api, id).await?;
       let token = parse::find(&page, "itemSectionRenderer")
         .into_iter()
         .filter(|s| s.str("sectionIdentifier").as_deref() == Some("comment-item-section"))
@@ -166,7 +166,7 @@ async fn owner(api: &Api, video: &str) -> Result<String> {
   if let Some(id) = api.ctx.store.cache_get::<String>(&key, OWNER_TTL) {
     return Ok(id);
   }
-  let player = video::player(api, video).await?;
+  let player = videos::player(api, video).await?;
   let id = player
     .str("videoDetails.channelId")
     .ok_or_else(|| Error::not_found(format!("video {video} not found")))?;

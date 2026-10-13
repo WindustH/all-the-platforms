@@ -96,12 +96,12 @@ fn params(sort: Option<&str>, filter: Option<&str>, kind: Option<u64>) -> Result
   Ok(outer.encode())
 }
 
-async fn run(api: &Api, q: &Query, kind: Option<u64>, req: &PageReq) -> Result<Listing> {
+async fn run(api: &Api, query: &Query, kind: Option<u64>, req: &PageReq) -> Result<Listing> {
   let body = match &req.cursor {
     Some(token) => json!({ "continuation": token }),
     None => {
-      let mut b = json!({ "query": q.keyword });
-      let p = params(q.sort.as_deref(), q.filter.as_deref(), kind)?;
+      let mut b = json!({ "query": query.keyword });
+      let p = params(query.sort.as_deref(), query.filter.as_deref(), kind)?;
       if !p.is_empty() {
         b["params"] = Value::from(p);
       }
@@ -110,33 +110,33 @@ async fn run(api: &Api, q: &Query, kind: Option<u64>, req: &PageReq) -> Result<L
   };
   let v = api.call("search", body).await?;
   // The Shorts shelf in the middle of the results ignores filters.
-  Ok(match q.filter.as_deref() {
+  Ok(match query.filter.as_deref() {
     Some(f) if f != "shorts" => parse::listing_without(&v, SHELVES),
     _ => parse::listing(&v),
   })
 }
 
-pub async fn videos(api: &Api, q: &Query, req: &PageReq) -> Result<Page<Post>> {
-  let l = run(api, q, None, req).await?;
+pub async fn videos(api: &Api, query: &Query, req: &PageReq) -> Result<Page<Post>> {
+  let l = run(api, query, None, req).await?;
   Ok(Page::new(l.posts, l.next))
 }
 
-pub async fn channels(api: &Api, q: &Query, req: &PageReq) -> Result<Page<User>> {
-  let q = Query {
+pub async fn channels(api: &Api, query: &Query, req: &PageReq) -> Result<Page<User>> {
+  let query = Query {
     filter: None,
-    ..q.clone()
+    ..query.clone()
   };
-  let l = run(api, &q, Some(CHANNEL), req).await?;
+  let l = run(api, &query, Some(CHANNEL), req).await?;
   Ok(Page::new(l.users, l.next))
 }
 
 /// Playlists (and courses / podcasts): YouTube has no hashtag or topic search.
-pub async fn playlists(api: &Api, q: &Query, req: &PageReq) -> Result<Page<Collection>> {
-  let q = Query {
+pub async fn playlists(api: &Api, query: &Query, req: &PageReq) -> Result<Page<Collection>> {
+  let query = Query {
     filter: None,
-    ..q.clone()
+    ..query.clone()
   };
-  let l = run(api, &q, Some(PLAYLIST), req).await?;
+  let l = run(api, &query, Some(PLAYLIST), req).await?;
   Ok(Page::new(l.collections, l.next))
 }
 

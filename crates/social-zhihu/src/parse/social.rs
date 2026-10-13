@@ -130,6 +130,27 @@ pub fn card(v: &Value) -> Option<Notification> {
   if let Some(said) = content.str("abstract_text") {
     text = format!("{text}: {said}");
   }
+  let link = |l: Option<String>| l.filter(|l| l.starts_with("http"));
+  Some(Notification {
+    id: v.str("id").unwrap_or_default(),
+    kind: card_kind(v, &did).into(),
+    text,
+    actor: (!who.is_empty()).then(|| card_actor(head, who)),
+    target: content
+      .str("text")
+      .or_else(|| v.str("target_source.text"))
+      .filter(|t| !t.is_empty()),
+    url: link(content.str("target_link"))
+      .or_else(|| link(v.str("target_source.target_link")))
+      .or_else(|| link(head.str("target_link"))),
+    created_at: time(v, &["created"]),
+    unread: v.bool("is_read").map(|r| !r),
+    raw: Some(v.clone()),
+  })
+}
+
+/// Who a card is about: the head's author, named `who` when it has no name.
+fn card_actor(head: &Value, who: String) -> User {
   let token = head
     .str("author.url_token")
     .filter(|t| !t.is_empty() && !t.starts_with('-'))
@@ -138,7 +159,7 @@ pub fn card(v: &Value) -> Option<Notification> {
         .str("target_link")
         .and_then(|l| crate::refs::user(&l).ok())
     });
-  let actor = (!who.is_empty()).then(|| User {
+  User {
     id: head
       .str("author.id")
       .or_else(|| token.clone())
@@ -151,8 +172,12 @@ pub fn card(v: &Value) -> Option<Notification> {
     handle: token,
     avatar: head.str("avatar_url"),
     ..User::default()
-  });
-  let kind = match v.str("noti_type").as_deref() {
+  }
+}
+
+/// A card's kind from its `noti_type`, refined by the verb phrase `did`.
+fn card_kind(v: &Value, did: &str) -> &'static str {
+  match v.str("noti_type").as_deref() {
     Some("comment") if did.contains("回复") => "reply",
     Some("comment") if did.contains("提到") || did.contains('@') => "mention",
     Some("comment") => "comment",
@@ -160,25 +185,8 @@ pub fn card(v: &Value) -> Option<Notification> {
     Some("favlist_me") => "favorite",
     Some("follow") => "follow",
     Some("message") => "message",
-    Some(_) | None => kind_of(&did),
-  };
-  let link = |l: Option<String>| l.filter(|l| l.starts_with("http"));
-  Some(Notification {
-    id: v.str("id").unwrap_or_default(),
-    kind: kind.into(),
-    text,
-    actor,
-    target: content
-      .str("text")
-      .or_else(|| v.str("target_source.text"))
-      .filter(|t| !t.is_empty()),
-    url: link(content.str("target_link"))
-      .or_else(|| link(v.str("target_source.target_link")))
-      .or_else(|| link(head.str("target_link"))),
-    created_at: time(v, &["created"]),
-    unread: v.bool("is_read").map(|r| !r),
-    raw: Some(v.clone()),
-  })
+    Some(_) | None => kind_of(did),
+  }
 }
 
 /// Coarse notification kind from Zhihu's verb phrase (`赞同了你的回答` ...);

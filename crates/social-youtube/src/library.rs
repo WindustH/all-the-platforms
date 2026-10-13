@@ -1,12 +1,15 @@
 //! The account's library: home and subscription feeds, subscriptions,
 //! playlists (Watch later `WL`, Liked videos `LL`, own ones), history; and
-//! any public playlist.
+//! any public playlist. Saving a video to Watch later or a playlist uses the
+//! body of YouTube.js `PlaylistManager` / the web app's `playlistEditEndpoint`.
 
-use social_core::{Action, Collection, Error, Page, PageReq, Post, Result, User, ValueExt, json};
+use social_core::{
+  Action, Collection, Error, Page, PageReq, Post, Result, User, Value, ValueExt, json,
+};
 
 use crate::api::Api;
-use crate::channel::{self, Tab};
-use crate::{account, browse, refs};
+use crate::channels::Tab;
+use crate::{account, channels, parse, refs};
 
 pub const FEED_KINDS: &[&str] = &["home", "subscriptions"];
 
@@ -18,7 +21,7 @@ pub async fn feed(api: &Api, kind: Option<&str>, req: &PageReq) -> Result<Page<P
     }
     _ => "FEwhat_to_watch",
   };
-  let l = browse::listing(api, id, None, req).await?;
+  let l = parse::listing(&api.browse(id, None, req).await?);
   if l.posts.is_empty() && req.cursor.is_none() && !api.logged_in() {
     return Err(
       Error::auth("YouTube shows no home feed without a login").with_hint(api.ctx.login_hint()),
@@ -41,17 +44,17 @@ async fn own_only(api: &Api, user: Option<&str>, what: &str) -> Result<()> {
 /// Channels the logged-in account subscribes to.
 pub async fn following(api: &Api, user: &str, req: &PageReq) -> Result<Page<User>> {
   own_only(api, Some(user), "subscriptions").await?;
-  let l = browse::listing(api, "FEchannels", None, req).await?;
+  let l = parse::listing(&api.browse("FEchannels", None, req).await?);
   Ok(Page::new(l.users, l.next))
 }
 
 /// Playlists of a channel, or of the logged-in account (with Watch later and Liked videos).
 pub async fn collections(api: &Api, user: Option<&str>, req: &PageReq) -> Result<Page<Collection>> {
   let l = match user {
-    Some(u) if !account::is_me(u) => channel::tab(api, u, Tab::Playlists, req).await?,
+    Some(u) if !account::is_me(u) => channels::tab(api, u, Tab::Playlists, req).await?,
     _ => {
       api.require_login()?;
-      browse::listing(api, "FEplaylist_aggregation", None, req).await?
+      parse::listing(&api.browse("FEplaylist_aggregation", None, req).await?)
     }
   };
   Ok(Page::new(l.collections, l.next))
@@ -59,7 +62,7 @@ pub async fn collections(api: &Api, user: Option<&str>, req: &PageReq) -> Result
 
 /// Videos of a playlist, in playlist order.
 pub async fn playlist(api: &Api, id: &str, req: &PageReq) -> Result<Page<Post>> {
-  let l = browse::listing(api, &format!("VL{id}"), None, req).await?;
+  let l = parse::listing(&api.browse(&format!("VL{id}"), None, req).await?);
   Ok(Page::new(l.posts, l.next))
 }
 
@@ -87,7 +90,7 @@ pub async fn likes(api: &Api, user: Option<&str>, req: &PageReq) -> Result<Page<
 
 pub async fn history(api: &Api, req: &PageReq) -> Result<Page<Post>> {
   api.require_login()?;
-  let l = browse::listing(api, "FEhistory", None, req).await?;
+  let l = parse::listing(&api.browse("FEhistory", None, req).await?);
   Ok(Page::new(l.posts, l.next))
 }
 
@@ -99,7 +102,7 @@ pub async fn forget(api: &Api, arg: &str, pages: usize) -> Result<Action> {
   let id = refs::video(arg)?;
   let mut req = PageReq::default();
   for _ in 0..pages.max(1) {
-    let l = browse::listing(api, "FEhistory", None, &req).await?;
+    let l = parse::listing(&api.browse("FEhistory", None, &req).await?);
     let token = l.posts.iter().filter(|p| p.id == id).find_map(|p| {
       let raw = p.raw.as_ref()?;
       crate::parse::find(raw, "feedbackEndpoint")
@@ -132,4 +135,32 @@ pub async fn forget(api: &Api, arg: &str, pages: usize) -> Result<Action> {
   Err(Error::not_found(format!(
     "{id} is not in the first {pages} pages of your watch history"
   )))
+}
+
+fn failed(v: &Value) -> bool {
+  v.str("status").is_some_and(|s| s != "STATUS_SUCCEEDED")
+}
+
+/// Add to (or remove from) Watch later or the playlist named by `folder`.
+pub async fn favorite(api: &Api, post: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
+  let id = refs::video(post)?;
+  let list = match folder {
+    Some(f) => refs::playlist(f)?,
+    None => "WL".to_owned(),
+  };
+  let action = if undo {
+    json!({ "action": "ACTION_REMOVE_VIDEO_BY_VIDEO_ID", "removedVideoId": id })
+  } else {
+    json!({ "action": "ACTION_ADD_VIDEO", "addedVideoId": id })
+  };
+  let body = json!({ "playlistId": list, "actions": [action] });
+  let v = api.write("browse/edit_playlist", body).await?;
+  if failed(&v) {
+    return Err(Error::upstream(format!(
+      "YouTube could not change playlist {list} ({})",
+      v.str("status").unwrap_or_default()
+    )));
+  }
+  let name = if undo { "unfavorite" } else { "favorite" };
+  Ok(Action::done(name, &id).with_url(refs::playlist_url(&list)))
 }
