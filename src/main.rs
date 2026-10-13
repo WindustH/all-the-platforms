@@ -20,5 +20,8 @@ fn main() -> ExitCode {
   .platform::<social_tieba::Tieba>()
   .platform::<social_tiktok::TikTok>()
   .platform::<social_wechat::Wechat>()
+  .platform::<social_feishu::Feishu>()
+  .platform::<social_dingtalk::DingTalk>()
+  .platform::<social_wecom::WeCom>()
   .run()
 }

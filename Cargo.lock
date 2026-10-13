@@ -3936,8 +3936,10 @@ version = "0.1.0"
 dependencies = [
  "social-bilibili",
  "social-core",
+ "social-dingtalk",
  "social-discord",
  "social-douyin",
+ "social-feishu",
  "social-mp",
  "social-reddit",
  "social-telegram",
@@ -3945,6 +3947,7 @@ dependencies = [
  "social-tiktok",
  "social-twitter",
  "social-wechat",
+ "social-wecom",
  "social-weibo",
  "social-xhs",
  "social-youtube",
@@ -3984,6 +3987,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "social-dingtalk"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "hmac 0.12.1",
+ "jiff",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "social-discord"
 version = "0.1.0"
 dependencies = [
@@ -4018,6 +4038,20 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "social-feishu"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4125,6 +4159,23 @@ name = "social-wechat"
 version = "0.1.0"
 dependencies = [
  "aes 0.8.4",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-wecom"
+version = "0.1.0"
+dependencies = [
  "base64 0.22.1",
  "clap",
  "jiff",
