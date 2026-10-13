@@ -4242,6 +4242,8 @@ name = "social-bilibili"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "flate2",
+ "futures-util",
  "jiff",
  "md-5",
  "rand 0.9.5",

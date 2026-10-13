@@ -7,7 +7,7 @@ use social_core::{Action, Comment, Ctx, Error, Page, PageReq, Result, Value, Val
 
 use crate::page::Pn;
 use crate::refs::{self, PostRef};
-use crate::{api, dynamic, parse};
+use crate::{api, article, dynamic, parse};
 
 const LIST: &str = "https://api.bilibili.com/x/v2/reply";
 const MAIN: &str = "https://api.bilibili.com/x/v2/reply/wbi/main";
@@ -29,6 +29,11 @@ pub async fn section(ctx: &Ctx, post: &PostRef) -> Result<Section> {
       oid: v.aid.to_string(),
       kind: 1,
       post: v.bvid.clone(),
+    }),
+    PostRef::Article(id) => Ok(Section {
+      oid: id.to_string(),
+      kind: article::COMMENT_TYPE,
+      post: format!("cv{id}"),
     }),
     PostRef::Dynamic(id) => {
       let item = dynamic::detail(ctx, id).await?;
@@ -159,4 +164,46 @@ pub async fn delete(ctx: &Ctx, s: &Section, rpid: &str) -> Result<Action> {
     .send()
     .await?;
   Ok(Action::done("delete-comment", &s.post).with_id(rpid))
+}
+
+/// Like a comment, or with `dislike` mark it down (踩); `undo` removes either.
+pub async fn react(
+  ctx: &Ctx,
+  s: &Section,
+  rpid: &str,
+  dislike: bool,
+  undo: bool,
+) -> Result<Action> {
+  let url = if dislike {
+    "https://api.bilibili.com/x/v2/reply/hate"
+  } else {
+    "https://api.bilibili.com/x/v2/reply/action"
+  };
+  api::post(ctx, url)
+    .arg("oid", &s.oid)
+    .arg("type", s.kind)
+    .arg("rpid", rpid)
+    .arg("action", u8::from(!undo))
+    .send()
+    .await?;
+  let verb = match (dislike, undo) {
+    (false, false) => "comment-like",
+    (false, true) => "comment-unlike",
+    (true, false) => "comment-dislike",
+    (true, true) => "comment-undislike",
+  };
+  Ok(Action::done(verb, &s.post).with_id(rpid))
+}
+
+/// Pin (or with `undo` unpin) a comment under your own post.
+pub async fn pin(ctx: &Ctx, s: &Section, rpid: &str, undo: bool) -> Result<Action> {
+  api::post(ctx, "https://api.bilibili.com/x/v2/reply/top")
+    .arg("oid", &s.oid)
+    .arg("type", s.kind)
+    .arg("rpid", rpid)
+    .arg("action", u8::from(!undo))
+    .send()
+    .await?;
+  let verb = if undo { "comment-unpin" } else { "comment-pin" };
+  Ok(Action::done(verb, &s.post).with_id(rpid))
 }

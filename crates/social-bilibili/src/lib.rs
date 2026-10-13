@@ -1,35 +1,48 @@
 //! Bilibili for social-cli.
 //!
-//! Posts are videos (`BV...` / `av...`) or dynamics (`t.bilibili.com/<id>`);
-//! users are mids, space links or names. The modules below own one domain
-//! each; this file only describes the platform and delegates.
+//! Posts are videos (`BV...` / `av...`), dynamics (`t.bilibili.com/<id>`) or
+//! articles (`cv…`); users are mids, space links or names. Chats are private
+//! conversations (`dm:MID`) and live rooms (`live:ROOM`). The modules below
+//! own one domain each; this file only describes the platform and delegates.
 
 mod account;
 mod api;
 mod archive;
+mod article;
 mod comment;
 mod creator;
 mod device;
+mod discover;
 mod dynamic;
 mod extra;
+mod folder;
+mod history;
+mod im;
 mod library;
+mod live;
 mod message;
 mod page;
 mod parse;
+mod pgc;
 mod play;
 mod proto;
 mod refs;
+mod relation;
+mod search;
 mod sign;
+mod space;
+mod stream;
 mod user;
 mod video;
 
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use social_core::output::Stream;
 use social_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media, Message,
   Notification, Page, PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply,
-  Result, User,
+  Result, User, ValueExt,
 };
 
 use crate::refs::PostRef;
@@ -55,6 +68,11 @@ impl Bilibili {
     match self.post(post).await? {
       PostRef::Dynamic(id) => Ok(id),
       PostRef::Video(v) => dynamic::of_video(&self.ctx, &v).await,
+      PostRef::Article(id) => article::view(&self.ctx, id)
+        .await?
+        .str("dyn_id_str")
+        .filter(|d| d != "0")
+        .ok_or_else(|| Error::not_found(format!("cv{id} has no dynamic"))),
     }
   }
 }
@@ -72,6 +90,7 @@ impl Platform for Bilibili {
       Cap::QrLogin,
       Cap::Search,
       Cap::SearchUsers,
+      Cap::SearchTopics,
       Cap::Hot,
       Cap::Feed,
       Cap::Read,
@@ -98,10 +117,14 @@ impl Platform for Bilibili {
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
+      Cap::Chats,
+      Cap::Messages,
+      Cap::Send,
+      Cap::Listen,
     ],
     choices: Choices {
       search_sort: &["totalrank", "click", "pubdate", "dm", "stow", "scores"],
-      search_filter: &[],
+      search_filter: search::FILTERS,
       hot_category: video::HOT_CATEGORIES,
       feed_kind: &["all", "video"],
       comment_sort: &["hot", "time"],
@@ -140,7 +163,11 @@ impl Platform for Bilibili {
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    video::search(&self.ctx, query, page).await
+    search::posts(&self.ctx, query, page).await
+  }
+
+  async fn search_topics(&self, query: &Query, page: &PageReq) -> Result<Page<Collection>> {
+    search::topics(&self.ctx, query, page).await
   }
 
   async fn search_users(&self, query: &Query, page: &PageReq) -> Result<Page<User>> {
@@ -159,6 +186,7 @@ impl Platform for Bilibili {
     match self.post(post).await? {
       PostRef::Video(v) => video::read(&self.ctx, &v).await,
       PostRef::Dynamic(id) => dynamic::read(&self.ctx, &id).await,
+      PostRef::Article(id) => article::read(&self.ctx, id).await,
     }
   }
 
@@ -227,13 +255,19 @@ impl Platform for Bilibili {
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    message::unread(&self.ctx).await
+    let mut counts = message::unread(&self.ctx).await?;
+    // Private messages have their own counters (best effort).
+    if let Ok(dm) = im::unread(&self.ctx).await {
+      counts.extend(dm);
+    }
+    Ok(counts)
   }
 
   async fn like(&self, post: &str, undo: bool) -> Result<Action> {
     match self.post(post).await? {
       PostRef::Video(v) => video::like(&self.ctx, &v, undo).await,
       PostRef::Dynamic(id) => dynamic::like(&self.ctx, &id, undo).await,
+      PostRef::Article(id) => article::like(&self.ctx, id, undo).await,
     }
   }
 
@@ -241,6 +275,7 @@ impl Platform for Bilibili {
     match self.post(post).await? {
       PostRef::Video(v) => library::favorite(&self.ctx, &v, folder, undo).await,
       PostRef::Dynamic(id) => dynamic::favorite(&self.ctx, &id, undo).await,
+      PostRef::Article(id) => article::favorite(&self.ctx, id, undo).await,
     }
   }
 
@@ -265,7 +300,7 @@ impl Platform for Bilibili {
       None => None,
       Some(q) => match self.post(q).await? {
         PostRef::Dynamic(id) => Some(id),
-        PostRef::Video(_) => return Err(Error::input("--quote takes a dynamic, not a video")),
+        _ => return Err(Error::input("--quote takes a dynamic")),
       },
     };
     dynamic::publish(&self.ctx, draft, quote.as_deref()).await
@@ -275,6 +310,7 @@ impl Platform for Bilibili {
     match self.post(post).await? {
       PostRef::Dynamic(id) => dynamic::delete(&self.ctx, &id).await,
       PostRef::Video(_) => Err(Error::unsupported("delete (videos)")),
+      PostRef::Article(_) => Err(Error::unsupported("delete (articles)")),
     }
   }
 
@@ -289,7 +325,45 @@ impl Platform for Bilibili {
     match self.post(post).await? {
       PostRef::Video(v) => play::media(&self.ctx, &v, audio_only).await,
       PostRef::Dynamic(id) => play::dynamic_media(&self.ctx, &id, audio_only).await,
+      PostRef::Article(id) => {
+        let post = article::read(&self.ctx, id).await?;
+        let media = post.media.clone();
+        Ok((post, media))
+      }
     }
+  }
+
+  async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
+    if parent.is_some() {
+      return Err(Error::unsupported("chats PARENT (Bilibili chats are flat)"));
+    }
+    im::chats(&self.ctx, page).await
+  }
+
+  /// A private conversation, or the latest danmaku of a live room.
+  async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
+    if refs::room(chat).is_some() {
+      return live::recent(&self.ctx, chat).await;
+    }
+    im::messages(&self.ctx, chat, page).await
+  }
+
+  /// A private message, or danmaku to a live room (`live:ROOM`).
+  async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
+    if refs::room(chat).is_some() {
+      if !message.files.is_empty() || message.reply_to.is_some() {
+        return Err(Error::unsupported(
+          "send --attach / --reply-to (live rooms)",
+        ));
+      }
+      return live::send(&self.ctx, chat, &message.text).await;
+    }
+    im::send(&self.ctx, chat, message).await
+  }
+
+  /// Live danmaku, super chats, gifts and memberships of live rooms.
+  async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
+    stream::listen(&self.ctx, chats, out).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

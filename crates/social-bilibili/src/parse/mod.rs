@@ -34,6 +34,21 @@ pub fn plain(v: &Value, paths: &[&str]) -> Option<String> {
     .filter(|s| !s.is_empty())
 }
 
+/// `YYYY-MM-DD HH:MM[:SS]` in Beijing time, as live and history pages write it.
+pub fn beijing(s: &str) -> Option<jiff::Timestamp> {
+  let s = s.trim();
+  let s = if s.len() == 16 {
+    format!("{s}:00")
+  } else {
+    s.to_owned()
+  };
+  jiff::civil::DateTime::strptime("%Y-%m-%d %H:%M:%S", &s)
+    .ok()?
+    .to_zoned(jiff::tz::TimeZone::fixed(jiff::tz::offset(8)))
+    .ok()
+    .map(|z| z.timestamp())
+}
+
 fn secs(v: &Value, paths: &[&str]) -> Option<jiff::Timestamp> {
   paths.iter().find_map(|p| v.i64(p)).and_then(from_secs)
 }

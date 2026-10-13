@@ -59,6 +59,9 @@ const TREND: &[(&str, &str)] = &[
 pub async fn insights(ctx: &Ctx, post: &PostRef, days: u32) -> Result<Insights> {
   match post {
     PostRef::Video(v) => of_video(ctx, v, days).await,
+    PostRef::Article(id) => Err(social_core::Error::unsupported(&format!(
+      "insights for articles (cv{id}); `read` shows their counters"
+    ))),
     PostRef::Dynamic(id) => {
       let item = dynamic::detail(ctx, id).await?;
       let bvid = item.str("modules.module_dynamic.major.archive.bvid");

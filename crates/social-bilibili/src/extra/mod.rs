@@ -1,10 +1,14 @@
-//! Bilibili-only commands.
+//! Bilibili-only commands, grouped by domain in the submodules.
+
+mod explore;
+mod interact;
+mod library;
 
 use social_core::cli::PageArgs;
-use social_core::{Ctx, Data, Result};
+use social_core::{Ctx, Data, Error, Result};
 
 use crate::refs::{self, Video};
-use crate::{account, creator, dynamic, play, user, video};
+use crate::{account, creator, discover, dynamic, play, user, video};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Extra {
@@ -37,8 +41,10 @@ pub enum Extra {
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Site-wide ranking
+  /// Ranking board: the whole site, or one region (see `hot --category`)
   Rank {
+    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(video::HOT_CATEGORIES))]
+    region: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
@@ -54,6 +60,12 @@ pub enum Extra {
     #[arg(short = 'n', long, default_value_t = 10, value_parser = clap::value_parser!(u16).range(1..=50))]
     limit: u16,
   },
+  #[command(flatten)]
+  Explore(explore::Explore),
+  #[command(flatten)]
+  Library(library::Library),
+  #[command(flatten)]
+  Interact(interact::Interact),
   /// Dynamics of a user (yours when USER is omitted)
   #[command(visible_alias = "my-dynamics")]
   Dynamics {
@@ -65,6 +77,17 @@ pub enum Extra {
 
 async fn video_ref(ctx: &Ctx, arg: &str) -> Result<Video> {
   refs::video(ctx, &ctx.post_ref(arg)?).await
+}
+
+/// Destructive commands need `--yes`.
+fn confirm(yes: bool, what: &str) -> Result<()> {
+  if yes {
+    Ok(())
+  } else {
+    Err(Error::input(format!(
+      "this would {what}; add --yes to go ahead"
+    )))
+  }
 }
 
 pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
@@ -91,11 +114,14 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
           .await?,
       )
     }
-    E::Rank { page } => Data::Posts(
+    E::Rank { region, page } => Data::Posts(
       page
-        .collect_dated(async |_| video::ranking(ctx, 0, "all").await)
+        .collect_dated(async |_| discover::rank(ctx, region.as_deref()).await)
         .await?,
     ),
+    E::Explore(c) => explore::run(ctx, c).await?,
+    E::Library(c) => library::run(ctx, c).await?,
+    E::Interact(c) => interact::run(ctx, c).await?,
     E::WatchLater => Data::Posts(video::watch_later(ctx).await?),
     E::VideoStats { videos, limit } => {
       let mut refs = Vec::new();

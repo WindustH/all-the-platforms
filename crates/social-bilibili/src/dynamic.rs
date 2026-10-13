@@ -297,3 +297,17 @@ pub async fn favorite(ctx: &Ctx, id: &str, undo: bool) -> Result<Action> {
   let action = if undo { "unfavorite" } else { "favorite" };
   Ok(Action::done(action, id).with_url(format!("{DYNAMIC_URL}{id}")))
 }
+
+/// Pin (or with `undo` unpin) one of your dynamics on your space.
+pub async fn pin(ctx: &Ctx, id: &str, undo: bool) -> Result<Action> {
+  let url = if undo {
+    "https://api.bilibili.com/x/dynamic/feed/space/rm_top"
+  } else {
+    "https://api.bilibili.com/x/dynamic/feed/space/set_top"
+  };
+  api::post(ctx, url)
+    .json(serde_json::json!({ "dyn_str": id }))
+    .send()
+    .await?;
+  Ok(Action::done(if undo { "unpin" } else { "pin" }, id))
+}

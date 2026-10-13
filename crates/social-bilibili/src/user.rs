@@ -12,6 +12,7 @@ const CARD: &str = "https://api.bilibili.com/x/web-interface/card";
 const FOLLOWERS: &str = "https://api.bilibili.com/x/relation/followers";
 const FOLLOWINGS: &str = "https://api.bilibili.com/x/relation/followings";
 const MODIFY: &str = "https://api.bilibili.com/x/relation/modify";
+const UPSTAT: &str = "https://api.bilibili.com/x/space/upstat";
 
 /// A user argument as a mid; names are looked up with user search (best match).
 pub async fn mid(ctx: &Ctx, input: &str) -> Result<String> {
@@ -54,6 +55,14 @@ pub async fn profile(ctx: &Ctx, input: &str) -> Result<User> {
   user.stats.likes = data.count("like_num");
   if ctx.http.has_cookie("SESSDATA") {
     user.followed = data.bool("following");
+  }
+  // Lifetime plays of the uploads and reads of the articles.
+  if let Ok(up) = api::get(ctx, UPSTAT).arg("mid", &mid).send().await {
+    for (key, path) in [("views", "archive.view"), ("article_views", "article.view")] {
+      if let Some(n) = up.count(path).filter(|n| *n > 0) {
+        user.stats.other.insert(key.into(), n);
+      }
+    }
   }
   user.raw = Some(data);
   Ok(user)
