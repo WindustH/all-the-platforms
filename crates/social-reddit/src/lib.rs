@@ -9,12 +9,18 @@
 
 mod api;
 mod comments;
+mod community;
 mod extra;
 mod inbox;
 mod insights;
+mod library;
+mod listen;
 mod listing;
+mod manage;
+mod multis;
 mod oauth;
 mod parse;
+mod pm;
 mod posts;
 mod poststats;
 mod refs;
@@ -28,8 +34,9 @@ mod write;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use social_core::output::Stream;
 use social_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media, Message,
   Notification, Page, PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
 };
 
@@ -75,6 +82,10 @@ impl Platform for Reddit {
       Cap::Delete,
       Cap::Edit,
       Cap::Download,
+      Cap::Chats,
+      Cap::Messages,
+      Cap::Send,
+      Cap::Listen,
       Cap::AccountInsights,
       Cap::PostInsights,
     ],
@@ -138,6 +149,25 @@ impl Platform for Reddit {
 
   async fn edit(&self, post: &str, text: &str) -> Result<Action> {
     write::edit(&self.api, post, text).await
+  }
+
+  async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
+    if parent.is_some() {
+      return Err(Error::input("Reddit message threads have no parent"));
+    }
+    pm::chats(&self.api, page).await
+  }
+
+  async fn messages(&self, chat: &str, _page: &PageReq) -> Result<Page<Post>> {
+    pm::messages(&self.api, chat).await
+  }
+
+  async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
+    pm::send(&self.api, chat, message).await
+  }
+
+  async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
+    listen::run(&self.api, chats, out).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {

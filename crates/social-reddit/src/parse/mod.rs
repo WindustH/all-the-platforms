@@ -102,10 +102,39 @@ fn post_at(d: &Value, depth: usize) -> Option<Post> {
   put(x, "removed", d.str("removed_by_category").map(Value::from));
   put(x, "link", link(d).map(Value::from));
   put(x, "vote", vote(d));
-  for key in ["spoiler", "stickied", "locked", "archived", "saved"] {
+  for key in [
+    "spoiler", "stickied", "locked", "archived", "saved", "hidden",
+  ] {
     put(x, key, flag(d, key));
   }
+  put(x, "poll", poll(d));
   Some(post)
+}
+
+/// A poll post's options with their votes (counts show once voting ended or
+/// to voters), the total, the end time and the account's choice.
+fn poll(d: &Value) -> Option<Value> {
+  let p = d.at("poll_data");
+  if p.is_null() {
+    return None;
+  }
+  let options: Vec<Value> = p
+    .list("options")
+    .iter()
+    .map(|o| {
+      serde_json::json!({
+        "id": o.str("id"),
+        "text": o.str("text"),
+        "votes": o.u64("vote_count"),
+      })
+    })
+    .collect();
+  Some(serde_json::json!({
+    "options": options,
+    "total_votes": p.u64("total_vote_count"),
+    "ends_at": p.i64("voting_end_timestamp").and_then(|ms| from_secs(ms / 1000)).map(|t| t.to_string()),
+    "chosen": p.str("user_selection"),
+  }))
 }
 
 /// Every counter of a post. `likes` is the score (upvotes minus downvotes;
