@@ -71,12 +71,14 @@ pub struct Timeline<'a> {
 }
 
 impl<'a> Timeline<'a> {
-  /// Read the instructions at the first of `paths` that holds a list.
+  /// Read the instructions at the first of `paths` that holds a list, or
+  /// the first `instructions` list anywhere (responses whose shape varies).
   pub fn at(data: &'a Value, paths: &[&str]) -> Self {
     let instructions = paths
       .iter()
       .map(|p| data.list(p))
       .find(|l| !l.is_empty())
+      .or_else(|| find_instructions(data))
       .unwrap_or_default();
     let mut tl = Timeline::default();
     for ins in instructions {
@@ -138,6 +140,22 @@ impl<'a> Timeline<'a> {
   /// All `itemContent`s with their entry ids.
   pub fn items(&self) -> impl Iterator<Item = &(&'a str, &'a Value)> {
     self.entries.iter().flat_map(|e| &e.items)
+  }
+}
+
+/// The first non-empty `instructions` array in a response, depth first.
+fn find_instructions(v: &Value) -> Option<&[Value]> {
+  match v {
+    Value::Object(m) => {
+      if let Some(Value::Array(a)) = m.get("instructions")
+        && !a.is_empty()
+      {
+        return Some(a);
+      }
+      m.values().find_map(find_instructions)
+    }
+    Value::Array(a) => a.iter().find_map(find_instructions),
+    _ => None,
   }
 }
 

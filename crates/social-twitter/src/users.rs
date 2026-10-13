@@ -165,6 +165,28 @@ pub async fn search(api: &Api, q: &Query, req: &PageReq) -> Result<Page<User>> {
   .await
 }
 
+/// Lists whose name or description match (the search's Lists tab).
+pub async fn search_lists(api: &Api, q: &Query, req: &PageReq) -> Result<Page<Collection>> {
+  api.require_login()?;
+  let variables = with(
+    vars(req),
+    json!({ "rawQuery": q.keyword, "querySource": "typed_query", "product": "Lists" }),
+  );
+  timeline::page(
+    api,
+    &SEARCH,
+    variables,
+    SEARCH_TIMELINE,
+    req,
+    |tl: &Timeline| {
+      tl.items()
+        .filter_map(|(_, item)| list(item.at("list")))
+        .collect()
+    },
+  )
+  .await
+}
+
 /// Lists owned by a user (the logged-in one when absent).
 pub async fn lists(api: &Api, arg: Option<&str>, req: &PageReq) -> Result<Page<Collection>> {
   let id = user_id_or_self(api, arg).await?;
@@ -187,7 +209,7 @@ pub async fn lists(api: &Api, arg: Option<&str>, req: &PageReq) -> Result<Page<C
   .await
 }
 
-fn list(v: &Value) -> Option<Collection> {
+pub fn list(v: &Value) -> Option<Collection> {
   let id = v.str("id_str")?;
   let mut c = Collection {
     kind: "list".into(),

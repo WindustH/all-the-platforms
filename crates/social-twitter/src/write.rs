@@ -80,6 +80,8 @@ pub async fn retweet(api: &Api, post: &str, undo: bool) -> Result<Action> {
 pub struct Links {
   pub reply_to: Option<String>,
   pub quote: Option<String>,
+  /// The tweet this one replaces (an edit).
+  pub edit: Option<String>,
 }
 
 /// `CreateTweet`; returns the new tweet id.
@@ -99,6 +101,9 @@ pub async fn create(api: &Api, text: &str, media_ids: &[String], links: &Links) 
   }
   if let Some(id) = &links.quote {
     variables["attachment_url"] = status_url(id).into();
+  }
+  if let Some(id) = &links.edit {
+    variables["edit_options"] = json!({ "previous_tweet_id": id });
   }
   let data = mutate(api, &CREATE_TWEET, variables).await?;
   data
@@ -133,6 +138,7 @@ pub async fn publish(api: &Api, draft: &Draft) -> Result<Action> {
   let links = Links {
     reply_to: draft.reply_to.as_deref().map(refs::tweet_id).transpose()?,
     quote: draft.quote.as_deref().map(refs::tweet_id).transpose()?,
+    edit: None,
   };
   let media = upload_images(api, &draft.images).await?;
   let id = create(api, text.trim(), &media, &links).await?;
@@ -157,7 +163,7 @@ pub async fn reply(api: &Api, post: &str, reply: &Reply) -> Result<Action> {
   let target = refs::tweet_id(reply.reply_to.as_deref().unwrap_or(post))?;
   let links = Links {
     reply_to: Some(target.clone()),
-    quote: None,
+    ..Links::default()
   };
   let media = upload_images(api, &reply.images).await?;
   let id = create(api, &reply.text, &media, &links).await?;
@@ -165,6 +171,22 @@ pub async fn reply(api: &Api, post: &str, reply: &Reply) -> Result<Action> {
     Action::done("comment", target)
       .with_id(&id)
       .with_url(status_url(&id)),
+  )
+}
+
+/// Edit one of your tweets (X Premium, within an hour of posting, five
+/// times at most): a new version replaces it.
+pub async fn edit(api: &Api, post: &str, text: &str) -> Result<Action> {
+  let id = refs::tweet_id(post)?;
+  let links = Links {
+    edit: Some(id.clone()),
+    ..Links::default()
+  };
+  let new = create(api, text, &[], &links).await?;
+  Ok(
+    Action::done("edit", &id)
+      .with_id(&new)
+      .with_url(status_url(&new)),
   )
 }
 

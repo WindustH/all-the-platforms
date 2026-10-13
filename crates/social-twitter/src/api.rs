@@ -139,6 +139,18 @@ impl Api {
     }
   }
 
+  /// POST a JSON body to a REST endpoint (direct messages).
+  pub async fn post_json(&self, url: &str, query: &[(&str, &str)], body: &Value) -> Result<Value> {
+    let resp = self
+      .request(Method::Post, url)
+      .await?
+      .queries(query.iter().copied())
+      .json(body)
+      .send()
+      .await?;
+    check(resp)
+  }
+
   /// POST a form to a REST (v1.1 / upload) endpoint.
   pub async fn post_form(&self, url: &str, form: &[(&str, &str)]) -> Result<Value> {
     let resp = self

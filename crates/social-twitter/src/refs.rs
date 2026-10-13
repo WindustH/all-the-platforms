@@ -129,6 +129,41 @@ pub fn list_id(arg: &str) -> Result<String> {
   found.ok_or_else(|| Error::input(format!("not a list id or URL: {arg}")))
 }
 
+/// Community id from `123` or `https://x.com/i/communities/123`.
+pub fn community_id(arg: &str) -> Result<String> {
+  let arg = arg.trim();
+  if is_id(arg) {
+    return Ok(arg.to_owned());
+  }
+  let found = parse_url(arg).and_then(|url| match segments(&url).as_slice() {
+    ["i", "communities", id, ..] if is_id(id) => Some(id.to_string()),
+    _ => None,
+  });
+  found.ok_or_else(|| Error::input(format!("not a community id or URL: {arg}")))
+}
+
+/// Space id from `1ABC…` or `https://x.com/i/spaces/1ABC…`.
+pub fn space_id(arg: &str) -> Result<String> {
+  let arg = arg.trim();
+  let ok = |s: &str| !s.is_empty() && s.len() <= 20 && s.bytes().all(|b| b.is_ascii_alphanumeric());
+  if ok(arg) {
+    return Ok(arg.to_owned());
+  }
+  let found = parse_url(arg).and_then(|url| match segments(&url).as_slice() {
+    ["i", "spaces", id, ..] if ok(id) => Some(id.to_string()),
+    _ => None,
+  });
+  found.ok_or_else(|| Error::input(format!("not a Space id or URL: {arg}")))
+}
+
+pub fn community_url(id: &str) -> String {
+  format!("https://x.com/i/communities/{id}")
+}
+
+pub fn space_url(id: &str) -> String {
+  format!("https://x.com/i/spaces/{id}")
+}
+
 pub fn tweet_url(handle: &str, id: &str) -> String {
   format!("https://x.com/{handle}/status/{id}")
 }
