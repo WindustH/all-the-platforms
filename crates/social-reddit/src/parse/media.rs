@@ -1,5 +1,5 @@
 //! Media of a post at source resolution: Reddit-hosted videos (`v.redd.it`,
-//! the separate audio track is added by [`crate::video`]), galleries, images
+//! the separate audio track is added by [`crate::videos`]), galleries, images
 //! embedded in text posts, single images and GIF previews.
 
 use social_core::{Media, MediaKind, Value, ValueExt};

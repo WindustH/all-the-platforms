@@ -5,25 +5,13 @@ use social_core::{Action, Draft, Error, Reply, Result, Value, ValueExt, json};
 
 use crate::api::{Api, REST};
 use crate::graphql::{
-  BOOKMARK, CREATE_TWEET, DELETE_TWEET, FAVORITE, Op, RETWEET, UNBOOKMARK, UNFAVORITE, UNRETWEET,
+  BOOKMARK, CREATE_TWEET, DELETE_TWEET, FAVORITE, RETWEET, UNBOOKMARK, UNFAVORITE, UNRETWEET,
 };
-use crate::refs;
-use crate::upload;
+use crate::refs::{self, tweet_url};
+use crate::uploads;
 use crate::users;
 
 /// Most images one tweet can carry.
-const MAX_IMAGES: usize = 4;
-
-async fn mutate(api: &Api, op: &Op, variables: Value) -> Result<Value> {
-  api.require_login()?;
-  api.write_pause().await;
-  api.graphql(op, variables).await
-}
-
-fn status_url(id: &str) -> String {
-  format!("https://x.com/i/status/{id}")
-}
-
 pub async fn like(api: &Api, post: &str, undo: bool) -> Result<Action> {
   let id = refs::tweet_id(post)?;
   let (op, variables, name) = if undo {
@@ -35,8 +23,8 @@ pub async fn like(api: &Api, post: &str, undo: bool) -> Result<Action> {
   } else {
     (&FAVORITE, json!({ "tweet_id": id }), "like")
   };
-  mutate(api, op, variables).await?;
-  Ok(Action::done(name, &id).with_url(status_url(&id)))
+  api.mutate(op, variables).await?;
+  Ok(Action::done(name, &id).with_url(tweet_url("i", &id)))
 }
 
 pub async fn bookmark(api: &Api, post: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
@@ -51,24 +39,21 @@ pub async fn bookmark(api: &Api, post: &str, folder: Option<&str>, undo: bool) -
   } else {
     (&BOOKMARK, "bookmark")
   };
-  mutate(api, op, json!({ "tweet_id": id })).await?;
-  Ok(Action::done(name, &id).with_url(status_url(&id)))
+  api.mutate(op, json!({ "tweet_id": id })).await?;
+  Ok(Action::done(name, &id).with_url(tweet_url("i", &id)))
 }
 
 pub async fn retweet(api: &Api, post: &str, undo: bool) -> Result<Action> {
   let id = refs::tweet_id(post)?;
   if undo {
     let variables = json!({ "source_tweet_id": id, "dark_request": false });
-    mutate(api, &UNRETWEET, variables).await?;
-    return Ok(Action::done("unretweet", &id).with_url(status_url(&id)));
+    api.mutate(&UNRETWEET, variables).await?;
+    return Ok(Action::done("unretweet", &id).with_url(tweet_url("i", &id)));
   }
-  let data = mutate(
-    api,
-    &RETWEET,
-    json!({ "tweet_id": id, "dark_request": false }),
-  )
-  .await?;
-  let mut action = Action::done("retweet", &id).with_url(status_url(&id));
+  let data = api
+    .mutate(&RETWEET, json!({ "tweet_id": id, "dark_request": false }))
+    .await?;
+  let mut action = Action::done("retweet", &id).with_url(tweet_url("i", &id));
   if let Some(new) = data.str("data.create_retweet.retweet_results.result.rest_id") {
     action = action.with_id(new);
   }
@@ -100,30 +85,15 @@ pub async fn create(api: &Api, text: &str, media_ids: &[String], links: &Links) 
     variables["reply"] = json!({ "in_reply_to_tweet_id": id, "exclude_reply_user_ids": [] });
   }
   if let Some(id) = &links.quote {
-    variables["attachment_url"] = status_url(id).into();
+    variables["attachment_url"] = tweet_url("i", id).into();
   }
   if let Some(id) = &links.edit {
     variables["edit_options"] = json!({ "previous_tweet_id": id });
   }
-  let data = mutate(api, &CREATE_TWEET, variables).await?;
+  let data = api.mutate(&CREATE_TWEET, variables).await?;
   data
     .str("data.create_tweet.tweet_results.result.rest_id")
     .ok_or_else(|| Error::upstream("X did not create the tweet"))
-}
-
-/// Upload the images (at most four) of a new tweet.
-pub async fn upload_images(api: &Api, images: &[std::path::PathBuf]) -> Result<Vec<String>> {
-  if images.len() > MAX_IMAGES {
-    return Err(Error::input(format!(
-      "a tweet takes at most {MAX_IMAGES} images"
-    )));
-  }
-  api.require_login()?;
-  let mut ids = Vec::new();
-  for image in images {
-    ids.push(upload::image(api, image).await?);
-  }
-  Ok(ids)
 }
 
 pub async fn publish(api: &Api, draft: &Draft) -> Result<Action> {
@@ -140,7 +110,7 @@ pub async fn publish(api: &Api, draft: &Draft) -> Result<Action> {
     quote: draft.quote.as_deref().map(refs::tweet_id).transpose()?,
     edit: None,
   };
-  let media = upload_images(api, &draft.images).await?;
+  let media = uploads::images(api, &draft.images).await?;
   let id = create(api, text.trim(), &media, &links).await?;
   let name = if links.reply_to.is_some() {
     "reply"
@@ -153,7 +123,7 @@ pub async fn publish(api: &Api, draft: &Draft) -> Result<Action> {
   Ok(
     Action::done(name, target)
       .with_id(&id)
-      .with_url(status_url(&id)),
+      .with_url(tweet_url("i", &id)),
   )
 }
 
@@ -165,12 +135,12 @@ pub async fn reply(api: &Api, post: &str, reply: &Reply) -> Result<Action> {
     reply_to: Some(target.clone()),
     ..Links::default()
   };
-  let media = upload_images(api, &reply.images).await?;
+  let media = uploads::images(api, &reply.images).await?;
   let id = create(api, &reply.text, &media, &links).await?;
   Ok(
     Action::done("comment", target)
       .with_id(&id)
-      .with_url(status_url(&id)),
+      .with_url(tweet_url("i", &id)),
   )
 }
 
@@ -186,19 +156,19 @@ pub async fn edit(api: &Api, post: &str, text: &str) -> Result<Action> {
   Ok(
     Action::done("edit", &id)
       .with_id(&new)
-      .with_url(status_url(&new)),
+      .with_url(tweet_url("i", &new)),
   )
 }
 
 /// Delete one of your tweets (a post or a reply).
 pub async fn delete(api: &Api, post: &str, name: &str) -> Result<Action> {
   let id = refs::tweet_id(post)?;
-  mutate(
-    api,
-    &DELETE_TWEET,
-    json!({ "tweet_id": id, "dark_request": false }),
-  )
-  .await?;
+  api
+    .mutate(
+      &DELETE_TWEET,
+      json!({ "tweet_id": id, "dark_request": false }),
+    )
+    .await?;
   Ok(Action::done(name, id))
 }
 

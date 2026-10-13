@@ -1,11 +1,11 @@
 //! Writing: votes, saves, comments, edits, deletes and new posts (text,
-//! link, crosspost; images in [`crate::upload`]). Every write goes through
+//! link, crosspost; images in [`crate::uploads`]). Every write goes through
 //! [`Api::post`], which checks the login, pauses and adds the CSRF token.
 
 use social_core::{Action, Draft, Error, Result, Value, ValueExt};
 
 use crate::api::{Api, WWW};
-use crate::{refs, upload};
+use crate::{refs, uploads};
 
 /// Where a fullname can be opened (posts only; comments need their post).
 fn thing_url(fullname: &str) -> Option<String> {
@@ -122,7 +122,7 @@ pub async fn publish(api: &Api, draft: &Draft) -> Result<Action> {
     ));
   }
   if !draft.images.is_empty() {
-    return upload::submit(api, &sr, title, &draft.images).await;
+    return uploads::submit(api, &sr, title, &draft.images).await;
   }
   let mut form = vec![
     ("sr", sr.clone()),

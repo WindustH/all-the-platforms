@@ -1,4 +1,4 @@
-//! `t1` comments. Threads are assembled by [`crate::thread`]; this maps one
+//! `t1` comments. Threads are assembled by [`crate::comments`]; this maps one
 //! comment without its replies.
 
 use social_core::{Comment, Value, ValueExt};

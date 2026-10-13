@@ -1,12 +1,10 @@
 //! The logged-in account's own things: blocks and mutes, the pinned tweet,
-//! scheduled posts, bookmark folders, unread counters, and trends by place.
+//! scheduled posts, bookmark folders and unread counters.
 
 use std::collections::BTreeMap;
 
 use social_core::text::from_secs;
-use social_core::{
-  Action, Collection, Error, Page, PageReq, Post, Result, User, Value, ValueExt, json,
-};
+use social_core::{Action, Collection, Error, Page, PageReq, Post, Result, User, ValueExt, json};
 
 use crate::api::{Api, REST};
 use crate::graphql::{
@@ -16,12 +14,6 @@ use crate::graphql::{
 use crate::refs::{self, user_url};
 use crate::timeline::{self, vars, with};
 use crate::users;
-
-async fn mutate(api: &Api, op: &Op, variables: Value) -> Result<Value> {
-  api.require_login()?;
-  api.write_pause().await;
-  api.graphql(op, variables).await
-}
 
 /// Block (or unblock) / mute (or unmute) a user.
 pub async fn block(api: &Api, user: &str, mute: bool, undo: bool) -> Result<Action> {
@@ -73,7 +65,7 @@ pub async fn pin(api: &Api, post: &str, undo: bool) -> Result<Action> {
   } else {
     (&PIN_TWEET, "pin")
   };
-  mutate(api, op, json!({ "tweet_id": id })).await?;
+  api.mutate(op, json!({ "tweet_id": id })).await?;
   Ok(Action::done(name, &id).with_url(format!("https://x.com/i/status/{id}")))
 }
 
@@ -116,7 +108,7 @@ pub async fn schedule(api: &Api, text: &str, at: i64, media: &[String]) -> Resul
     },
     "execute_at": at,
   });
-  let data = mutate(api, &CREATE_SCHEDULED, variables).await?;
+  let data = api.mutate(&CREATE_SCHEDULED, variables).await?;
   let mut action = Action::done("schedule", text);
   if let Some(id) = data.str("data.tweet.rest_id") {
     action = action.with_id(id);
@@ -125,7 +117,9 @@ pub async fn schedule(api: &Api, text: &str, at: i64, media: &[String]) -> Resul
 }
 
 pub async fn unschedule(api: &Api, id: &str) -> Result<Action> {
-  mutate(api, &DELETE_SCHEDULED, json!({ "scheduled_tweet_id": id })).await?;
+  api
+    .mutate(&DELETE_SCHEDULED, json!({ "scheduled_tweet_id": id }))
+    .await?;
   Ok(Action::done("unschedule", id))
 }
 
@@ -137,17 +131,17 @@ pub async fn file(api: &Api, post: &str, folder: &str, undo: bool) -> Result<Act
   } else {
     (&FOLDER_ADD, "file")
   };
-  mutate(
-    api,
-    op,
-    json!({ "tweet_id": id, "bookmark_collection_id": folder }),
-  )
-  .await?;
+  api
+    .mutate(
+      op,
+      json!({ "tweet_id": id, "bookmark_collection_id": folder }),
+    )
+    .await?;
   Ok(Action::done(name, &id).with_message(format!("folder {folder}")))
 }
 
 pub async fn create_folder(api: &Api, name: &str) -> Result<Collection> {
-  let data = mutate(api, &FOLDER_CREATE, json!({ "name": name })).await?;
+  let data = api.mutate(&FOLDER_CREATE, json!({ "name": name })).await?;
   let f = data.at("data.bookmark_collection_create");
   Ok(Collection {
     id: f
@@ -160,22 +154,19 @@ pub async fn create_folder(api: &Api, name: &str) -> Result<Collection> {
 }
 
 pub async fn rename_folder(api: &Api, folder: &str, name: &str) -> Result<Action> {
-  mutate(
-    api,
-    &FOLDER_RENAME,
-    json!({ "bookmark_collection_id": folder, "name": name }),
-  )
-  .await?;
+  api
+    .mutate(
+      &FOLDER_RENAME,
+      json!({ "bookmark_collection_id": folder, "name": name }),
+    )
+    .await?;
   Ok(Action::done("rename-folder", folder).with_message(name.to_owned()))
 }
 
 pub async fn delete_folder(api: &Api, folder: &str) -> Result<Action> {
-  mutate(
-    api,
-    &FOLDER_DELETE,
-    json!({ "bookmark_collection_id": folder }),
-  )
-  .await?;
+  api
+    .mutate(&FOLDER_DELETE, json!({ "bookmark_collection_id": folder }))
+    .await?;
   Ok(Action::done("delete-folder", folder))
 }
 
@@ -199,64 +190,4 @@ pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
     }
   }
   Ok(counts)
-}
-
-/// Places with trends (`woeid` for `trends --place`).
-pub async fn places(api: &Api) -> Result<Page<Collection>> {
-  api.require_login()?;
-  let v = api
-    .get(&format!("{REST}/trends/available.json"), &[])
-    .await?;
-  let items = v
-    .as_array()
-    .into_iter()
-    .flatten()
-    .filter_map(|p| {
-      let mut c = Collection {
-        id: p.str("woeid")?,
-        kind: p
-          .str("placeType.name")
-          .unwrap_or_else(|| "place".into())
-          .to_lowercase(),
-        name: p.str("name").unwrap_or_default(),
-        ..Collection::default()
-      };
-      if let Some(country) = p.str("country").filter(|c| !c.is_empty()) {
-        c.extra.insert("country".into(), country.into());
-      }
-      Some(c)
-    })
-    .collect();
-  Ok(Page::last(items))
-}
-
-/// The top trends of one place (`1` is worldwide), with tweet volumes.
-pub async fn place_trends(api: &Api, woeid: &str) -> Result<Page<Post>> {
-  api.require_login()?;
-  let v = api
-    .get(&format!("{REST}/trends/place.json"), &[("id", woeid)])
-    .await?;
-  let block = v.at("0");
-  let items = block
-    .list("trends")
-    .iter()
-    .enumerate()
-    .filter_map(|(i, t)| {
-      let name = t.str("name")?;
-      let mut post = Post {
-        kind: "trend".into(),
-        title: Some(name.clone()),
-        url: t.str("url"),
-        raw: Some(t.clone()),
-        id: name,
-        ..Post::default()
-      };
-      if let Some(volume) = t.u64("tweet_volume") {
-        post.metrics.other.insert("tweets".into(), volume);
-      }
-      post.extra.insert("rank".into(), (i as u64 + 1).into());
-      Some(post)
-    })
-    .collect();
-  Ok(Page::last(items))
 }
