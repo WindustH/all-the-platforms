@@ -33,63 +33,84 @@ impl<'a> Entities<'a> {
 }
 
 /// A comment from its view model and the response's entities.
-pub fn comment_view(cvm: &Value, e: &Entities, video: &str) -> Option<Comment> {
-  let entity = e.get(cvm.str("commentKey"))?;
+pub fn comment_view(view: &Value, entities: &Entities, video: &str) -> Option<Comment> {
+  let entity = entities.get(view.str("commentKey"))?;
   let props = entity.at("properties");
-  let id = props.str("commentId").or_else(|| cvm.str("commentId"))?;
-  let a = entity.at("author");
-  let tb = entity.at("toolbar");
-  let author = a.str("channelId").map(|cid| {
-    let name = a.str("displayName").unwrap_or_else(|| cid.clone());
-    User {
-      handle: name.strip_prefix('@').map(str::to_owned),
-      url: Some(channel_url(&cid)),
-      avatar: a.str("avatarThumbnailUrl"),
-      verified: a.bool("isVerified") == Some(true),
-      name,
-      id: cid,
-      ..User::default()
-    }
-  });
+  let id = props.str("commentId").or_else(|| view.str("commentId"))?;
+  let toolbar = entity.at("toolbar");
   let text = text(props.at("content")).unwrap_or_default();
   let top = props.u64("replyLevel").unwrap_or(0) == 0;
   let published = props.str("publishedTime");
   let mut c = Comment {
     created_at: published.as_deref().and_then(ago),
-    likes: tb
+    likes: toolbar
       .str("likeCountA11y")
       .and_then(|t| count(&t))
-      .or_else(|| tb.str("likeCountNotliked").and_then(|t| count(&t)))
+      .or_else(|| toolbar.str("likeCountNotliked").and_then(|t| count(&t)))
       .or(Some(0)),
-    reply_count: top.then(|| tb.str("replyCount").and_then(|t| count(&t)).unwrap_or(0)),
+    reply_count: top.then(|| {
+      toolbar
+        .str("replyCount")
+        .and_then(|t| count(&t))
+        .unwrap_or(0)
+    }),
     // Replies name whom they answer with a leading @handle.
-    reply_to: (!top)
-      .then(|| {
-        text
-          .split_whitespace()
-          .next()
-          .filter(|w| w.starts_with('@'))
-          .map(str::to_owned)
-      })
-      .flatten(),
+    reply_to: (!top).then(|| mentioned(&text)).flatten(),
     raw: Some(entity.clone()),
-    author,
+    author: comment_author(entity.at("author")),
     text,
     ..Comment::default()
   };
+  put(&mut c.extra, "url", comment_url(video, &id));
+  comment_flags(&mut c, view, entity, entities, published);
+  c.id = id;
+  Some(c)
+}
+
+/// The channel that wrote a comment (its `author` entity).
+fn comment_author(author: &Value) -> Option<User> {
+  let channel = author.str("channelId")?;
+  let name = author.str("displayName").unwrap_or_else(|| channel.clone());
+  Some(User {
+    handle: name.strip_prefix('@').map(str::to_owned),
+    url: Some(channel_url(&channel)),
+    avatar: author.str("avatarThumbnailUrl"),
+    verified: author.bool("isVerified") == Some(true),
+    name,
+    id: channel,
+    ..User::default()
+  })
+}
+
+/// The @handle a reply starts with.
+fn mentioned(text: &str) -> Option<String> {
+  text
+    .split_whitespace()
+    .next()
+    .filter(|w| w.starts_with('@'))
+    .map(str::to_owned)
+}
+
+/// Edited, pinned, by the creator, hearted, and your own rating.
+fn comment_flags(
+  c: &mut Comment,
+  view: &Value,
+  entity: &Value,
+  entities: &Entities,
+  published: Option<String>,
+) {
   let x = &mut c.extra;
-  put(x, "url", comment_url(video, &id));
   put(x, "published", published.clone());
   if published.is_some_and(|p| p.contains("edited")) {
     put(x, "edited", true);
   }
-  if cvm.str("pinnedText").is_some() {
+  if view.str("pinnedText").is_some() {
     put(x, "pinned", true);
   }
-  if a.bool("isCreator") == Some(true) {
+  if entity.bool("author.isCreator") == Some(true) {
     put(x, "by_creator", true);
   }
-  if let Some(state) = e.get(cvm.str("toolbarStateKey")) {
+  if let Some(state) = entities.get(view.str("toolbarStateKey")) {
     if state.str("heartState").as_deref() == Some("TOOLBAR_HEART_STATE_HEARTED") {
       put(x, "hearted", true);
     }
@@ -99,8 +120,6 @@ pub fn comment_view(cvm: &Value, e: &Entities, video: &str) -> Option<Comment> {
       _ => {}
     }
   }
-  c.id = id;
-  Some(c)
 }
 
 /// Exact number of comments from a comments page header (`1,598 Comments`).

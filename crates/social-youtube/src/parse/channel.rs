@@ -114,24 +114,24 @@ pub fn channel_page(v: &Value) -> Option<User> {
 
 /// Add the "about" panel: total views, joined date, country, links, exact
 /// counts where the header abbreviates them.
-pub fn about(v: &Value, u: &mut User) {
+pub fn about(v: &Value, user: &mut User) {
   let Some(a) = first(v, "aboutChannelViewModel") else {
     return;
   };
   if let Some(d) = a.str("description").map(|d| d.trim().to_owned()) {
-    u.bio = Some(d);
+    user.bio = Some(d);
   }
-  u.location = a.str("country");
+  user.location = a.str("country");
   let joined = text(a.at("joinedDateText"));
-  u.created_at = joined.as_deref().and_then(date);
+  user.created_at = joined.as_deref().and_then(date);
   if let Some(n) = text(a.at("viewCountText")).and_then(|t| count(&t)) {
-    u.stats.other.insert("views".into(), n);
+    user.stats.other.insert("views".into(), n);
   }
   if let Some(n) = text(a.at("videoCountText")).and_then(|t| count(&t)) {
-    u.stats.posts = Some(n);
+    user.stats.posts = Some(n);
   }
   if let Some(n) = text(a.at("subscriberCountText")).and_then(|t| count(&t)) {
-    u.stats.followers = Some(n);
+    user.stats.followers = Some(n);
   }
   let links: Vec<Value> = a
     .list("links")
@@ -142,12 +142,12 @@ pub fn about(v: &Value, u: &mut User) {
       Some(json!({ "title": text(l.at("title")), "url": url }))
     })
     .collect();
-  let x = &mut u.extra;
+  let x = &mut user.extra;
   put(x, "joined", joined);
   if !links.is_empty() {
     put(x, "links", links);
   }
-  if let Some(r) = u.raw.as_mut().and_then(Value::as_object_mut) {
+  if let Some(r) = user.raw.as_mut().and_then(Value::as_object_mut) {
     r.insert("about".into(), a.clone());
   }
 }

@@ -45,8 +45,8 @@ impl Msg {
     self.bytes(field, s.as_bytes())
   }
 
-  pub fn msg(self, field: u32, m: Msg) -> Self {
-    self.bytes(field, &m.0)
+  pub fn msg(self, field: u32, nested: Msg) -> Self {
+    self.bytes(field, &nested.0)
   }
 
   pub fn is_empty(&self) -> bool {
