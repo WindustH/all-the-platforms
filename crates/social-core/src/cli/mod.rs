@@ -171,7 +171,7 @@ async fn execute<P: Platform>(
   let name = matches.subcommand_name().unwrap_or_default();
   let (data, code, persist) = if CommonCommand::has_subcommand(name) {
     let cmd = CommonCommand::from_arg_matches(matches).map_err(|e| Error::input(e.to_string()))?;
-    dispatch::common(&platform, cmd, &loaded, global.output_format()).await?
+    dispatch::common(&platform, cmd, &loaded, global.output_format(), global.raw).await?
   } else {
     let cmd = <P::Extra as FromArgMatches>::from_arg_matches(matches)
       .map_err(|e| Error::input(e.to_string()))?;

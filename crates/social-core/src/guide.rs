@@ -12,7 +12,7 @@ use clap::Subcommand;
 use owo_colors::{OwoColorize, Stream};
 
 use crate::cli::CommonCommand;
-use crate::platform::{Cap, PlatformInfo};
+use crate::platform::PlatformInfo;
 
 pub struct Topic {
   pub name: &'static str,
@@ -132,18 +132,7 @@ pub fn platform(info: &PlatformInfo, cmd: &clap::Command) -> String {
   }
 
   out.push_str("\n## Session\n\n");
-  let mut ways = Vec::new();
-  if info.supports(Cap::QrLogin) {
-    ways.push(format!("`social {} login` (QR code)", info.id));
-  }
-  if cfg!(feature = "browser") {
-    ways.push(format!("`social {} login --browser`", info.id));
-  }
-  ways.push(format!("`social {} login --cookie '...'`", info.id));
-  let ways = match ways.split_last() {
-    Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
-    _ => ways.concat(),
-  };
+  let ways = crate::platform::either(&info.login_ways());
   out.push_str(&format!("Log in with {ways}. "));
   if !info.required_cookies.is_empty() {
     let names: Vec<String> = info
@@ -157,10 +146,13 @@ pub fn platform(info: &PlatformInfo, cmd: &clap::Command) -> String {
       names.join(" and ")
     ));
   }
-  out.push_str(&format!(
-    "`SOCIAL_{}_COOKIE` supplies a cookie header for one run.\n\n",
-    info.id.to_ascii_uppercase()
-  ));
+  if !info.cookie_domains.is_empty() {
+    out.push_str(&format!(
+      "`SOCIAL_{}_COOKIE` supplies a cookie header for one run.",
+      info.id.to_ascii_uppercase()
+    ));
+  }
+  out.push_str("\n\n");
   out.push_str(info.guide.trim());
   out.push('\n');
   out

@@ -154,14 +154,29 @@ pub fn emit_error(format: Format, platform: Option<&str>, error: &Error) {
 pub struct Stream {
   format: Format,
   platform: &'static str,
+  raw: bool,
 }
 
 impl Stream {
-  pub fn new(format: Format, platform: &'static str) -> Self {
-    Self { format, platform }
+  /// `raw`: keep the upstream payloads (`--raw`).
+  pub fn new(format: Format, platform: &'static str, raw: bool) -> Self {
+    Self {
+      format,
+      platform,
+      raw,
+    }
   }
 
   pub fn post(&self, post: &crate::model::Post) {
+    if !self.raw && post.raw.is_some() {
+      let mut post = post.clone();
+      post.raw = None;
+      return self.print(&post);
+    }
+    self.print(post);
+  }
+
+  fn print(&self, post: &crate::model::Post) {
     if self.format == Format::Table {
       human::stream_line(post);
       return;

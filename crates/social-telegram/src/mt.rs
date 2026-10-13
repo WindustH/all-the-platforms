@@ -140,10 +140,12 @@ impl Mt {
       return;
     };
     let (keys, peers) = conn.session.take_changes();
-    if keys && let Some(k) = conn.session.keys()
-      && let Ok(json) = serde_json::to_string(&k) {
-        ctx.set_extra(KEYS, &json);
-      }
+    if keys
+      && let Some(k) = conn.session.keys()
+      && let Ok(json) = serde_json::to_string(&k)
+    {
+      ctx.set_extra(KEYS, &json);
+    }
     if peers {
       ctx.store.cache_put(PEERS, &conn.session.peers());
     }

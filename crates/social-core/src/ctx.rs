@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::error::{Error, Result};
 use crate::http::Http;
-use crate::platform::{Cap, PlatformInfo};
+use crate::platform::PlatformInfo;
 use crate::store::{RefKind, Session, Store};
 
 /// Runtime handed to a platform: HTTP client (with the session cookies), files and session extras.
@@ -35,25 +35,11 @@ impl Ctx {
 
   /// How to log in, for error hints: every way the platform offers.
   pub fn login_hint(&self) -> String {
-    let id = self.info.id;
-    let cookies = !self.info.cookie_domains.is_empty();
-    let mut ways = Vec::new();
-    if self.info.supports(Cap::QrLogin) {
-      ways.push(format!("`social {id} login` (QR code)"));
-    }
-    if self.info.supports(Cap::TokenLogin) {
-      ways.push(format!("`social {id} login --token '...'`"));
-    }
-    if cookies && cfg!(feature = "browser") {
-      ways.push(format!("`social {id} login --browser`"));
-    }
-    if cookies {
-      ways.push(format!("`social {id} login --cookie '...'`"));
-    }
-    match ways.split_last() {
-      None => format!("see `social guide {id}`"),
-      Some((last, [])) => format!("run {last}"),
-      Some((last, rest)) => format!("run {} or {last}", rest.join(", ")),
+    let ways = self.info.login_ways();
+    if ways.is_empty() {
+      format!("see `social guide {}`", self.info.id)
+    } else {
+      format!("run {}", crate::platform::either(&ways))
     }
   }
 

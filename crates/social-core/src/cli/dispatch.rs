@@ -70,6 +70,7 @@ pub(super) async fn common<P: Platform>(
   cmd: CommonCommand,
   loaded: &account::Loaded,
   format: Format,
+  raw: bool,
 ) -> Result<(Data, ExitCode, bool)> {
   use CommonCommand as C;
   let ctx = p.ctx();
@@ -354,7 +355,8 @@ pub(super) async fn common<P: Platform>(
         .iter()
         .map(|c| ctx.collection_ref(c))
         .collect::<Result<Vec<_>>>()?;
-      p.listen(&chats, &Stream::new(format, P::INFO.id)).await?;
+      p.listen(&chats, &Stream::new(format, P::INFO.id, raw))
+        .await?;
       ok(Data::Action(
         Action::done("listen", P::INFO.id).with_message("the stream ended"),
       ))

@@ -212,6 +212,36 @@ impl PlatformInfo {
   pub fn supports(&self, cap: Cap) -> bool {
     self.caps.contains(&cap)
   }
+
+  /// Every way to log in, as commands: `social <id> login` (QR code),
+  /// `--token`, `--browser`, `--cookie`, as the platform offers them.
+  pub fn login_ways(&self) -> Vec<String> {
+    let id = self.id;
+    let cookies = !self.cookie_domains.is_empty();
+    let mut ways = Vec::new();
+    if self.supports(Cap::QrLogin) {
+      ways.push(format!("`social {id} login` (QR code)"));
+    }
+    if self.supports(Cap::TokenLogin) {
+      ways.push(format!("`social {id} login --token '...'`"));
+    }
+    if cookies && cfg!(feature = "browser") {
+      ways.push(format!("`social {id} login --browser`"));
+    }
+    if cookies {
+      ways.push(format!("`social {id} login --cookie '...'`"));
+    }
+    ways
+  }
+}
+
+/// `a`, `a or b`, `a, b or c`.
+pub fn either(items: &[String]) -> String {
+  match items.split_last() {
+    None => String::new(),
+    Some((last, [])) => last.clone(),
+    Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
+  }
 }
 
 /// Which page of a listing to fetch.
