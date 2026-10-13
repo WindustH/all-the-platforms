@@ -4705,7 +4705,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "jiff",
- "rand 0.9.5",
  "serde",
  "serde_json",
  "social-core",
@@ -4730,7 +4729,6 @@ name = "social-misskey"
 version = "0.1.0"
 dependencies = [
  "clap",
- "jiff",
  "rand 0.9.5",
  "serde_json",
  "social-core",
@@ -4808,7 +4806,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "jiff",
- "rand 0.9.5",
  "serde",
  "serde_json",
  "social-core",

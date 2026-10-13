@@ -4,49 +4,27 @@
 //! statistics. Incoming messages reach bots only by webhook, so there is no
 //! history and no `listen`.
 
+mod account;
 mod api;
-mod bot;
-mod stats;
+mod chats;
+mod extra;
+mod insights;
+mod messages;
+mod parse;
+mod refs;
+mod users;
 
 use std::time::Duration;
 
 use social_core::{
-  Action, Cap, Choices, Ctx, Data, Error, Insights, Media, Message, Page, PageReq, Platform,
-  PlatformInfo, Post, Result, User,
+  Action, Cap, Choices, Ctx, Data, Insights, Media, Message, Page, PageReq, Platform, PlatformInfo,
+  Post, Result, User,
 };
 
 use crate::api::Api;
 
 pub struct Line {
   api: Api,
-}
-
-/// LINE-only commands.
-#[derive(Debug, clap::Subcommand)]
-pub enum Command {
-  /// Send an image by its public HTTPS URL
-  Image {
-    /// User (U…), group (C…), room (R…), `U…,U…` or `all`
-    chat: String,
-    url: String,
-    /// Smaller preview image URL (default: the image itself)
-    #[arg(long)]
-    preview: Option<String>,
-  },
-  /// Send a sticker (package and sticker ids from LINE's sticker list)
-  Sticker {
-    chat: String,
-    package: String,
-    sticker: String,
-  },
-  /// A group's name, picture and member count
-  Group { group: String },
-  /// Leave a group or room
-  Leave { chat: String },
-  /// Monthly message quota, usage and the webhook URL
-  Quota,
-  /// Rich menus and the default one
-  Richmenus,
 }
 
 impl Platform for Line {
@@ -73,7 +51,7 @@ impl Platform for Line {
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = Command;
+  type Extra = extra::Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self { api: Api::new(ctx) })
@@ -84,7 +62,7 @@ impl Platform for Line {
   }
 
   async fn whoami(&self) -> Result<User> {
-    bot::whoami(&self.api).await
+    users::whoami(&self.api).await
   }
 
   fn logged_in(&self) -> bool {
@@ -92,62 +70,39 @@ impl Platform for Line {
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    self.api.save(token.trim());
+    self.api.save(token);
     Ok(())
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    bot::user(&self.api, user).await
+    users::user(&self.api, user).await
   }
 
   /// Friends of the bot (the logged-in account only).
   async fn followers(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    if !matches!(user, "" | "me") {
-      let me = bot::whoami(&self.api).await?;
-      if user != me.id {
-        return Err(
-          Error::unsupported("followers of another account")
-            .with_hint("LINE lists the friends of your own bot only"),
-        );
-      }
-    }
-    bot::followers(&self.api, page).await
+    users::followers(&self.api, user, page).await
   }
 
   async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
-    bot::send(&self.api, chat, message).await
+    messages::send(&self.api, chat, message).await
   }
 
   async fn members(&self, chat: &str, page: &PageReq) -> Result<Page<User>> {
-    bot::members(&self.api, chat, page).await
+    users::members(&self.api, chat, page).await
   }
 
   async fn media(&self, post: &str, _audio_only: bool) -> Result<(Post, Vec<Media>)> {
-    bot::content(&self.api, post)
+    messages::content(&self.api, post)
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
     match post {
-      Some(request_id) => stats::message(&self.api, request_id).await,
-      None => stats::account(&self.api, days).await,
+      Some(request_id) => insights::message(&self.api, request_id).await,
+      None => insights::account(&self.api, days).await,
     }
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {
-    let api = &self.api;
-    Ok(match command {
-      Command::Image { chat, url, preview } => {
-        Data::Action(bot::image(api, &chat, &url, preview.as_deref()).await?)
-      }
-      Command::Sticker {
-        chat,
-        package,
-        sticker,
-      } => Data::Action(bot::sticker(api, &chat, &package, &sticker).await?),
-      Command::Group { group } => Data::User(Box::new(bot::user(api, &group).await?)),
-      Command::Leave { chat } => Data::Action(bot::leave(api, &chat).await?),
-      Command::Quota => Data::Value(bot::quota(api).await?),
-      Command::Richmenus => Data::Value(bot::rich_menus(api).await?),
-    })
+    extra::run(&self.api, command).await
   }
 }

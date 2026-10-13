@@ -2,17 +2,17 @@
 //! personal access token or a session token as bearer.
 //!
 //! The server and token come from `MATTERMOST_URL` / `MATTERMOST_TOKEN`
-//! when set, else from the session (`login --token 'SERVER TOKEN'`, or
-//! `'SERVER LOGIN PASSWORD'` for a password login that yields a session
-//! token). Errors (`{id, message, status_code}`) map onto
-//! `social_core::Error`; 429 and server errors are retried.
+//! when set, else from the session ([`crate::login`]). Errors (`{id,
+//! message, status_code}`) map onto `social_core::Error`; 429 and server
+//! errors are retried.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use social_core::http::{Method, Part};
-use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt, json};
+use social_core::credentials;
+use social_core::http::{Method, Part, Req, Resp};
+use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 
 use crate::chats::ChannelInfo;
 use crate::users::Brief;
@@ -28,6 +28,13 @@ pub struct Creds {
   pub token: String,
 }
 
+/// What a request carries.
+#[derive(Clone)]
+pub enum Body {
+  Json(Value),
+  Multipart(Vec<Part>),
+}
+
 pub struct Api {
   pub ctx: Ctx,
   env: Option<Creds>,
@@ -40,22 +47,24 @@ pub struct Api {
 }
 
 /// `chat.example.com` → `https://chat.example.com`, without a trailing `/`.
-pub fn server_url(s: &str) -> String {
-  let s = s.trim().trim_end_matches('/');
-  if s.starts_with("http://") || s.starts_with("https://") {
-    s.to_owned()
+pub fn server_url(server: &str) -> String {
+  let server = server.trim().trim_end_matches('/');
+  if server.starts_with("http://") || server.starts_with("https://") {
+    server.to_owned()
   } else {
-    format!("https://{s}")
+    format!("https://{server}")
   }
 }
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-    let env = match (var("MATTERMOST_URL"), var("MATTERMOST_TOKEN")) {
+    let env = match (
+      credentials::env("MATTERMOST_URL"),
+      credentials::env("MATTERMOST_TOKEN"),
+    ) {
       (Some(server), Some(token)) => Some(Creds {
         server: server_url(&server),
-        token: token.trim().to_owned(),
+        token,
       }),
       _ => None,
     };
@@ -72,10 +81,9 @@ impl Api {
     if let Some(c) = &self.env {
       return Some(c.clone());
     }
-    Some(Creds {
-      server: self.ctx.extra(SERVER_KEY).filter(|s| !s.is_empty())?,
-      token: self.ctx.extra(TOKEN_KEY).filter(|t| !t.is_empty())?,
-    })
+    let saved = credentials::saved(&self.ctx, &[SERVER_KEY, TOKEN_KEY])?;
+    let [server, token] = <[String; 2]>::try_from(saved).ok()?;
+    Some(Creds { server, token })
   }
 
   pub fn logged_in(&self) -> bool {
@@ -95,9 +103,14 @@ impl Api {
   }
 
   pub fn save(&self, creds: &Creds, user_id: &str) {
-    self.ctx.set_extra(SERVER_KEY, &creds.server);
-    self.ctx.set_extra(TOKEN_KEY, &creds.token);
-    self.ctx.set_extra(USER_KEY, user_id);
+    credentials::save(
+      &self.ctx,
+      &[
+        (SERVER_KEY, creds.server.as_str()),
+        (TOKEN_KEY, creds.token.as_str()),
+        (USER_KEY, user_id),
+      ],
+    );
   }
 
   /// The account's user id.
@@ -160,6 +173,8 @@ impl Api {
     self.send(&creds, method, path, &[], body).await
   }
 
+  /// One call, retried on 429 (and server errors of reads) as the
+  /// `X-RateLimit-Reset` header says.
   pub async fn send(
     &self,
     creds: &Creds,
@@ -171,114 +186,78 @@ impl Api {
     let mut tries = 0;
     loop {
       tries += 1;
-      let mut req = self
-        .ctx
-        .http
-        .request(method.clone(), format!("{}/api/v4{path}", creds.server))
-        .no_cookies()
-        .retries(0)
-        .header("authorization", format!("Bearer {}", creds.token))
-        .header("x-requested-with", "XMLHttpRequest")
-        .queries(query.iter().map(|(k, v)| (*k, v)));
-      req = match &body {
-        None => req,
-        Some(Body::Json(v)) => req.json(v),
-        Some(Body::Multipart(parts)) => req.multipart(parts.clone()),
-      };
+      let req = self.request(creds, &method, path, query, body.as_ref());
       let resp = req.send().await?;
-      let status = resp.status.as_u16();
-      let retry = status == 429 || (resp.status.is_server_error() && method == Method::GET);
+      let retry =
+        resp.status.as_u16() == 429 || (resp.status.is_server_error() && method == Method::GET);
       if retry && tries < MAX_TRIES {
-        let wait = resp
-          .header("x-ratelimit-reset")
-          .and_then(|s| s.parse::<u64>().ok())
-          .unwrap_or(u64::from(tries))
-          .min(30);
-        tokio::time::sleep(Duration::from_secs(wait.max(1))).await;
+        tokio::time::sleep(retry_wait(&resp, tries)).await;
         continue;
       }
-      if resp.status.is_success() {
-        if resp.body.iter().all(u8::is_ascii_whitespace) {
-          return Ok(Value::Null);
-        }
-        return resp.value();
-      }
-      let v: Value = serde_json::from_slice(&resp.body).unwrap_or_default();
-      let message = v.str("message").unwrap_or_else(|| format!("HTTP {status}"));
-      let text = format!("Mattermost: {message}");
-      return Err(match status {
-        401 => Error::auth(text).with_hint(if self.env.is_some() {
-          "check MATTERMOST_TOKEN"
-        } else {
-          "the token was revoked or the session expired; log in again"
-        }),
-        403 => Error::new(ErrorCode::PermissionDenied, text),
-        404 => Error::not_found(text),
-        400 | 413 => Error::input(text),
-        429 => Error::new(ErrorCode::RateLimited, text),
-        501 => Error::new(ErrorCode::UnsupportedOperation, text)
-          .with_hint("the server is older or has the feature turned off"),
-        _ => Error::upstream(text),
-      });
+      return self.check(resp);
     }
+  }
+
+  fn request(
+    &self,
+    creds: &Creds,
+    method: &Method,
+    path: &str,
+    query: &[(&str, String)],
+    body: Option<&Body>,
+  ) -> Req<'_> {
+    let req = self
+      .ctx
+      .http
+      .request(method.clone(), format!("{}/api/v4{path}", creds.server))
+      .no_cookies()
+      .retries(0)
+      .header("authorization", format!("Bearer {}", creds.token))
+      .header("x-requested-with", "XMLHttpRequest")
+      .queries(query.iter().map(|(k, v)| (*k, v)));
+    match body {
+      None => req,
+      Some(Body::Json(v)) => req.json(v),
+      Some(Body::Multipart(parts)) => req.multipart(parts.clone()),
+    }
+  }
+
+  /// The JSON of a success (`Null` for an empty body), or the mapped error.
+  fn check(&self, resp: Resp) -> Result<Value> {
+    if resp.status.is_success() {
+      if resp.body.iter().all(u8::is_ascii_whitespace) {
+        return Ok(Value::Null);
+      }
+      return resp.value();
+    }
+    let status = resp.status.as_u16();
+    let v: Value = serde_json::from_slice(&resp.body).unwrap_or_default();
+    let message = v.str("message").unwrap_or_else(|| format!("HTTP {status}"));
+    let text = format!("Mattermost: {message}");
+    Err(match status {
+      401 => Error::auth(text).with_hint(if self.env.is_some() {
+        "check MATTERMOST_TOKEN"
+      } else {
+        "the token was revoked or the session expired; log in again"
+      }),
+      403 => Error::new(ErrorCode::PermissionDenied, text),
+      404 => Error::not_found(text),
+      400 | 413 => Error::input(text),
+      429 => Error::new(ErrorCode::RateLimited, text),
+      501 => Error::new(ErrorCode::UnsupportedOperation, text)
+        .with_hint("the server is older or has the feature turned off"),
+      _ => Error::upstream(text),
+    })
   }
 }
 
-#[derive(Clone)]
-pub enum Body {
-  Json(Value),
-  Multipart(Vec<Part>),
-}
-
-/// Log in: `SERVER TOKEN`, or `SERVER LOGIN PASSWORD` (split on `|` when
-/// present, else on whitespace).
-pub async fn login(api: &Api, raw: &str) -> Result<String> {
-  let parts: Vec<&str> = if raw.contains('|') {
-    raw.split('|').map(str::trim).collect()
-  } else {
-    raw.split_whitespace().collect()
-  };
-  let (server, token) = match parts.as_slice() {
-    [server, token] => (server_url(server), (*token).to_owned()),
-    [server, login, password] => {
-      let server = server_url(server);
-      let resp = api
-        .ctx
-        .http
-        .post(format!("{server}/api/v4/users/login"))
-        .no_cookies()
-        .json(&json!({"login_id": login, "password": password}))
-        .send()
-        .await?;
-      if !resp.status.is_success() {
-        let v: Value = serde_json::from_slice(&resp.body).unwrap_or_default();
-        return Err(
-          Error::auth(format!(
-            "Mattermost refused the login: {}",
-            v.str("message").unwrap_or_else(|| resp.status.to_string())
-          ))
-          .with_hint("accounts with MFA or SSO need a personal access token instead"),
-        );
-      }
-      let token = resp
-        .header("token")
-        .ok_or_else(|| Error::upstream("the login answer carried no session token"))?
-        .to_owned();
-      (server, token)
-    }
-    _ => {
-      return Err(Error::input(
-        "expected 'SERVER TOKEN' or 'SERVER LOGIN PASSWORD'",
-      ));
-    }
-  };
-  let creds = Creds { server, token };
-  let me = api
-    .send(&creds, Method::GET, "/users/me", &[], None)
-    .await?;
-  let id = me
-    .str("id")
-    .ok_or_else(|| Error::upstream("no user id for the account"))?;
-  api.save(&creds, &id);
-  Ok(id)
+/// How long to wait before retry number `tries`: the reset the server
+/// names, else one second per try, at most 30.
+fn retry_wait(resp: &Resp, tries: u32) -> Duration {
+  let secs = resp
+    .header("x-ratelimit-reset")
+    .and_then(|s| s.parse::<u64>().ok())
+    .unwrap_or(u64::from(tries))
+    .min(30);
+  Duration::from_secs(secs.max(1))
 }

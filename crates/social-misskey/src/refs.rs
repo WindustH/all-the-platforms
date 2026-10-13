@@ -7,7 +7,7 @@
 //! - chat messages: `user:<id>/<message>` or `room:<id>/<message>` (the `id`
 //!   of listed chat messages).
 
-use social_core::{Error, Result};
+use social_core::{Error, Result, chat};
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,19 +28,20 @@ pub enum NoteRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Chat {
+pub enum ChatRef {
   User(UserRef),
   Room(String),
 }
 
+/// A chat message: the chat's `user:<id>` / `room:<id>` and the message id.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChatMessage {
-  pub chat: Chat,
+pub struct MessageRef {
+  pub chat: String,
   pub id: String,
 }
 
-fn is_id(s: &str) -> bool {
-  !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_alphanumeric())
+fn is_id(text: &str) -> bool {
+  !text.is_empty() && text.len() <= 32 && text.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
 pub fn note(arg: &str, instance: &str) -> Result<NoteRef> {
@@ -94,41 +95,35 @@ pub fn user(arg: &str, instance: &str) -> Result<UserRef> {
   )))
 }
 
-fn split_handle(s: &str) -> (String, Option<String>) {
-  match s.split_once('@') {
-    Some((u, h)) if !h.is_empty() => (u.to_owned(), Some(h.to_ascii_lowercase())),
-    _ => (s.trim_end_matches('@').to_owned(), None),
+fn split_handle(handle: &str) -> (String, Option<String>) {
+  match handle.split_once('@') {
+    Some((username, host)) if !host.is_empty() => {
+      (username.to_owned(), Some(host.to_ascii_lowercase()))
+    }
+    _ => (handle.trim_end_matches('@').to_owned(), None),
   }
 }
 
-pub fn chat(arg: &str, instance: &str) -> Result<Chat> {
+pub fn chat(arg: &str, instance: &str) -> Result<ChatRef> {
   let arg = arg.trim();
   if let Some(id) = arg.strip_prefix("room:") {
-    return Ok(Chat::Room(id.to_owned()));
+    return Ok(ChatRef::Room(id.to_owned()));
   }
   if let Ok(url) = Url::parse(arg)
     && let Some(id) = url.path().strip_prefix("/chat/room/")
   {
-    return Ok(Chat::Room(id.trim_end_matches('/').to_owned()));
+    return Ok(ChatRef::Room(id.trim_end_matches('/').to_owned()));
   }
-  user(arg, instance).map(Chat::User)
+  user(arg, instance).map(ChatRef::User)
 }
 
 /// A chat message (`user:<id>/<message>` / `room:<id>/<message>`), or `None`
 /// for anything else (then it is a note).
-pub fn chat_message(arg: &str) -> Option<ChatMessage> {
-  let arg = arg.trim();
-  let (chat, id) = arg.rsplit_once('/')?;
-  if !is_id(id) {
-    return None;
-  }
-  let chat = if let Some(uid) = chat.strip_prefix("user:") {
-    Chat::User(UserRef::Id(uid.to_owned()))
-  } else {
-    Chat::Room(chat.strip_prefix("room:")?.to_owned())
-  };
-  Some(ChatMessage {
-    chat,
+pub fn message(arg: &str) -> Option<MessageRef> {
+  let (chat, id) = chat::split_message_id(arg)?;
+  let is_chat = chat.starts_with("user:") || chat.starts_with("room:");
+  (is_chat && is_id(id)).then(|| MessageRef {
+    chat: chat.to_owned(),
     id: id.to_owned(),
   })
 }

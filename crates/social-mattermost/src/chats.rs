@@ -5,12 +5,12 @@
 use std::collections::HashMap;
 
 use social_core::{
-  Collection, Error, ErrorCode, Page, PageReq, Result, User, Value, ValueExt, json,
+  Action, Collection, Error, ErrorCode, Page, PageReq, Result, User, Value, ValueExt, json,
 };
 
 use crate::api::Api;
 use crate::parse::{self, View};
-use crate::refs::{self, Chat};
+use crate::refs::{self, ChatRef};
 use crate::users::{self, Brief};
 
 /// A channel's name, kind and team, for post listings.
@@ -174,18 +174,18 @@ pub async fn team_id(api: &Api, arg: &str) -> Result<String> {
 /// The channel id an argument names.
 pub async fn channel_id(api: &Api, arg: &str) -> Result<String> {
   let v = match refs::chat(arg) {
-    Chat::Id(id) => return Ok(id),
-    Chat::User(user) => {
+    ChatRef::Id(id) => return Ok(id),
+    ChatRef::User(user) => {
       let me = api.me().await?;
       let other = users::user_id(api, &user).await?;
       api.post("/channels/direct", json!([me, other])).await?
     }
-    Chat::Path(team, name) => {
+    ChatRef::Path(team, name) => {
       api
         .get(&format!("/teams/name/{team}/channels/name/{name}"), &[])
         .await?
     }
-    Chat::Name(name) => {
+    ChatRef::Name(name) => {
       let mut found = None;
       for t in my_teams(api).await? {
         let Some(id) = t.str("id") else { continue };
@@ -240,4 +240,35 @@ pub async fn members(api: &Api, arg: &str, page: &PageReq) -> Result<Page<User>>
     .collect();
   let next = (ids.len() >= per_page).then(|| (no + 1).to_string());
   Ok(Page::new(users::many(api, &ids).await, next))
+}
+
+/// Your teams.
+pub async fn teams(api: &Api) -> Result<Page<Collection>> {
+  let server = api.server()?;
+  let rows = my_teams(api).await?;
+  Ok(Page::last(
+    rows.iter().map(|t| parse::team(t, &server)).collect(),
+  ))
+}
+
+/// One channel: purpose, header, message count.
+pub async fn channel(api: &Api, arg: &str) -> Result<Page<Collection>> {
+  let id = channel_id(api, arg).await?;
+  let v = api.get(&format!("/channels/{id}"), &[]).await?;
+  let c = render(api, |view| parse::channel(&v, view)).await?;
+  Ok(Page::last(vec![c]))
+}
+
+/// Join a channel, or leave it with `undo`.
+pub async fn join(api: &Api, arg: &str, undo: bool) -> Result<Action> {
+  let id = channel_id(api, arg).await?;
+  let me = api.me().await?;
+  if undo {
+    api.delete(&format!("/channels/{id}/members/{me}")).await?;
+  } else {
+    api
+      .post(&format!("/channels/{id}/members"), json!({"user_id": me}))
+      .await?;
+  }
+  Ok(Action::done(if undo { "leave" } else { "join" }, id))
 }

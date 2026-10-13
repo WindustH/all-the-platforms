@@ -6,11 +6,11 @@ use social_core::{Error, Result};
 use url::Url;
 
 /// Meteor ids (17 characters) and direct-room ids (two of them).
-pub fn is_id(s: &str) -> bool {
-  (s.len() == 17 || s.len() == 34) && s.bytes().all(|b| b.is_ascii_alphanumeric())
+pub fn is_id(text: &str) -> bool {
+  (text.len() == 17 || text.len() == 34) && text.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
-pub fn message(arg: &str) -> Result<String> {
+pub fn message_id(arg: &str) -> Result<String> {
   let arg = arg.trim();
   if let Ok(url) = Url::parse(arg) {
     if let Some((_, id)) = url.query_pairs().find(|(k, _)| k == "msg") {
@@ -27,16 +27,16 @@ pub fn message(arg: &str) -> Result<String> {
   )))
 }
 
-pub enum Room {
+pub enum RoomRef {
   Id(String),
   Name(String),
   User(String),
 }
 
-pub fn room(arg: &str) -> Room {
+pub fn room(arg: &str) -> RoomRef {
   let arg = arg.trim();
   if is_id(arg) {
-    return Room::Id(arg.to_owned());
+    return RoomRef::Id(arg.to_owned());
   }
   if let Ok(url) = Url::parse(arg) {
     let segs: Vec<&str> = url
@@ -45,14 +45,14 @@ pub fn room(arg: &str) -> Room {
       .unwrap_or_default();
     if let [kind, name, ..] = segs.as_slice() {
       return match *kind {
-        "direct" if is_id(name) => Room::Id((*name).to_owned()),
-        "direct" => Room::User((*name).to_owned()),
-        _ => Room::Name((*name).to_owned()),
+        "direct" if is_id(name) => RoomRef::Id((*name).to_owned()),
+        "direct" => RoomRef::User((*name).to_owned()),
+        _ => RoomRef::Name((*name).to_owned()),
       };
     }
   }
   if let Some(user) = arg.strip_prefix('@') {
-    return Room::User(user.to_owned());
+    return RoomRef::User(user.to_owned());
   }
-  Room::Name(arg.trim_start_matches('#').to_owned())
+  RoomRef::Name(arg.trim_start_matches('#').to_owned())
 }

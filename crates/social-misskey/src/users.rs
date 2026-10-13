@@ -1,14 +1,11 @@
-//! Users: the account, profiles, their notes, followers, search, follows,
+//! Users: the account, profiles, their notes, followers, follows,
 //! notifications.
 
 use std::collections::BTreeMap;
 
-use social_core::{
-  Action, Notification, Page, PageReq, Post, Query, Result, User, Value, ValueExt, json,
-};
+use social_core::{Action, Notification, Page, PageReq, Post, Result, User, Value, ValueExt, json};
 
 use crate::api::Api;
-use crate::notes::paged;
 use crate::parse;
 use crate::refs::{self, UserRef};
 
@@ -46,8 +43,9 @@ pub async fn whoami(api: &Api) -> Result<User> {
   Ok(parse::user(&me(api).await?, &api.instance()))
 }
 
-pub async fn lookup(api: &Api, r: &UserRef) -> Result<Value> {
-  match r {
+/// The profile a reference points at, as Misskey sends it.
+pub async fn lookup(api: &Api, user: &UserRef) -> Result<Value> {
+  match user {
     UserRef::Me => me(api).await,
     UserRef::Id(id) => api.call("users/show", json!({"userId": id})).await,
     UserRef::Name { username, host } => {
@@ -58,31 +56,28 @@ pub async fn lookup(api: &Api, r: &UserRef) -> Result<Value> {
   }
 }
 
-pub async fn user_id(api: &Api, arg: &str) -> Result<String> {
-  match refs::user(arg, &api.instance())? {
-    UserRef::Id(id) => Ok(id),
+/// The id of the user a reference points at.
+pub async fn id(api: &Api, user: &UserRef) -> Result<String> {
+  match user {
+    UserRef::Id(id) => Ok(id.clone()),
     UserRef::Me => my_id(api).await,
-    r => Ok(lookup(api, &r).await?.str("id").unwrap_or_default()),
+    user => Ok(lookup(api, user).await?.str("id").unwrap_or_default()),
   }
 }
 
+async fn user_id(api: &Api, arg: &str) -> Result<String> {
+  id(api, &refs::user(arg, &api.instance())?).await
+}
+
 pub async fn user(api: &Api, arg: &str) -> Result<User> {
-  let r = refs::user(arg, &api.instance())?;
-  Ok(parse::user(&lookup(api, &r).await?, &api.instance()))
+  let user = refs::user(arg, &api.instance())?;
+  Ok(parse::user(&lookup(api, &user).await?, &api.instance()))
 }
 
 pub async fn posts(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
   let id = user_id(api, arg).await?;
-  let size = page.size_within(100);
-  let mut body = json!({"userId": id, "limit": size, "withRenotes": true, "withReplies": false});
-  if let Some(c) = &page.cursor {
-    body["untilId"] = json!(c);
-  }
-  let v = api.call("users/notes", body).await?;
-  let rows = v.as_array().cloned().unwrap_or_default();
-  let instance = api.instance();
-  let items = rows.iter().map(|n| parse::note(n, &instance)).collect();
-  Ok(Page::new(items, paged(&rows, size)))
+  let body = json!({"userId": id, "withRenotes": true, "withReplies": false});
+  api.list("users/notes", body, page, parse::post).await
 }
 
 /// `users/followers` / `users/following`: relation rows paged by their own id.
@@ -93,46 +88,17 @@ pub async fn relations(
   page: &PageReq,
 ) -> Result<Page<User>> {
   let id = user_id(api, arg).await?;
-  let size = page.size_within(100);
-  let mut body = json!({"userId": id, "limit": size});
-  if let Some(c) = &page.cursor {
-    body["untilId"] = json!(c);
-  }
   let (endpoint, key) = if followers {
     ("users/followers", "follower")
   } else {
     ("users/following", "followee")
   };
-  let v = api.call(endpoint, body).await?;
-  let rows = v.as_array().cloned().unwrap_or_default();
-  let instance = api.instance();
-  let items = rows
-    .iter()
-    .map(|r| parse::user(r.at(key), &instance))
-    .collect();
-  Ok(Page::new(items, paged(&rows, size)))
-}
-
-pub async fn search(api: &Api, q: &Query, page: &PageReq) -> Result<Page<User>> {
-  let size = page.size_within(100);
-  let offset: usize = page
-    .cursor
-    .as_deref()
-    .and_then(|c| c.parse().ok())
-    .unwrap_or(0);
-  let v = api
-    .call(
-      "users/search",
-      json!({"query": q.keyword.trim_start_matches('@'), "limit": size, "offset": offset}),
-    )
-    .await?;
-  let rows = v.as_array().cloned().unwrap_or_default();
-  let instance = api.instance();
-  let next = (rows.len() >= size).then(|| (offset + rows.len()).to_string());
-  Ok(Page::new(
-    rows.iter().map(|u| parse::user(u, &instance)).collect(),
-    next,
-  ))
+  let body = json!({"userId": id});
+  api
+    .list(endpoint, body, page, |row, instance| {
+      parse::user(row.at(key), instance)
+    })
+    .await
 }
 
 pub async fn follow(api: &Api, arg: &str, undo: bool) -> Result<Action> {
@@ -151,32 +117,22 @@ pub async fn notifications(
   kind: Option<&str>,
   page: &PageReq,
 ) -> Result<Page<Notification>> {
-  let size = page.size_within(100);
-  let mut body = json!({"limit": size, "markAsRead": false});
-  if let Some(c) = &page.cursor {
-    body["untilId"] = json!(c);
+  api.require()?;
+  let mut body = json!({"markAsRead": false});
+  if let Some(kind) = kind {
+    body["includeTypes"] = json!([kind]);
   }
-  if let Some(k) = kind {
-    body["includeTypes"] = json!([k]);
-  }
-  let v = api.call_auth("i/notifications", body).await?;
-  let rows = v.as_array().cloned().unwrap_or_default();
-  let instance = api.instance();
-  Ok(Page::new(
-    rows
-      .iter()
-      .map(|n| parse::notification(n, &instance))
-      .collect(),
-    paged(&rows, size),
-  ))
+  api
+    .list("i/notifications", body, page, parse::notification)
+    .await
 }
 
 /// What `i` says is waiting: notifications, mentions, chat messages ...
 pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
   let v = me(api).await?;
-  let mut out = BTreeMap::new();
-  if let Some(n) = v.u64("unreadNotificationsCount") {
-    out.insert("notifications".into(), n);
+  let mut counts = BTreeMap::new();
+  if let Some(count) = v.u64("unreadNotificationsCount") {
+    counts.insert("notifications".into(), count);
   }
   for (key, field) in [
     ("notifications", "hasUnreadNotification"),
@@ -186,9 +142,9 @@ pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
     ("announcements", "hasUnreadAnnouncement"),
     ("antennas", "hasUnreadAntenna"),
   ] {
-    if let Some(b) = v.bool(field) {
-      out.entry(key.into()).or_insert(u64::from(b));
+    if let Some(unread) = v.bool(field) {
+      counts.entry(key.into()).or_insert(u64::from(unread));
     }
   }
-  Ok(out)
+  Ok(counts)
 }

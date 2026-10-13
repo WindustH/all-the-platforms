@@ -2,26 +2,27 @@
 //! anything else is a channel id as the server names it (these can hold
 //! colons, e.g. `private:123`). Messages are `CHANNEL/MESSAGE`.
 
+use social_core::chat;
 use social_core::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Chat {
+pub enum ChatRef {
   Guild(String),
   Channel(String),
   User(String),
 }
 
-pub fn chat(arg: &str) -> Result<Chat> {
+pub fn chat(arg: &str) -> Result<ChatRef> {
   let arg = arg.trim();
   if arg.is_empty() {
     return Err(Error::input("empty chat"));
   }
   Ok(if let Some(g) = arg.strip_prefix("guild:") {
-    Chat::Guild(g.to_owned())
+    ChatRef::Guild(g.to_owned())
   } else if let Some(u) = arg.strip_prefix("user:") {
-    Chat::User(u.to_owned())
+    ChatRef::User(u.to_owned())
   } else {
-    Chat::Channel(arg.to_owned())
+    ChatRef::Channel(arg.to_owned())
   })
 }
 
@@ -32,12 +33,12 @@ pub struct MessageRef {
 }
 
 pub fn message(arg: &str) -> Result<MessageRef> {
-  match arg.trim().rsplit_once('/') {
-    Some((channel, id)) if !channel.is_empty() && !id.is_empty() => Ok(MessageRef {
+  match chat::split_message_id(arg) {
+    Some((channel, id)) => Ok(MessageRef {
       channel: channel.to_owned(),
       id: id.to_owned(),
     }),
-    _ => Err(Error::input(format!(
+    None => Err(Error::input(format!(
       "not a Satori message: {arg}; use CHANNEL/MESSAGE as listed by `messages`"
     ))),
   }

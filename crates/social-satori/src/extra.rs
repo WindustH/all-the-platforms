@@ -1,8 +1,9 @@
 //! Satori-only commands.
 
-use social_core::{Data, Error, Result, Value, ValueExt, json};
+use social_core::{Data, Error, Result, Value};
 
 use crate::api::Api;
+use crate::users;
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -31,31 +32,8 @@ Examples:
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
-    Command::Logins => {
-      let server = api.require()?;
-      let logins = api.logins(&server).await?;
-      Data::Value(Value::from(
-        logins
-          .iter()
-          .map(|l| {
-            json!({
-              "platform": l.str("platform"),
-              "user_id": l.str("user.id"),
-              "name": l.str("user.name"),
-              "status": l.at("status"),
-              "pick": format!("{}:{}", l.str("platform").unwrap_or_default(), l.str("user.id").unwrap_or_default()),
-            })
-          })
-          .collect::<Vec<_>>(),
-      ))
-    }
-    Command::Friends { cursor } => {
-      let mut body = json!({});
-      if let Some(c) = cursor {
-        body["next"] = json!(c);
-      }
-      Data::Value(api.call("friend.list", body).await?)
-    }
+    Command::Logins => Data::Value(users::logins(api).await?),
+    Command::Friends { cursor } => Data::Value(users::friends(api, cursor).await?),
     Command::Call { method, body } => {
       let body: Value = serde_json::from_str(&body)
         .map_err(|e| Error::input(format!("the body is not JSON: {e}")))?;

@@ -3,10 +3,11 @@
 use std::path::PathBuf;
 
 use social_core::cli::{PageArgs, check_images, read_text};
-use social_core::{Data, Result, ValueExt, json};
+use social_core::{Action, Data, Result, ValueExt, json};
 
 use crate::api::Api;
-use crate::notes::{self, NoteOpts};
+use crate::posts::{self, NoteOptions};
+use crate::search;
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -55,10 +56,9 @@ pub enum Command {
 }
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
-  let ctx = &api.ctx;
   Ok(match command {
     Command::Renote { note, undo } => {
-      Data::Action(notes::renote(api, &ctx.post_ref(&note)?, undo).await?)
+      Data::Action(posts::renote(api, &api.ctx.post_ref(&note)?, undo).await?)
     }
     Command::Note {
       text,
@@ -69,42 +69,53 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       quote,
       files,
     } => {
-      check_images(&files)?;
-      let opts = NoteOpts {
+      let options = NoteOptions {
         cw,
         visibility,
         local_only,
-        reply_to: reply_to.map(|r| ctx.post_ref(&r)).transpose()?,
-        quote: quote.map(|q| ctx.post_ref(&q)).transpose()?,
+        reply_to,
+        quote,
         files,
       };
-      Data::Action(notes::create(api, read_text(text)?.trim(), &opts).await?)
+      Data::Action(note(api, text, options).await?)
     }
-    Command::Trends => Data::Collections(notes::trends(api).await?),
+    Command::Trends => Data::Collections(search::trends(api).await?),
     Command::Tag { tag, page } => Data::Posts(
       page
-        .collect_dated(async |r| notes::by_tag(api, &tag, &r).await)
+        .collect_dated(async |req| search::tagged(api, &tag, &req).await)
         .await?,
     ),
     Command::Mentions { page } => Data::Posts(
       page
-        .collect_dated(async |r| notes::mentions(api, &r).await)
+        .collect_dated(async |req| posts::mentions(api, &req).await)
         .await?,
     ),
-    Command::Instance => {
-      let meta = api.call("meta", json!({"detail": true})).await?;
-      let stats = api.call("stats", json!({})).await.unwrap_or_default();
-      Data::Value(json!({
-        "host": api.instance(),
-        "name": meta.str("name"),
-        "version": meta.str("version"),
-        "description": meta.str("description"),
-        "max_note_length": meta.u64("maxNoteTextLength"),
-        "registration_open": meta.bool("disableRegistration").map(|d| !d),
-        "users": stats.u64("originalUsersCount"),
-        "notes": stats.u64("originalNotesCount"),
-        "known_instances": stats.u64("instances"),
-      }))
-    }
+    Command::Instance => instance(api).await?,
   })
+}
+
+/// `note`: `#N` references resolved, the text read, then [`posts::create`].
+async fn note(api: &Api, text: Option<String>, mut options: NoteOptions) -> Result<Action> {
+  check_images(&options.files)?;
+  let ctx = &api.ctx;
+  options.reply_to = options.reply_to.map(|r| ctx.post_ref(&r)).transpose()?;
+  options.quote = options.quote.map(|q| ctx.post_ref(&q)).transpose()?;
+  posts::create(api, read_text(text)?.trim(), &options).await
+}
+
+/// The instance: name, version, limits and counts.
+async fn instance(api: &Api) -> Result<Data> {
+  let meta = api.call("meta", json!({"detail": true})).await?;
+  let stats = api.call("stats", json!({})).await.unwrap_or_default();
+  Ok(Data::Value(json!({
+    "host": api.instance(),
+    "name": meta.str("name"),
+    "version": meta.str("version"),
+    "description": meta.str("description"),
+    "max_note_length": meta.u64("maxNoteTextLength"),
+    "registration_open": meta.bool("disableRegistration").map(|disabled| !disabled),
+    "users": stats.u64("originalUsersCount"),
+    "notes": stats.u64("originalNotesCount"),
+    "known_instances": stats.u64("instances"),
+  })))
 }

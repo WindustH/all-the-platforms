@@ -2,63 +2,62 @@
 //! with files and in threads, editing, deleting, reactions, stars, pins,
 //! and search within a room.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
-use social_core::file::sniff;
+use social_core::file::{Upload, sniff};
 use social_core::http::Part;
 use social_core::text::emoji_shortcode;
 use social_core::{
-  Action, Comment, Error, ErrorCode, Media, Message, Page, PageReq, Post, Query, Result, User,
-  Value, ValueExt, json,
+  Action, Comment, Error, ErrorCode, Media, Message, Page, PageReq, Post, Result, Value, ValueExt,
+  json,
 };
 
 use crate::api::Api;
+use crate::chats;
 use crate::parse;
 use crate::refs;
-use crate::rooms;
 
 /// Messages as posts, their rooms known first.
-pub async fn convert(api: &Api, rows: &[Value]) -> Result<Vec<Post>> {
+pub async fn posts(api: &Api, rows: &[Value]) -> Result<Vec<Post>> {
   let mut rids: Vec<String> = rows.iter().filter_map(|m| m.str("rid")).collect();
   rids.sort();
   rids.dedup();
   for rid in rids {
-    let _ = rooms::info(api, &rid).await;
+    let _ = chats::info(api, &rid).await;
   }
-  rooms::render(api, |view| {
+  chats::render(api, |view| {
     rows.iter().map(|m| parse::message(m, view)).collect()
   })
 }
 
 /// A room's messages, newest first, paged by `latest=`.
 pub async fn list(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
-  let rid = rooms::id(api, arg).await?;
-  let room = rooms::info(api, &rid).await?;
+  let rid = chats::room_id(api, arg).await?;
+  let room = chats::info(api, &rid).await?;
   let count = page.size_within(100);
   let mut query = vec![("roomId", rid), ("count", count.to_string())];
   if let Some(latest) = &page.cursor {
     query.push(("latest", latest.clone()));
   }
   let v = api
-    .get(&format!("{}.history", rooms::family(&room.t)), &query)
+    .get(&format!("{}.history", chats::family(&room.t)), &query)
     .await?;
   let rows = v.list("messages").to_vec();
   let next = (rows.len() >= count)
     .then(|| rows.last().and_then(|m| m.str("ts")))
     .flatten();
-  Ok(Page::new(convert(api, &rows).await?, next))
+  Ok(Page::new(posts(api, &rows).await?, next))
 }
 
-async fn fetch(api: &Api, arg: &str) -> Result<Value> {
-  let id = refs::message(arg)?;
+async fn payload(api: &Api, arg: &str) -> Result<Value> {
+  let id = refs::message_id(arg)?;
   let v = api.get("chat.getMessage", &[("msgId", id)]).await?;
   Ok(v.at("message").clone())
 }
 
 pub async fn read(api: &Api, arg: &str) -> Result<Post> {
-  let v = fetch(api, arg).await?;
-  Ok(convert(api, &[v]).await?.remove(0))
+  let v = payload(api, arg).await?;
+  Ok(posts(api, &[v]).await?.remove(0))
 }
 
 pub async fn media(api: &Api, arg: &str) -> Result<(Post, Vec<Media>)> {
@@ -76,7 +75,7 @@ fn root_of(v: &Value) -> String {
 
 /// The replies of a message's thread, oldest first.
 pub async fn thread(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Comment>> {
-  let v = fetch(api, arg).await?;
+  let v = payload(api, arg).await?;
   let offset = page.number_or(0);
   let count = page.size_within(100);
   let list = api
@@ -95,8 +94,8 @@ pub async fn thread(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Comment
       .map(|t| t.as_millisecond())
       .unwrap_or_default()
   });
-  let _ = rooms::info(api, &v.str("rid").unwrap_or_default()).await;
-  let items = rooms::render(api, |view| {
+  let _ = chats::info(api, &v.str("rid").unwrap_or_default()).await;
+  let items = chats::render(api, |view| {
     rows.iter().map(|m| parse::comment(m, view)).collect()
   })?;
   let total = list.u64("total").unwrap_or_default();
@@ -107,9 +106,9 @@ pub async fn thread(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Comment
 // ── writing ─────────────────────────────────────────────────────────────
 
 pub async fn send(api: &Api, arg: &str, message: &Message) -> Result<Action> {
-  let rid = rooms::id(api, arg).await?;
+  let rid = chats::room_id(api, arg).await?;
   let tmid = match message.reply_to.as_deref() {
-    Some(r) => Some(root_of(&fetch(api, r).await?)),
+    Some(r) => Some(root_of(&payload(api, r).await?)),
     None => None,
   };
   create(api, &rid, &message.text, tmid.as_deref(), &message.files).await
@@ -122,7 +121,7 @@ pub async fn reply(
   text: &str,
   files: &[std::path::PathBuf],
 ) -> Result<Action> {
-  let v = fetch(api, arg).await?;
+  let v = payload(api, arg).await?;
   let rid = v.str("rid").unwrap_or_default();
   create(api, &rid, text, Some(&root_of(&v)), files).await
 }
@@ -158,7 +157,7 @@ async fn create(
   let mut action = Action::done("send", rid);
   if !id.is_empty() {
     action = action.with_id(&id);
-    if let Some(url) = convert(api, &[m]).await?.pop().and_then(|p| p.url) {
+    if let Some(url) = posts(api, &[m]).await?.pop().and_then(|p| p.url) {
       action = action.with_url(url);
     }
   }
@@ -174,20 +173,7 @@ async fn upload(
   text: &str,
   tmid: Option<&str>,
 ) -> Result<Value> {
-  let data = tokio::fs::read(path)
-    .await
-    .map_err(|e| Error::input(format!("cannot read {}: {e}", path.display())))?;
-  let mut name = path
-    .file_name()
-    .and_then(|n| n.to_str())
-    .unwrap_or("file")
-    .to_owned();
-  if Path::new(&name).extension().is_none()
-    && let Some(ext) = sniff(&data)
-  {
-    name = format!("{name}.{ext}");
-  }
-  let file = Part::file("file", data, &name, "application/octet-stream");
+  let file = file_part(path).await?;
   match api
     .upload(&format!("rooms.media/{rid}"), vec![file.clone()])
     .await
@@ -205,20 +191,42 @@ async fn upload(
         .await?;
       Ok(v.at("message").clone())
     }
-    Err(e) if e.code == ErrorCode::NotFound => {
-      let mut parts = vec![file, Part::text("msg", text)];
-      if let Some(t) = tmid {
-        parts.push(Part::text("tmid", t));
-      }
-      let v = api.upload(&format!("rooms.upload/{rid}"), parts).await?;
-      Ok(v.at("message").clone())
-    }
+    Err(e) if e.code == ErrorCode::NotFound => upload_legacy(api, rid, file, text, tmid).await,
     Err(e) => Err(e),
   }
 }
 
+/// `rooms.upload`: file, text and thread in one request.
+async fn upload_legacy(
+  api: &Api,
+  rid: &str,
+  file: Part,
+  text: &str,
+  tmid: Option<&str>,
+) -> Result<Value> {
+  let mut parts = vec![file, Part::text("msg", text)];
+  if let Some(t) = tmid {
+    parts.push(Part::text("tmid", t));
+  }
+  let v = api.upload(&format!("rooms.upload/{rid}"), parts).await?;
+  Ok(v.at("message").clone())
+}
+
+/// The `file` part of an upload. Names without an extension get the one
+/// their content shows.
+async fn file_part(path: &Path) -> Result<Part> {
+  let file = Upload::read(path).await?;
+  let mut name = file.name.clone();
+  if Path::new(&name).extension().is_none()
+    && let Some(ext) = sniff(&file.data)
+  {
+    name = format!("{name}.{ext}");
+  }
+  Ok(Part::file("file", file.data, &name, file.mime))
+}
+
 pub async fn edit(api: &Api, arg: &str, text: &str) -> Result<Action> {
-  let v = fetch(api, arg).await?;
+  let v = payload(api, arg).await?;
   let id = v.str("_id").unwrap_or_default();
   api
     .post(
@@ -230,7 +238,7 @@ pub async fn edit(api: &Api, arg: &str, text: &str) -> Result<Action> {
 }
 
 pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
-  let v = fetch(api, arg).await?;
+  let v = payload(api, arg).await?;
   let id = v.str("_id").unwrap_or_default();
   api
     .post("chat.delete", json!({"roomId": v.str("rid"), "msgId": id}))
@@ -239,7 +247,7 @@ pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
 }
 
 pub async fn react(api: &Api, arg: &str, emoji: &str, undo: bool) -> Result<Action> {
-  let id = refs::message(arg)?;
+  let id = refs::message_id(arg)?;
   let name = emoji_shortcode(emoji);
   api
     .post(
@@ -253,7 +261,7 @@ pub async fn react(api: &Api, arg: &str, emoji: &str, undo: bool) -> Result<Acti
 
 /// Star a message (`favorite`), or unstar it.
 pub async fn star(api: &Api, arg: &str, undo: bool) -> Result<Action> {
-  let id = refs::message(arg)?;
+  let id = refs::message_id(arg)?;
   let method = if undo {
     "chat.unStarMessage"
   } else {
@@ -264,15 +272,15 @@ pub async fn star(api: &Api, arg: &str, undo: bool) -> Result<Action> {
 }
 
 pub async fn pins(api: &Api, arg: &str) -> Result<Page<Post>> {
-  let rid = rooms::id(api, arg).await?;
+  let rid = chats::room_id(api, arg).await?;
   let v = api
     .get("chat.getPinnedMessages", &[("roomId", rid)])
     .await?;
-  Ok(Page::last(convert(api, v.list("messages")).await?))
+  Ok(Page::last(posts(api, v.list("messages")).await?))
 }
 
 pub async fn pin(api: &Api, arg: &str, undo: bool) -> Result<Action> {
-  let id = refs::message(arg)?;
+  let id = refs::message_id(arg)?;
   let method = if undo {
     "chat.unPinMessage"
   } else {
@@ -280,79 +288,4 @@ pub async fn pin(api: &Api, arg: &str, undo: bool) -> Result<Action> {
   };
   api.post(method, json!({"messageId": id})).await?;
   Ok(Action::done(if undo { "unpin" } else { "pin" }, id))
-}
-
-/// Search one room: `room:NAME` (or `in:NAME`) in the query names it.
-pub async fn search(api: &Api, q: &Query, page: &PageReq) -> Result<Page<Post>> {
-  let mut room = None;
-  let words: Vec<&str> = q
-    .keyword
-    .split_whitespace()
-    .filter(
-      |w| match w.strip_prefix("room:").or_else(|| w.strip_prefix("in:")) {
-        Some(r) => {
-          room = Some(r.to_owned());
-          false
-        }
-        None => true,
-      },
-    )
-    .collect();
-  let Some(room) = room else {
-    return Err(
-      Error::input("Rocket.Chat searches one room at a time")
-        .with_hint("add `room:NAME` to the query, e.g. `social rc search 'deploy room:general'`"),
-    );
-  };
-  let rid = rooms::id(api, &room).await?;
-  let offset = page.number_or(0);
-  let count = page.size_within(100);
-  let v = api
-    .get(
-      "chat.search",
-      &[
-        ("roomId", rid),
-        ("searchText", words.join(" ")),
-        ("offset", offset.to_string()),
-        ("count", count.to_string()),
-      ],
-    )
-    .await?;
-  let rows = v.list("messages").to_vec();
-  let next = (rows.len() >= count).then(|| (offset + rows.len() as u64).to_string());
-  Ok(Page::new(convert(api, &rows).await?, next))
-}
-
-pub async fn search_users(api: &Api, term: &str) -> Result<Page<User>> {
-  let v = api
-    .get(
-      "spotlight",
-      &[("query", format!("@{}", term.trim_start_matches('@')))],
-    )
-    .await?;
-  let server = api.require()?.server;
-  Ok(Page::last(
-    v.list("users")
-      .iter()
-      .map(|u| parse::user(u, &server))
-      .collect(),
-  ))
-}
-
-/// Unread messages per room.
-pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
-  let v = api.get("subscriptions.get", &[]).await?;
-  let rows = v.list("update").to_vec();
-  rooms::remember(api, &rows);
-  let known = api.rooms.borrow();
-  Ok(
-    rows
-      .iter()
-      .filter_map(|s| {
-        let n = s.u64("unread").filter(|n| *n > 0)?;
-        let rid = s.str("rid")?;
-        Some((known.get(&rid).map(|r| r.name.clone()).unwrap_or(rid), n))
-      })
-      .collect(),
-  )
 }

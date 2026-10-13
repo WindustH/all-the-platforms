@@ -2,26 +2,29 @@
 //! protocol (Koishi, Chronocat, LLTwoBot ...), which in turn reaches QQ,
 //! Discord, Telegram, KOOK and others.
 //!
-//! HTTP methods and the event websocket are in [`api`]; servers are
-//! `guild:<id>` chats, channels keep the server's ids, messages are
-//! `CHANNEL/MESSAGE` ([`parse`]).
+//! HTTP methods and the event websocket are in [`api`] ([`login`] picks
+//! the account); servers are `guild:<id>` chats ([`chats`]), channels keep
+//! the server's ids, messages are `CHANNEL/MESSAGE` ([`messages`]).
 
 mod api;
+mod chats;
 mod extra;
 mod live;
-mod ops;
+mod login;
+mod messages;
 mod parse;
 mod refs;
+mod users;
 
 use std::time::Duration;
 
 use social_core::output::Stream;
 use social_core::{
-  Action, Cap, Choices, Collection, Ctx, Data, Error, Message, Page, PageReq, Platform,
-  PlatformInfo, Post, Result, User, ValueExt,
+  Action, Cap, Choices, Collection, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo,
+  Post, Result, User,
 };
 
-use crate::api::{Api, Server};
+use crate::api::Api;
 
 pub struct Satori {
   api: Api,
@@ -66,7 +69,7 @@ impl Platform for Satori {
   }
 
   async fn whoami(&self) -> Result<User> {
-    ops::whoami(&self.api).await
+    users::whoami(&self.api).await
   }
 
   fn logged_in(&self) -> bool {
@@ -76,65 +79,43 @@ impl Platform for Satori {
   /// Remembers the server and the account to act as: the one named in the
   /// token, else the first the server offers.
   async fn login_token(&self, token: &str) -> Result<()> {
-    let mut server = Server::parse(token)?;
-    if server.platform.is_none() {
-      let logins = self.api.logins(&server).await?;
-      let first = logins
-        .first()
-        .ok_or_else(|| Error::upstream("the Satori server offers no logged-in account"))?;
-      server.platform = first.str("platform");
-      server.user_id = first.str("user.id");
-      if logins.len() > 1 {
-        social_core::output::note(&format!(
-          "the server offers {} accounts; using {}:{} (pick another with `--token 'URL|TOKEN|PLATFORM:USER_ID'`, see `social satori logins`)",
-          logins.len(),
-          server.platform.as_deref().unwrap_or_default(),
-          server.user_id.as_deref().unwrap_or_default()
-        ));
-      }
-    }
-    self
-      .api
-      .call_at(&server, "login.get", serde_json::json!({}))
-      .await?;
-    self.api.save(&server);
-    Ok(())
+    login::login(&self.api, token).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    ops::read(&self.api, post).await
+    messages::read(&self.api, post).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    ops::user(&self.api, user).await
+    users::user(&self.api, user).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
-    ops::delete(&self.api, post).await
+    messages::delete(&self.api, post).await
   }
 
   async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
-    ops::chats(&self.api, parent, page).await
+    chats::list(&self.api, parent, page).await
   }
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
-    ops::messages(&self.api, chat, page).await
+    messages::list(&self.api, chat, page).await
   }
 
   async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
-    ops::send(&self.api, chat, message).await
+    messages::send(&self.api, chat, message).await
   }
 
   async fn members(&self, chat: &str, page: &PageReq) -> Result<Page<User>> {
-    ops::members(&self.api, chat, page).await
+    chats::members(&self.api, chat, page).await
   }
 
   async fn react(&self, post: &str, emoji: &str, undo: bool) -> Result<Action> {
-    ops::react(&self.api, post, emoji, undo).await
+    messages::react(&self.api, post, emoji, undo).await
   }
 
   async fn edit(&self, post: &str, text: &str) -> Result<Action> {
-    ops::edit(&self.api, post, text).await
+    messages::edit(&self.api, post, text).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {

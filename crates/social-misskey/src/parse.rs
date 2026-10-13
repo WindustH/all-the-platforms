@@ -7,18 +7,18 @@ use std::collections::BTreeMap;
 
 use social_core::text::parse_time;
 use social_core::{
-  Collection, Comment, Media, MediaKind, Metrics, Notification, Post, User, UserStats, Value,
-  ValueExt, json,
+  Collection, Comment, Extra, Media, MediaKind, Metrics, Notification, Post, User, UserStats,
+  Value, ValueExt, chat, json,
 };
 
 pub fn user(v: &Value, instance: &str) -> User {
   let username = v.str("username").unwrap_or_default();
   let host = v.str("host");
   let handle = match &host {
-    Some(h) => format!("@{username}@{h}"),
+    Some(host) => format!("@{username}@{host}"),
     None => format!("@{username}"),
   };
-  let mut u = User {
+  let mut user = User {
     id: v.str("id").unwrap_or_default(),
     name: v.str("name").unwrap_or_else(|| username.clone()),
     url: (!username.is_empty()).then(|| format!("https://{instance}/{handle}")),
@@ -39,13 +39,13 @@ pub fn user(v: &Value, instance: &str) -> User {
   };
   for key in ["isBot", "isCat", "isLocked"] {
     if v.bool(key) == Some(true) {
-      u.extra.insert(key.into(), json!(true));
+      user.extra.insert(key.into(), json!(true));
     }
   }
-  if let Some(h) = host {
-    u.extra.insert("host".into(), json!(h));
+  if let Some(host) = host {
+    user.extra.insert("host".into(), json!(host));
   }
-  u
+  user
 }
 
 pub fn note_url(instance: &str, id: &str) -> String {
@@ -55,43 +55,41 @@ pub fn note_url(instance: &str, id: &str) -> String {
 fn files(v: &Value) -> Vec<Media> {
   v.list("files")
     .iter()
-    .filter_map(|f| {
-      let url = f.str("url")?;
-      let mime = f.str("type").unwrap_or_default();
-      let kind = if mime == "image/gif" {
-        MediaKind::Gif
-      } else if mime.starts_with("video/") {
-        MediaKind::Video
-      } else if mime.starts_with("audio/") {
-        MediaKind::Audio
-      } else if mime.starts_with("image/") {
-        MediaKind::Image
-      } else {
-        return None;
-      };
-      let mut m = Media::new(kind, url);
-      m.width = f.u64("properties.width").map(|w| w as u32);
-      m.height = f.u64("properties.height").map(|h| h as u32);
-      m.size = f.u64("size");
-      m.alt = f.str("comment");
-      Some(m)
+    .filter_map(|file| {
+      let url = file.str("url")?;
+      let kind = media_kind(&file.str("type").unwrap_or_default())?;
+      let mut media = Media::new(kind, url);
+      media.width = file.u64("properties.width").map(|w| w as u32);
+      media.height = file.u64("properties.height").map(|h| h as u32);
+      media.size = file.u64("size");
+      media.alt = file.str("comment");
+      Some(media)
     })
     .collect()
+}
+
+/// Images, video and audio by their MIME type; `None` for other files.
+fn media_kind(mime: &str) -> Option<MediaKind> {
+  match mime.split_once('/')?.0 {
+    "image" if mime == "image/gif" => Some(MediaKind::Gif),
+    "image" => Some(MediaKind::Image),
+    "video" => Some(MediaKind::Video),
+    "audio" => Some(MediaKind::Audio),
+    _ => None,
+  }
 }
 
 /// Files that are not images, video or audio, as links.
 fn other_files(v: &Value) -> Vec<Value> {
   v.list("files")
     .iter()
-    .filter(|f| {
-      let t = f.str("type").unwrap_or_default();
-      !(t.starts_with("image/") || t.starts_with("video/") || t.starts_with("audio/"))
-    })
-    .map(|f| json!({"name": f.str("name"), "url": f.str("url"), "type": f.str("type")}))
+    .filter(|file| media_kind(&file.str("type").unwrap_or_default()).is_none())
+    .map(|file| json!({"name": file.str("name"), "url": file.str("url"), "type": file.str("type")}))
     .collect()
 }
 
-pub fn note(v: &Value, instance: &str) -> Post {
+/// A note as a post; a renote quotes the renoted note.
+pub fn post(v: &Value, instance: &str) -> Post {
   let id = v.str("id").unwrap_or_default();
   let text = v.str("text");
   let renote = v.at("renote");
@@ -110,30 +108,41 @@ pub fn note(v: &Value, instance: &str) -> Post {
     text,
     author: Some(user(v.at("user"), instance)),
     created_at: v.str("createdAt").and_then(|t| parse_time(&t)),
-    metrics: Metrics {
-      likes: v.u64("reactionCount"),
-      comments: v.u64("repliesCount"),
-      shares: v.u64("renoteCount"),
-      other: v
-        .u64("clippedCount")
-        .filter(|n| *n > 0)
-        .map(|n| BTreeMap::from([("clips".to_owned(), n)]))
-        .unwrap_or_default(),
-      ..Metrics::default()
-    },
+    metrics: metrics(v),
     media: files(v),
     tags: v
       .list("tags")
       .iter()
-      .filter_map(|t| t.as_str().map(str::to_owned))
+      .filter_map(|tag| tag.as_str().map(str::to_owned))
       .collect(),
-    quoted: (!renote.is_null()).then(|| Box::new(note(renote, instance))),
+    quoted: (!renote.is_null()).then(|| Box::new(post(renote, instance))),
     raw: Some(v.clone()),
     ..Post::default()
   };
+  note_extra(&mut post.extra, v);
+  post
+}
+
+fn metrics(v: &Value) -> Metrics {
+  Metrics {
+    likes: v.u64("reactionCount"),
+    comments: v.u64("repliesCount"),
+    shares: v.u64("renoteCount"),
+    other: v
+      .u64("clippedCount")
+      .filter(|count| *count > 0)
+      .map(|count| BTreeMap::from([("clips".to_owned(), count)]))
+      .unwrap_or_default(),
+    ..Metrics::default()
+  }
+}
+
+/// Content warning, visibility, links to other notes, reactions and files
+/// that are not media.
+fn note_extra(extra: &mut Extra, v: &Value) {
   let mut put = |key: &str, value: Value| {
     if !value.is_null() {
-      post.extra.insert(key.into(), value);
+      extra.insert(key.into(), value);
     }
   };
   put("cw", json!(v.str("cw")));
@@ -145,29 +154,28 @@ pub fn note(v: &Value, instance: &str) -> Post {
   if v.at("reactions").as_object().is_some_and(|m| !m.is_empty()) {
     put("reactions", v.at("reactions").clone());
   }
-  if let Some(r) = v.str("myReaction") {
-    put("my_reaction", json!(r));
+  if let Some(reaction) = v.str("myReaction") {
+    put("my_reaction", json!(reaction));
   }
   let others = other_files(v);
   if !others.is_empty() {
     put("files", json!(others));
   }
-  post
 }
 
 /// A reply note as a comment, with its own replies when the API sent them.
 pub fn comment(v: &Value, instance: &str) -> Comment {
-  let p = note(v, instance);
+  let post = post(v, instance);
   Comment {
-    id: p.id,
-    author: p.author,
-    text: p.text.unwrap_or_default(),
-    created_at: p.created_at,
-    likes: p.metrics.likes,
-    reply_count: p.metrics.comments,
+    id: post.id,
+    author: post.author,
+    text: post.text.unwrap_or_default(),
+    created_at: post.created_at,
+    likes: post.metrics.likes,
+    reply_count: post.metrics.comments,
     reply_to: v.str("reply.user.username").map(|u| format!("@{u}")),
-    extra: p.extra,
-    raw: p.raw,
+    extra: post.extra,
+    raw: post.raw,
     ..Comment::default()
   }
 }
@@ -236,22 +244,22 @@ pub fn room(v: &Value, instance: &str) -> Collection {
 
 /// A direct chat with `other` as a collection (`user:<id>`).
 pub fn direct(other: &Value, instance: &str) -> Collection {
-  let u = user(other, instance);
+  let user = user(other, instance);
   Collection {
-    id: format!("user:{}", u.id),
+    id: format!("user:{}", user.id),
     kind: "dm".into(),
-    name: u.name.clone(),
-    description: u.handle.clone(),
-    url: Some(format!("https://{instance}/chat/user/{}", u.id)),
-    owner: Some(u),
+    name: user.name.clone(),
+    description: user.handle.clone(),
+    url: Some(format!("https://{instance}/chat/user/{}", user.id)),
+    owner: Some(user),
     raw: Some(other.clone()),
     ..Collection::default()
   }
 }
 
 /// A chat message; `chat` is the `user:<id>` / `room:<id>` it belongs to.
-pub fn chat_message(v: &Value, chat: &str, chat_name: &str, instance: &str) -> Post {
-  let mid = v.str("id").unwrap_or_default();
+pub fn message(v: &Value, chat: &str, chat_name: &str, instance: &str) -> Post {
+  let message = v.str("id").unwrap_or_default();
   let file = v.at("file");
   let media = if file.is_null() {
     Vec::new()
@@ -259,7 +267,7 @@ pub fn chat_message(v: &Value, chat: &str, chat_name: &str, instance: &str) -> P
     files(&json!({"files": [file]}))
   };
   let mut post = Post {
-    id: format!("{chat}/{mid}"),
+    id: chat::message_id(chat, &message),
     kind: "message".into(),
     text: v.str("text"),
     author: (!v.at("fromUser").is_null()).then(|| user(v.at("fromUser"), instance)),
@@ -272,7 +280,7 @@ pub fn chat_message(v: &Value, chat: &str, chat_name: &str, instance: &str) -> P
   if !chat_name.is_empty() {
     post.extra.insert("chat_name".into(), json!(chat_name));
   }
-  post.extra.insert("message_id".into(), json!(mid));
+  post.extra.insert("message_id".into(), json!(message));
   let reactions = v.list("reactions");
   if !reactions.is_empty() {
     post.metrics.likes = Some(reactions.len() as u64);

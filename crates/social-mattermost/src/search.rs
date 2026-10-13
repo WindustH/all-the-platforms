@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use social_core::{Notification, Page, PageReq, Post, Query, Result, Value, ValueExt, json};
 
 use crate::api::Api;
-use crate::{chats, parse, posts};
+use crate::{chats, messages, parse};
 
 async fn find(api: &Api, keyword: &str, page: &PageReq) -> Result<(Vec<Post>, Option<String>)> {
   let mut team = None;
@@ -57,11 +57,11 @@ async fn find(api: &Api, keyword: &str, page: &PageReq) -> Result<(Vec<Post>, Op
   }
   rows.sort_by_key(|p| std::cmp::Reverse(p.i64("create_at").unwrap_or_default()));
   let next = more.then(|| (no + 1).to_string());
-  Ok((posts::convert(api, &rows).await?, next))
+  Ok((messages::posts(api, &rows).await?, next))
 }
 
-pub async fn messages(api: &Api, q: &Query, page: &PageReq) -> Result<Page<Post>> {
-  let (items, next) = find(api, &q.keyword, page).await?;
+pub async fn messages(api: &Api, query: &Query, page: &PageReq) -> Result<Page<Post>> {
+  let (items, next) = find(api, &query.keyword, page).await?;
   Ok(Page::new(items, next))
 }
 

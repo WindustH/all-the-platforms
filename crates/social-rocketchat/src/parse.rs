@@ -7,11 +7,11 @@ use std::collections::HashMap;
 use jiff::Timestamp;
 use social_core::text::{from_millis, parse_time};
 use social_core::{
-  Collection, Comment, Media, MediaKind, Metrics, Post, User, Value, ValueExt, json,
+  Collection, Comment, Extra, Media, MediaKind, Metrics, Post, User, Value, ValueExt, json,
 };
 
 use crate::api::Creds;
-use crate::rooms::RoomInfo;
+use crate::chats::RoomInfo;
 
 pub struct View<'a> {
   pub creds: &'a Creds,
@@ -65,7 +65,7 @@ pub fn user(v: &Value, server: &str) -> User {
 
 pub fn room(v: &Value, view: &View) -> Collection {
   let id = v.first_str(&["rid", "_id"]).unwrap_or_default();
-  let info = crate::rooms::info_of(v);
+  let info = crate::chats::info_of(v);
   let mut c = Collection {
     url: Some(format!("{}/{}", view.creds.server, info.path)),
     kind: info.kind.clone(),
@@ -129,19 +129,25 @@ fn media(v: &Value, view: &View) -> Vec<Media> {
   out
 }
 
-pub fn message(v: &Value, view: &View) -> Post {
-  let id = v.str("_id").unwrap_or_default();
-  let rid = v.str("rid").unwrap_or_default();
-  let room = view.rooms.get(&rid);
-  let mut reactions = Vec::new();
+/// Reactions as `{emoji, count}`, and how many there are in all.
+fn reactions(v: &Value) -> (Vec<Value>, u64) {
+  let mut out = Vec::new();
   let mut total = 0;
   if let Some(map) = v.at("reactions").as_object() {
     for (emoji, r) in map {
       let n = r.list("usernames").len() as u64;
       total += n;
-      reactions.push(json!({"emoji": emoji.trim_matches(':'), "count": n}));
+      out.push(json!({"emoji": emoji.trim_matches(':'), "count": n}));
     }
   }
+  (out, total)
+}
+
+pub fn message(v: &Value, view: &View) -> Post {
+  let id = v.str("_id").unwrap_or_default();
+  let rid = v.str("rid").unwrap_or_default();
+  let room = view.rooms.get(&rid);
+  let (reactions, total) = reactions(v);
   let kind = match v.str("t").as_deref() {
     None | Some("") => "message".to_owned(),
     Some("rm") => "delete".to_owned(),
@@ -176,11 +182,18 @@ pub fn message(v: &Value, view: &View) -> Post {
   if let Some(r) = room {
     e.insert("chat_name".into(), json!(r.name));
   }
-  if let Some(t) = v.str("tmid") {
-    e.insert("reply_to".into(), json!(t));
-  }
   if !reactions.is_empty() {
     e.insert("reactions".into(), json!(reactions));
+  }
+  message_extra(e, v);
+  p.id = id;
+  p
+}
+
+/// Thread, pin and attachment texts.
+fn message_extra(e: &mut Extra, v: &Value) {
+  if let Some(t) = v.str("tmid") {
+    e.insert("reply_to".into(), json!(t));
   }
   if v.bool("pinned") == Some(true) {
     e.insert("pinned".into(), json!(true));
@@ -194,8 +207,6 @@ pub fn message(v: &Value, view: &View) -> Post {
   if !notes.is_empty() {
     e.insert("attachments".into(), json!(notes));
   }
-  p.id = id;
-  p
 }
 
 pub fn comment(v: &Value, view: &View) -> Comment {

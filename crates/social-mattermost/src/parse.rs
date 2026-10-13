@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use social_core::text::from_millis;
 use social_core::{
-  Collection, Comment, Media, MediaKind, Metrics, Post, User, Value, ValueExt, json,
+  Collection, Comment, Extra, Media, MediaKind, Metrics, Post, User, Value, ValueExt, json,
 };
 
 use crate::chats::ChannelInfo;
@@ -102,21 +102,24 @@ fn author(v: &Value, view: &View) -> Option<User> {
   Some(u)
 }
 
+/// The kind of media a MIME type names.
+fn media_kind(mime: &str) -> MediaKind {
+  match mime.split('/').next() {
+    _ if mime == "image/gif" => MediaKind::Gif,
+    Some("image") => MediaKind::Image,
+    Some("video") => MediaKind::Video,
+    Some("audio") => MediaKind::Audio,
+    _ => MediaKind::File,
+  }
+}
+
 fn file(f: &Value, view: &View) -> Option<Media> {
   let id = f.str("id")?;
   let mime = f.str("mime_type").unwrap_or_default();
-  let kind = if mime == "image/gif" {
-    MediaKind::Gif
-  } else if mime.starts_with("image/") {
-    MediaKind::Image
-  } else if mime.starts_with("video/") {
-    MediaKind::Video
-  } else if mime.starts_with("audio/") {
-    MediaKind::Audio
-  } else {
-    MediaKind::File
-  };
-  let mut m = Media::new(kind, format!("{}/api/v4/files/{id}", view.server));
+  let mut m = Media::new(
+    media_kind(&mime),
+    format!("{}/api/v4/files/{id}", view.server),
+  );
   m.width = f.u64("width").filter(|w| *w > 0).map(|w| w as u32);
   m.height = f.u64("height").filter(|h| *h > 0).map(|h| h as u32);
   m.size = f.u64("size");
@@ -125,10 +128,8 @@ fn file(f: &Value, view: &View) -> Option<Media> {
   Some(m)
 }
 
-pub fn post(v: &Value, view: &View) -> Post {
-  let id = v.str("id").unwrap_or_default();
-  let channel = v.str("channel_id").unwrap_or_default();
-  let reactions = v.list("metadata.reactions");
+/// How often each emoji was used, in first-use order.
+fn reaction_counts(reactions: &[Value]) -> Vec<(String, u64)> {
   let mut counts: Vec<(String, u64)> = Vec::new();
   for r in reactions {
     let name = r.str("emoji_name").unwrap_or_default();
@@ -137,6 +138,13 @@ pub fn post(v: &Value, view: &View) -> Post {
       None => counts.push((name, 1)),
     }
   }
+  counts
+}
+
+pub fn post(v: &Value, view: &View) -> Post {
+  let id = v.str("id").unwrap_or_default();
+  let channel = v.str("channel_id").unwrap_or_default();
+  let reactions = v.list("metadata.reactions");
   let kind = match v.str("type").as_deref() {
     None | Some("") => "message".to_owned(),
     Some(t) => t.trim_start_matches("system_").to_owned(),
@@ -158,14 +166,21 @@ pub fn post(v: &Value, view: &View) -> Post {
     raw: Some(v.clone()),
     ..Post::default()
   };
-  let e = &mut p.extra;
+  post_extra(&mut p.extra, v, &channel, view);
+  p.id = id;
+  p
+}
+
+/// Chat, thread root, reactions, pin and attachment texts.
+fn post_extra(e: &mut Extra, v: &Value, channel: &str, view: &View) {
   e.insert("chat".into(), json!(channel));
-  if let Some(c) = view.channels.get(&channel) {
+  if let Some(c) = view.channels.get(channel) {
     e.insert("chat_name".into(), json!(c.name));
   }
   if let Some(root) = v.str("root_id").filter(|r| !r.is_empty()) {
     e.insert("reply_to".into(), json!(root));
   }
+  let counts = reaction_counts(v.list("metadata.reactions"));
   if !counts.is_empty() {
     let r: Vec<Value> = counts
       .iter()
@@ -185,8 +200,6 @@ pub fn post(v: &Value, view: &View) -> Post {
   if !attachments.is_empty() {
     e.insert("attachments".into(), json!(attachments));
   }
-  p.id = id;
-  p
 }
 
 pub fn comment(v: &Value, view: &View) -> Comment {

@@ -6,6 +6,7 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
+use social_core::live::Backoff;
 use social_core::output::{Stream, note};
 use social_core::text::from_millis;
 use social_core::{Error, Post, Result, Value, ValueExt, json};
@@ -13,7 +14,7 @@ use tokio::time::Instant;
 
 use crate::api::{Api, Server};
 use crate::parse;
-use crate::refs::{self, Chat};
+use crate::refs::{self, ChatRef};
 
 const PING: Duration = Duration::from_secs(10);
 
@@ -22,9 +23,9 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
   let mut wanted = HashSet::new();
   for c in chats {
     wanted.insert(match refs::chat(c)? {
-      Chat::Guild(g) => g,
-      Chat::Channel(c) => c,
-      Chat::User(_) => {
+      ChatRef::Guild(g) => g,
+      ChatRef::Channel(c) => c,
+      ChatRef::User(_) => {
         return Err(Error::input(
           "listen takes channels or servers; open the direct chat with `messages user:<id>` first",
         ));
@@ -33,9 +34,13 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
   }
   let mut sn: Option<u64> = None;
   let mut failures = 0;
+  let mut backoff = Backoff::default();
   loop {
     match session(api, &server, &wanted, &mut sn, out).await {
-      Ok(()) => failures = 0,
+      Ok(()) => {
+        failures = 0;
+        backoff.reset();
+      }
       Err(e) => {
         failures += 1;
         if failures >= 3 {
@@ -45,7 +50,7 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
       }
     }
     note("the Satori event connection closed; reconnecting");
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    backoff.wait().await;
   }
 }
 

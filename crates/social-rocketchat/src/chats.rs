@@ -1,12 +1,14 @@
-//! Rooms: your subscriptions (channels, private groups, direct messages,
-//! discussions), the rooms of a team, finding a room by name, opening a
-//! direct room, and members.
+//! Rooms (chats): your subscriptions (channels, private groups, direct
+//! messages, discussions), the rooms of a team, finding a room by name,
+//! opening a direct room, joining and leaving, members and unread counts.
 
-use social_core::{Collection, Error, Page, PageReq, Result, User, Value, ValueExt, json};
+use std::collections::BTreeMap;
+
+use social_core::{Action, Collection, Error, Page, PageReq, Result, User, Value, ValueExt, json};
 
 use crate::api::Api;
 use crate::parse::{self, View};
-use crate::refs::{self, Room};
+use crate::refs::{self, RoomRef};
 
 /// What message listings need of a room.
 #[derive(Debug, Clone)]
@@ -82,62 +84,111 @@ pub fn render<T>(api: &Api, f: impl FnOnce(&View) -> T) -> Result<T> {
 
 pub async fn list(api: &Api, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
   match parent {
-    None => {
-      let v = api.get("subscriptions.get", &[]).await?;
-      let mut rows = v.list("update").to_vec();
-      rows.sort_by_key(|s| {
-        std::cmp::Reverse(
-          parse::time(s.at("_updatedAt"))
-            .map(|t| t.as_millisecond())
-            .unwrap_or_default(),
-        )
-      });
-      remember(api, &rows);
-      let items = render(api, |view| {
-        rows.iter().map(|r| parse::room(r, view)).collect()
-      })?;
-      Ok(Page::last(items))
-    }
-    Some(team) => {
-      let offset = page.number_or(0);
-      let count = page.size_within(100);
-      let key = if refs::is_id(team) {
-        "teamId"
-      } else {
-        "teamName"
-      };
-      let v = api
-        .get(
-          "teams.listRooms",
-          &[
-            (key, team.trim_start_matches('#').to_owned()),
-            ("offset", offset.to_string()),
-            ("count", count.to_string()),
-          ],
-        )
-        .await?;
-      let rows = v.list("rooms").to_vec();
-      remember(api, &rows);
-      let total = v.u64("total").unwrap_or_default();
-      let next =
-        (offset + (rows.len() as u64) < total).then(|| (offset + rows.len() as u64).to_string());
-      let items = render(api, |view| {
-        rows.iter().map(|r| parse::room(r, view)).collect()
-      })?;
-      Ok(Page::new(items, next))
-    }
+    None => subscriptions(api).await,
+    Some(team) => team_rooms(api, team, page).await,
   }
 }
 
+/// The rooms you are in, most recently active first.
+async fn subscriptions(api: &Api) -> Result<Page<Collection>> {
+  let v = api.get("subscriptions.get", &[]).await?;
+  let mut rows = v.list("update").to_vec();
+  rows.sort_by_key(|s| {
+    std::cmp::Reverse(
+      parse::time(s.at("_updatedAt"))
+        .map(|t| t.as_millisecond())
+        .unwrap_or_default(),
+    )
+  });
+  remember(api, &rows);
+  let items = render(api, |view| {
+    rows.iter().map(|r| parse::room(r, view)).collect()
+  })?;
+  Ok(Page::last(items))
+}
+
+/// The rooms of a team (by id or name), paged by offset.
+async fn team_rooms(api: &Api, team: &str, page: &PageReq) -> Result<Page<Collection>> {
+  let offset = page.number_or(0);
+  let count = page.size_within(100);
+  let key = if refs::is_id(team) {
+    "teamId"
+  } else {
+    "teamName"
+  };
+  let v = api
+    .get(
+      "teams.listRooms",
+      &[
+        (key, team.trim_start_matches('#').to_owned()),
+        ("offset", offset.to_string()),
+        ("count", count.to_string()),
+      ],
+    )
+    .await?;
+  let rows = v.list("rooms").to_vec();
+  remember(api, &rows);
+  let total = v.u64("total").unwrap_or_default();
+  let seen = offset + rows.len() as u64;
+  let next = (seen < total).then(|| seen.to_string());
+  let items = render(api, |view| {
+    rows.iter().map(|r| parse::room(r, view)).collect()
+  })?;
+  Ok(Page::new(items, next))
+}
+
+/// One room: topic, members, message count.
+pub async fn room(api: &Api, arg: &str) -> Result<Page<Collection>> {
+  let rid = room_id(api, arg).await?;
+  let v = api.get("rooms.info", &[("roomId", rid)]).await?;
+  let c = render(api, |view| parse::room(v.at("room"), view))?;
+  Ok(Page::last(vec![c]))
+}
+
+/// Join a public channel, or leave a room with `undo`.
+pub async fn join(api: &Api, arg: &str, undo: bool) -> Result<Action> {
+  let rid = room_id(api, arg).await?;
+  if undo {
+    let info = info(api, &rid).await?;
+    api
+      .post(
+        &format!("{}.leave", family(&info.t)),
+        json!({"roomId": rid}),
+      )
+      .await?;
+  } else {
+    api.post("channels.join", json!({"roomId": rid})).await?;
+  }
+  Ok(Action::done(if undo { "leave" } else { "join" }, rid))
+}
+
+/// Unread messages per room.
+pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
+  let v = api.get("subscriptions.get", &[]).await?;
+  let rows = v.list("update").to_vec();
+  remember(api, &rows);
+  let known = api.rooms.borrow();
+  Ok(
+    rows
+      .iter()
+      .filter_map(|s| {
+        let n = s.u64("unread").filter(|n| *n > 0)?;
+        let rid = s.str("rid")?;
+        Some((known.get(&rid).map(|r| r.name.clone()).unwrap_or(rid), n))
+      })
+      .collect(),
+  )
+}
+
 /// The room id an argument names.
-pub async fn id(api: &Api, arg: &str) -> Result<String> {
+pub async fn room_id(api: &Api, arg: &str) -> Result<String> {
   let v = match refs::room(arg) {
-    Room::Id(id) => {
+    RoomRef::Id(id) => {
       info(api, &id).await?;
       return Ok(id);
     }
-    Room::Name(name) => api.get("rooms.info", &[("roomName", name)]).await?,
-    Room::User(user) => api.post("im.create", json!({"username": user})).await?,
+    RoomRef::Name(name) => api.get("rooms.info", &[("roomName", name)]).await?,
+    RoomRef::User(user) => api.post("im.create", json!({"username": user})).await?,
   };
   let room = v.at("room");
   remember(api, std::slice::from_ref(room));
@@ -171,7 +222,7 @@ pub fn family(t: &str) -> &'static str {
 }
 
 pub async fn members(api: &Api, arg: &str, page: &PageReq) -> Result<Page<User>> {
-  let rid = id(api, arg).await?;
+  let rid = room_id(api, arg).await?;
   let room = info(api, &rid).await?;
   let offset = page.number_or(0);
   let count = page.size_within(100);

@@ -1,8 +1,9 @@
 //! Mattermost for social-cli.
 //!
 //! A server's REST API v4 with a personal access token or session token
-//! ([`api`]): teams and channels are collections ([`chats`]), posts are
-//! posts with permalinks, a post's thread is its comment list ([`posts`]);
+//! ([`api`], [`login`]): teams and channels are collections ([`chats`]),
+//! messages are posts with permalinks, a post's thread is its comment list
+//! ([`messages`]);
 //! search spans your teams ([`search`]); `listen` uses the websocket
 //! ([`live`]).
 
@@ -10,8 +11,9 @@ mod api;
 mod chats;
 mod extra;
 mod live;
+mod login;
+mod messages;
 mod parse;
-mod posts;
 mod refs;
 mod search;
 mod users;
@@ -21,7 +23,7 @@ use std::time::Duration;
 
 use social_core::output::Stream;
 use social_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Error, Media, Message, Notification, Page,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Media, Message, Notification, Page,
   PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
 };
 
@@ -88,7 +90,7 @@ impl Platform for Mattermost {
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    api::login(&self.api, token).await.map(drop)
+    login::login(&self.api, token).await.map(drop)
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
@@ -100,7 +102,7 @@ impl Platform for Mattermost {
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    posts::read(&self.api, post).await
+    messages::read(&self.api, post).await
   }
 
   async fn comments(
@@ -109,7 +111,7 @@ impl Platform for Mattermost {
     _sort: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Comment>> {
-    posts::thread(&self.api, post, page).await
+    messages::thread(&self.api, post, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
@@ -122,12 +124,7 @@ impl Platform for Mattermost {
     _folder: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Post>> {
-    if user.is_some_and(|u| u != "me") {
-      return Err(
-        Error::unsupported("favorites USER").with_hint("only your own flagged posts are visible"),
-      );
-    }
-    posts::flagged(&self.api, page).await
+    messages::favorites(&self.api, user, page).await
   }
 
   async fn notifications(&self, _kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
@@ -139,23 +136,23 @@ impl Platform for Mattermost {
   }
 
   async fn favorite(&self, post: &str, _folder: Option<&str>, undo: bool) -> Result<Action> {
-    posts::flag(&self.api, post, undo).await
+    messages::flag(&self.api, post, undo).await
   }
 
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
-    posts::reply(&self.api, post, &reply.text, &reply.images).await
+    messages::reply(&self.api, post, &reply.text, &reply.images).await
   }
 
   async fn delete_comment(&self, _post: &str, comment: &str) -> Result<Action> {
-    posts::delete(&self.api, comment).await
+    messages::delete(&self.api, comment).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
-    posts::delete(&self.api, post).await
+    messages::delete(&self.api, post).await
   }
 
   async fn media(&self, post: &str, _audio_only: bool) -> Result<(Post, Vec<Media>)> {
-    posts::media(&self.api, post).await
+    messages::media(&self.api, post).await
   }
 
   async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
@@ -163,11 +160,11 @@ impl Platform for Mattermost {
   }
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
-    posts::list(&self.api, chat, page).await
+    messages::list(&self.api, chat, page).await
   }
 
   async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
-    posts::send(&self.api, chat, message).await
+    messages::send(&self.api, chat, message).await
   }
 
   async fn members(&self, chat: &str, page: &PageReq) -> Result<Page<User>> {
@@ -175,11 +172,11 @@ impl Platform for Mattermost {
   }
 
   async fn react(&self, post: &str, emoji: &str, undo: bool) -> Result<Action> {
-    posts::react(&self.api, post, emoji, undo).await
+    messages::react(&self.api, post, emoji, undo).await
   }
 
   async fn edit(&self, post: &str, text: &str) -> Result<Action> {
-    posts::edit(&self.api, post, text).await
+    messages::edit(&self.api, post, text).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {

@@ -7,71 +7,95 @@
 //!   channels, look up users and channels.
 //!
 //! Credentials come from `VOCECHAT_URL` + `VOCECHAT_API_KEY` (a bot key)
-//! when set, else from the session (`login --token`).
+//! when set, else from the session ([`crate::login`]).
 
 use std::cell::RefCell;
 use std::time::Duration;
 
-use social_core::http::{Method, Part, Req};
+use social_core::credentials;
+use social_core::http::{Method, Part, Req, Resp};
 use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt, json};
+
+use crate::parse::Users;
 
 const SERVER_KEY: &str = "server";
 const TOKEN_KEY: &str = "token";
 const REFRESH_KEY: &str = "refresh_token";
 const BOT_KEY: &str = "bot_key";
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
   User,
   Bot,
+}
+
+/// What a request carries.
+#[derive(Clone)]
+pub enum Body {
+  None,
+  Json(Value),
+  /// Message content with its VoceChat content type.
+  Raw {
+    data: String,
+    content_type: &'static str,
+  },
+  Multipart(Vec<Part>),
+}
+
+/// The content of a message.
+pub enum Content {
+  Text(String),
+  Markdown(String),
+  /// A file uploaded before, by its server path.
+  File(String),
+}
+
+impl From<Content> for Body {
+  fn from(content: Content) -> Self {
+    let (data, content_type) = match content {
+      Content::Text(t) => (t, "text/plain"),
+      Content::Markdown(t) => (t, "text/markdown"),
+      Content::File(path) => (json!({"path": path}).to_string(), "vocechat/file"),
+    };
+    Body::Raw { data, content_type }
+  }
 }
 
 pub struct Api {
   pub ctx: Ctx,
   env: Option<(String, String)>,
   renewed: RefCell<bool>,
+  /// The server's users, loaded once per run (user mode).
+  pub users: RefCell<Option<Users>>,
+  /// The account's user id, once asked.
+  pub me: RefCell<Option<i64>>,
 }
 
-/// The request body of a message: its content type and bytes.
-pub enum Content {
-  Text(String),
-  Markdown(String),
-  File(String),
-}
-
-impl Content {
-  fn parts(&self) -> (&'static str, Vec<u8>) {
-    match self {
-      Content::Text(t) => ("text/plain", t.as_bytes().to_vec()),
-      Content::Markdown(t) => ("text/markdown", t.as_bytes().to_vec()),
-      Content::File(path) => (
-        "vocechat/file",
-        json!({"path": path}).to_string().into_bytes(),
-      ),
-    }
-  }
-}
-
-pub fn normalize(s: &str) -> String {
-  let s = s.trim().trim_end_matches('/');
-  if s.starts_with("https://") || s.starts_with("http://") {
-    s.to_owned()
+/// `chat.example.com` → `https://chat.example.com`, without a trailing `/`.
+pub fn server_url(server: &str) -> String {
+  let server = server.trim().trim_end_matches('/');
+  if server.starts_with("https://") || server.starts_with("http://") {
+    server.to_owned()
   } else {
-    format!("https://{s}")
+    format!("https://{server}")
   }
 }
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-    let env = match (var("VOCECHAT_URL"), var("VOCECHAT_API_KEY")) {
-      (Some(url), Some(key)) => Some((normalize(&url), key)),
+    let env = match (
+      credentials::env("VOCECHAT_URL"),
+      credentials::env("VOCECHAT_API_KEY"),
+    ) {
+      (Some(url), Some(key)) => Some((server_url(&url), key)),
       _ => None,
     };
     Self {
       ctx,
       env,
       renewed: RefCell::new(false),
+      users: RefCell::new(None),
+      me: RefCell::new(None),
     }
   }
 
@@ -90,6 +114,10 @@ impl Api {
     } else {
       None
     }
+  }
+
+  pub fn is_bot(&self) -> bool {
+    self.mode() == Some(Mode::Bot)
   }
 
   pub fn logged_in(&self) -> bool {
@@ -127,75 +155,69 @@ impl Api {
   }
 
   pub fn save_user(&self, server: &str, token: &str, refresh: &str) {
-    self.ctx.set_extra(SERVER_KEY, server);
-    self.ctx.set_extra(TOKEN_KEY, token);
-    self.ctx.set_extra(REFRESH_KEY, refresh);
+    credentials::save(
+      &self.ctx,
+      &[
+        (SERVER_KEY, server),
+        (TOKEN_KEY, token),
+        (REFRESH_KEY, refresh),
+      ],
+    );
   }
 
   pub fn save_bot(&self, server: &str, key: &str) {
-    self.ctx.set_extra(SERVER_KEY, server);
-    self.ctx.set_extra(BOT_KEY, key);
+    credentials::save(&self.ctx, &[(SERVER_KEY, server), (BOT_KEY, key)]);
   }
 
-  fn request(&self, method: Method, server: &str, path: &str, key: &str) -> Req<'_> {
-    self
+  fn request(&self, method: Method, server: &str, path: &str, body: &Body) -> Req<'_> {
+    let key = self.key().unwrap_or_default();
+    let req = self
       .ctx
       .http
       .request(method, format!("{server}/api{path}"))
       .no_cookies()
       .retries(0)
-      .header("x-api-key", key)
+      .header("x-api-key", key);
+    match body {
+      Body::None => req,
+      Body::Json(v) => req.json(v),
+      Body::Raw { data, content_type } => req.bytes(data.as_bytes().to_vec(), content_type),
+      Body::Multipart(parts) => req
+        .multipart(parts.clone())
+        .timeout(Duration::from_secs(300)),
+    }
   }
 
-  /// One call. `body`: JSON, raw content, or a multipart form.
+  /// One call; a user's expired token is renewed once on the way.
   pub async fn call(&self, method: Method, path: &str, body: Body) -> Result<Value> {
     let (server, _) = self.require()?;
     loop {
-      let key = self.key().unwrap_or_default();
-      let mut req = self.request(method.clone(), &server, path, &key);
-      req = match &body {
-        Body::None => req,
-        Body::Json(v) => req.json(v),
-        Body::Content(c) => {
-          let (ct, data) = c.parts();
-          req.bytes(data, ct)
-        }
-        Body::Multipart(parts) => req
-          .multipart(parts.clone())
-          .timeout(Duration::from_secs(300)),
-      };
-      let resp = req.send().await?;
-      let status = resp.status.as_u16();
-      if status == 401 && self.mode() == Some(Mode::User) && !*self.renewed.borrow() {
+      let resp = self
+        .request(method.clone(), &server, path, &body)
+        .send()
+        .await?;
+      let expired =
+        resp.status.as_u16() == 401 && self.mode() == Some(Mode::User) && !*self.renewed.borrow();
+      if expired {
         self.renew(&server).await?;
         continue;
       }
-      if resp.status.is_success() {
-        if resp.body.iter().all(u8::is_ascii_whitespace) {
-          return Ok(Value::Null);
-        }
-        return Ok(serde_json::from_slice(&resp.body).unwrap_or_else(|_| json!(resp.text())));
-      }
-      let text = resp.text();
-      let detail = if text.trim().is_empty() || text.contains("<html") {
-        format!("HTTP {status}")
-      } else {
-        format!("{} (HTTP {status})", text.trim())
-      };
-      return Err(match status {
-        401 => Error::auth(format!("VoceChat refused the credentials: {detail}"))
-          .with_hint("log in again (`social vocechat login --token ...`)"),
-        403 => Error::new(ErrorCode::PermissionDenied, detail),
-        404 => Error::not_found(detail),
-        429 => Error::new(ErrorCode::RateLimited, detail),
-        400 | 409 | 413 | 422 => Error::input(detail),
-        _ => Error::upstream(format!("VoceChat: {detail}")),
-      });
+      return check(resp);
     }
   }
 
   pub async fn get(&self, path: &str) -> Result<Value> {
     self.call(Method::GET, path, Body::None).await
+  }
+
+  /// A write, after the platform's short pause.
+  pub async fn write(&self, method: Method, path: &str, body: Body) -> Result<Value> {
+    self
+      .ctx
+      .http
+      .pause(Duration::from_millis(200), Duration::from_millis(600))
+      .await;
+    self.call(method, path, body).await
   }
 
   /// Swap the expired access token for a new one.
@@ -238,27 +260,29 @@ impl Api {
   }
 }
 
-#[derive(Clone)]
-pub enum Body {
-  None,
-  Json(Value),
-  Content(ContentBody),
-  Multipart(Vec<Part>),
-}
-
-/// A cloneable message body.
-#[derive(Clone)]
-pub struct ContentBody(pub String, pub &'static str);
-
-impl ContentBody {
-  fn parts(&self) -> (&'static str, Vec<u8>) {
-    (self.1, self.0.as_bytes().to_vec())
+/// The JSON of a success (`Null` when empty, a string when not JSON), or
+/// the mapped error.
+fn check(resp: Resp) -> Result<Value> {
+  let status = resp.status.as_u16();
+  if resp.status.is_success() {
+    if resp.body.iter().all(u8::is_ascii_whitespace) {
+      return Ok(Value::Null);
+    }
+    return Ok(serde_json::from_slice(&resp.body).unwrap_or_else(|_| json!(resp.text())));
   }
-}
-
-impl From<Content> for Body {
-  fn from(c: Content) -> Self {
-    let (ct, data) = c.parts();
-    Body::Content(ContentBody(String::from_utf8(data).unwrap_or_default(), ct))
-  }
+  let text = resp.text();
+  let detail = if text.trim().is_empty() || text.contains("<html") {
+    format!("HTTP {status}")
+  } else {
+    format!("{} (HTTP {status})", text.trim())
+  };
+  Err(match status {
+    401 => Error::auth(format!("VoceChat refused the credentials: {detail}"))
+      .with_hint("log in again (`social vocechat login --token ...`)"),
+    403 => Error::new(ErrorCode::PermissionDenied, detail),
+    404 => Error::not_found(detail),
+    429 => Error::new(ErrorCode::RateLimited, detail),
+    400 | 409 | 413 | 422 => Error::input(detail),
+    _ => Error::upstream(format!("VoceChat: {detail}")),
+  })
 }

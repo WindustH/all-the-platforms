@@ -5,10 +5,11 @@
 
 use std::collections::HashMap;
 
+use social_core::chat;
 use social_core::text::from_millis;
 use social_core::{Collection, Media, MediaKind, Post, User, Value, ValueExt, json};
 
-use crate::refs::Chat;
+use crate::refs::ChatRef;
 
 pub type Users = HashMap<i64, User>;
 
@@ -67,14 +68,14 @@ pub fn direct(u: &User) -> Collection {
 
 /// The chat a message belongs to, seen from `me` (direct messages from
 /// someone else belong to the chat with the sender).
-pub fn chat_of(v: &Value, me: Option<i64>) -> Option<Chat> {
+pub fn chat_of(v: &Value, me: Option<i64>) -> Option<ChatRef> {
   let target = v.at("target");
   if let Some(g) = target.i64("gid") {
-    return Some(Chat::Group(g));
+    return Some(ChatRef::Group(g));
   }
   let to = target.i64("uid")?;
   let from = v.i64("from_uid")?;
-  Some(Chat::User(if Some(to) == me { from } else { to }))
+  Some(ChatRef::User(if Some(to) == me { from } else { to }))
 }
 
 fn file_media(detail: &Value, server: &str) -> Option<Media> {
@@ -141,7 +142,7 @@ pub fn message(v: &Value, chat: &str, chat_name: &str, users: &Users, server: &s
     ..User::default()
   });
   let mut post = Post {
-    id: format!("{chat}/{mid}"),
+    id: chat::message_id(chat, &mid.to_string()),
     kind: post_kind.into(),
     text,
     author: Some(author),

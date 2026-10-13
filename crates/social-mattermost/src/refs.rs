@@ -6,15 +6,15 @@ use social_core::{Error, Result};
 use url::Url;
 
 /// Mattermost ids: 26 lowercase letters and digits.
-pub fn is_id(s: &str) -> bool {
-  s.len() == 26
-    && s
+pub fn is_id(text: &str) -> bool {
+  text.len() == 26
+    && text
       .bytes()
       .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
 }
 
 /// The post id of a permalink, `CHANNEL/POST` or an id.
-pub fn post(arg: &str) -> Result<String> {
+pub fn post_id(arg: &str) -> Result<String> {
   let arg = arg.trim();
   if is_id(arg) {
     return Ok(arg.to_owned());
@@ -36,7 +36,7 @@ pub fn post(arg: &str) -> Result<String> {
   )))
 }
 
-pub enum Chat {
+pub enum ChatRef {
   Id(String),
   /// Team name and channel name.
   Path(String, String),
@@ -46,10 +46,10 @@ pub enum Chat {
   Name(String),
 }
 
-pub fn chat(arg: &str) -> Chat {
+pub fn chat(arg: &str) -> ChatRef {
   let arg = arg.trim();
   if is_id(arg) {
-    return Chat::Id(arg.to_owned());
+    return ChatRef::Id(arg.to_owned());
   }
   if let Ok(url) = Url::parse(arg) {
     let segs: Vec<&str> = url
@@ -64,17 +64,17 @@ pub fn chat(arg: &str) -> Chat {
       && let Some(name) = segs.get(at + 1)
     {
       return match name.strip_prefix('@') {
-        Some(user) => Chat::User(user.to_owned()),
-        None if is_id(name) => Chat::Id((*name).to_owned()),
-        None => Chat::Path(segs[at - 1].to_owned(), (*name).to_owned()),
+        Some(user) => ChatRef::User(user.to_owned()),
+        None if is_id(name) => ChatRef::Id((*name).to_owned()),
+        None => ChatRef::Path(segs[at - 1].to_owned(), (*name).to_owned()),
       };
     }
   }
   if let Some(user) = arg.strip_prefix('@') {
-    return Chat::User(user.to_owned());
+    return ChatRef::User(user.to_owned());
   }
   if let Some((team, name)) = arg.split_once('/') {
-    return Chat::Path(team.to_owned(), name.trim_start_matches('~').to_owned());
+    return ChatRef::Path(team.to_owned(), name.trim_start_matches('~').to_owned());
   }
-  Chat::Name(arg.trim_start_matches(['~', '#']).to_owned())
+  ChatRef::Name(arg.trim_start_matches(['~', '#']).to_owned())
 }

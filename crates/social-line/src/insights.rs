@@ -5,8 +5,9 @@
 
 use social_core::{Breakdown, Insights, Point, Result, Series, Share, Value, ValueExt, json};
 
+use crate::account;
 use crate::api::Api;
-use crate::bot;
+use crate::users;
 
 fn day(offset: i64) -> (String, String) {
   let d = jiff::Zoned::now()
@@ -18,21 +19,31 @@ fn day(offset: i64) -> (String, String) {
 }
 
 pub async fn account(api: &Api, days: u32) -> Result<Insights> {
-  let me = bot::whoami(api).await?;
-  let days = days.clamp(1, 30);
+  let me = users::whoami(api).await?;
   let mut ins = Insights {
     kind: "account".into(),
     subject: me.id.clone(),
     title: Some(me.name.clone()),
     ..Insights::default()
   };
+  followers(api, days.clamp(1, 30), &mut ins).await?;
+  deliveries(api, &mut ins).await;
+  audience(api, &mut ins).await;
+  if let Ok(q) = account::quota(api).await {
+    ins.total("quota_limit", q.get("limit").cloned());
+    ins.total("quota_used", q.get("used").cloned());
+  }
+  Ok(ins)
+}
+
+/// Friends, targeted reach and blocks per day; statistics are ready the
+/// day after, so the days run from `days` ago to yesterday.
+async fn followers(api: &Api, days: u32, ins: &mut Insights) -> Result<()> {
   let mut series: Vec<(&str, &str, Vec<Point>)> = vec![
     ("followers", "followers", Vec::new()),
     ("targeted_reaches", "targetedReaches", Vec::new()),
     ("blocks", "blocks", Vec::new()),
   ];
-  let mut first = None;
-  // Statistics are ready the day after; oldest first.
   for offset in (1..=i64::from(days)).rev() {
     let (key, date) = day(offset);
     let v = api
@@ -41,7 +52,7 @@ pub async fn account(api: &Api, days: u32) -> Result<Insights> {
     if v.str("status").as_deref() != Some("ready") {
       continue;
     }
-    first.get_or_insert(date.clone());
+    ins.from.get_or_insert(date.clone());
     for (_, field, points) in &mut series {
       if let Some(n) = v.u64(field) {
         points.push(Point {
@@ -52,7 +63,6 @@ pub async fn account(api: &Api, days: u32) -> Result<Insights> {
     }
     ins.to = Some(date);
   }
-  ins.from = first;
   for (metric, _, points) in series {
     if let Some(last) = points.last() {
       ins.total(metric, Some(last.value.clone()));
@@ -64,25 +74,32 @@ pub async fn account(api: &Api, days: u32) -> Result<Insights> {
       });
     }
   }
-  // Yesterday's deliveries by kind.
+  Ok(())
+}
+
+/// Yesterday's deliveries by kind.
+async fn deliveries(api: &Api, ins: &mut Insights) {
+  const KINDS: [&str; 10] = [
+    "broadcast",
+    "targeting",
+    "autoResponse",
+    "welcomeResponse",
+    "chat",
+    "apiBroadcast",
+    "apiPush",
+    "apiMulticast",
+    "apiNarrowcast",
+    "apiReply",
+  ];
   let (key, date) = day(1);
   let delivery = api
     .get(&format!("/v2/bot/insight/message/delivery?date={key}"))
     .await
     .unwrap_or_default();
-  if delivery.str("status").as_deref() == Some("ready") {
-    let items: Vec<Share> = [
-      "broadcast",
-      "targeting",
-      "autoResponse",
-      "welcomeResponse",
-      "chat",
-      "apiBroadcast",
-      "apiPush",
-      "apiMulticast",
-      "apiNarrowcast",
-      "apiReply",
-    ]
+  if delivery.str("status").as_deref() != Some("ready") {
+    return;
+  }
+  let items: Vec<Share> = KINDS
     .iter()
     .filter_map(|k| {
       Some(Share {
@@ -92,57 +109,55 @@ pub async fn account(api: &Api, days: u32) -> Result<Insights> {
       })
     })
     .collect();
-    if !items.is_empty() {
-      ins.breakdowns.push(Breakdown {
-        dimension: "deliveries".into(),
-        period: Some(date),
-        items,
-      });
-    }
+  if !items.is_empty() {
+    ins.breakdowns.push(Breakdown {
+      dimension: "deliveries".into(),
+      period: Some(date),
+      items,
+    });
   }
+}
+
+/// Gender, age, area, app and friendship length of the audience.
+async fn audience(api: &Api, ins: &mut Insights) {
   let demo = api
     .get("/v2/bot/insight/demographic")
     .await
     .unwrap_or_default();
-  if demo.bool("available") == Some(true) {
-    for (dimension, key, label) in [
-      ("gender", "genders", "gender"),
-      ("age", "ages", "age"),
-      ("region", "areas", "area"),
-      ("app", "appTypes", "appType"),
-      ("friends_for", "subscriptionPeriods", "subscriptionPeriod"),
-    ] {
-      let items: Vec<Share> = demo
-        .list(key)
-        .iter()
-        .filter_map(|e| {
-          let pct = e.f64("percentage")?;
-          Some(Share {
-            label: e.str(label)?,
-            value: json!(pct / 100.0),
-            ratio: Some(pct / 100.0),
-            ..Share::default()
-          })
-        })
-        .collect();
-      if !items.is_empty() {
-        ins.breakdowns.push(Breakdown {
-          dimension: dimension.into(),
-          period: Some("lifetime".into()),
-          items,
-        });
-      }
-    }
-  } else {
+  if demo.bool("available") != Some(true) {
     ins
       .warnings
       .push("LINE shows the audience only to accounts with 20 or more friends".into());
+    return;
   }
-  if let Ok(q) = bot::quota(api).await {
-    ins.total("quota_limit", q.get("limit").cloned());
-    ins.total("quota_used", q.get("used").cloned());
+  for (dimension, key, label) in [
+    ("gender", "genders", "gender"),
+    ("age", "ages", "age"),
+    ("region", "areas", "area"),
+    ("app", "appTypes", "appType"),
+    ("friends_for", "subscriptionPeriods", "subscriptionPeriod"),
+  ] {
+    let items: Vec<Share> = demo
+      .list(key)
+      .iter()
+      .filter_map(|e| {
+        let pct = e.f64("percentage")?;
+        Some(Share {
+          label: e.str(label)?,
+          value: json!(pct / 100.0),
+          ratio: Some(pct / 100.0),
+          ..Share::default()
+        })
+      })
+      .collect();
+    if !items.is_empty() {
+      ins.breakdowns.push(Breakdown {
+        dimension: dimension.into(),
+        period: Some("lifetime".into()),
+        items,
+      });
+    }
   }
-  Ok(ins)
 }
 
 /// One broadcast or narrowcast, by the request id its send returned.

@@ -1,17 +1,20 @@
 //! Rocket.Chat for social-cli.
 //!
-//! A server's REST API v1 with a user id and auth token ([`api`]): rooms
-//! are collections ([`rooms`]), messages are posts with `?msg=` links and a
-//! message's thread is its comment list ([`messages`]); `listen` uses the
-//! realtime DDP websocket ([`live`]).
+//! A server's REST API v1 with a user id and auth token ([`api`],
+//! [`login`]): rooms are collections ([`chats`]), messages are posts with
+//! `?msg=` links and a message's thread is its comment list ([`messages`]);
+//! search runs within a room ([`search`]); `listen` uses the realtime DDP
+//! websocket ([`live`]).
 
 mod api;
+mod chats;
 mod extra;
 mod live;
+mod login;
 mod messages;
 mod parse;
 mod refs;
-mod rooms;
+mod search;
 mod users;
 
 use std::collections::BTreeMap;
@@ -84,15 +87,15 @@ impl Platform for RocketChat {
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    api::login(&self.api, token).await
+    login::login(&self.api, token).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    messages::search(&self.api, query, page).await
+    search::messages(&self.api, query, page).await
   }
 
   async fn search_users(&self, query: &Query, _page: &PageReq) -> Result<Page<User>> {
-    messages::search_users(&self.api, &query.keyword).await
+    search::users(&self.api, &query.keyword).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
@@ -113,7 +116,7 @@ impl Platform for RocketChat {
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    messages::unread(&self.api).await
+    chats::unread(&self.api).await
   }
 
   async fn favorite(&self, post: &str, _folder: Option<&str>, undo: bool) -> Result<Action> {
@@ -137,7 +140,7 @@ impl Platform for RocketChat {
   }
 
   async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
-    rooms::list(&self.api, parent, page).await
+    chats::list(&self.api, parent, page).await
   }
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
@@ -149,7 +152,7 @@ impl Platform for RocketChat {
   }
 
   async fn members(&self, chat: &str, page: &PageReq) -> Result<Page<User>> {
-    rooms::members(&self.api, chat, page).await
+    chats::members(&self.api, chat, page).await
   }
 
   async fn react(&self, post: &str, emoji: &str, undo: bool) -> Result<Action> {

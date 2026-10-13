@@ -1,9 +1,9 @@
 //! Rocket.Chat-only commands: one room, pins, joining and leaving.
 
-use social_core::{Action, Data, Page, Result, ValueExt, json};
+use social_core::{Data, Result};
 
 use crate::api::Api;
-use crate::{messages, parse, rooms};
+use crate::{chats, messages};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -27,30 +27,17 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;
   Ok(match command {
     Command::Room { room } => {
-      let rid = rooms::id(api, &ctx.collection_ref(&room)?).await?;
-      let v = api.get("rooms.info", &[("roomId", rid)]).await?;
-      let c = rooms::render(api, |view| parse::room(v.at("room"), view))?;
-      Data::Collections(Page::last(vec![c]))
+      Data::Collections(chats::room(api, &ctx.collection_ref(&room)?).await?)
     }
     Command::Pins { room } => Data::Posts(messages::pins(api, &ctx.collection_ref(&room)?).await?),
     Command::Pin { message, undo } => {
       Data::Action(messages::pin(api, &ctx.post_ref(&message)?, undo).await?)
     }
     Command::Join { room } => {
-      let rid = rooms::id(api, &ctx.collection_ref(&room)?).await?;
-      api.post("channels.join", json!({"roomId": rid})).await?;
-      Data::Action(Action::done("join", rid))
+      Data::Action(chats::join(api, &ctx.collection_ref(&room)?, false).await?)
     }
     Command::Leave { room } => {
-      let rid = rooms::id(api, &ctx.collection_ref(&room)?).await?;
-      let info = rooms::info(api, &rid).await?;
-      api
-        .post(
-          &format!("{}.leave", rooms::family(&info.t)),
-          json!({"roomId": rid}),
-        )
-        .await?;
-      Data::Action(Action::done("leave", rid))
+      Data::Action(chats::join(api, &ctx.collection_ref(&room)?, true).await?)
     }
   })
 }

@@ -1,9 +1,10 @@
-//! Posts: channel history, one post, threads (as comments), sending with
-//! files and in threads, editing, deleting, reactions, pins and flags.
+//! Messages (Mattermost posts): channel history, one post, threads (as
+//! comments), sending with files and in threads, editing, deleting,
+//! reactions, pins and flags.
 
 use std::path::{Path, PathBuf};
 
-use social_core::file::sniff;
+use social_core::file::{Upload, sniff};
 use social_core::http::Part;
 use social_core::text::emoji_shortcode;
 use social_core::{
@@ -17,7 +18,7 @@ use crate::refs;
 use crate::users;
 
 /// Posts as the shared model, authors and channels resolved first.
-pub async fn convert(api: &Api, rows: &[Value]) -> Result<Vec<Post>> {
+pub async fn posts(api: &Api, rows: &[Value]) -> Result<Vec<Post>> {
   prepare(api, rows).await;
   chats::render(api, |view| {
     rows.iter().map(|p| parse::post(p, view)).collect()
@@ -50,17 +51,17 @@ pub async fn list(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
   let next = (rows.len() >= per_page)
     .then(|| rows.last().and_then(|p| p.str("id")))
     .flatten();
-  Ok(Page::new(convert(api, &rows).await?, next))
+  Ok(Page::new(posts(api, &rows).await?, next))
 }
 
-async fn fetch(api: &Api, arg: &str) -> Result<Value> {
-  let id = refs::post(arg)?;
+async fn payload(api: &Api, arg: &str) -> Result<Value> {
+  let id = refs::post_id(arg)?;
   api.get(&format!("/posts/{id}"), &[]).await
 }
 
 pub async fn read(api: &Api, arg: &str) -> Result<Post> {
-  let v = fetch(api, arg).await?;
-  Ok(convert(api, &[v]).await?.remove(0))
+  let v = payload(api, arg).await?;
+  Ok(posts(api, &[v]).await?.remove(0))
 }
 
 pub async fn media(api: &Api, arg: &str) -> Result<(Post, Vec<Media>)> {
@@ -74,7 +75,7 @@ pub async fn media(api: &Api, arg: &str) -> Result<(Post, Vec<Media>)> {
 
 /// The thread a post belongs to, oldest first, without its root.
 pub async fn thread(api: &Api, arg: &str, _page: &PageReq) -> Result<Page<Comment>> {
-  let v = fetch(api, arg).await?;
+  let v = payload(api, arg).await?;
   let root = root_of(&v);
   let list = api.get(&format!("/posts/{root}/thread"), &[]).await?;
   let mut rows: Vec<Value> = parse::ordered(&list)
@@ -102,7 +103,7 @@ fn root_of(v: &Value) -> String {
 pub async fn send(api: &Api, arg: &str, message: &Message) -> Result<Action> {
   let channel = chats::channel_id(api, arg).await?;
   let root = match message.reply_to.as_deref() {
-    Some(r) => Some(root_of(&fetch(api, r).await?)),
+    Some(r) => Some(root_of(&payload(api, r).await?)),
     None => None,
   };
   create(
@@ -117,7 +118,7 @@ pub async fn send(api: &Api, arg: &str, message: &Message) -> Result<Action> {
 
 /// `comment`: a reply in the post's thread.
 pub async fn reply(api: &Api, arg: &str, text: &str, files: &[PathBuf]) -> Result<Action> {
-  let v = fetch(api, arg).await?;
+  let v = payload(api, arg).await?;
   let channel = v.str("channel_id").unwrap_or_default();
   create(api, &channel, text, Some(&root_of(&v)), files).await
 }
@@ -150,17 +151,13 @@ async fn create(
   Ok(action)
 }
 
+/// Upload a file into a channel; its file id. Names without an extension
+/// get the one their content shows.
 async fn upload(api: &Api, channel: &str, path: &Path) -> Result<String> {
-  let data = tokio::fs::read(path)
-    .await
-    .map_err(|e| Error::input(format!("cannot read {}: {e}", path.display())))?;
-  let mut name = path
-    .file_name()
-    .and_then(|n| n.to_str())
-    .unwrap_or("file")
-    .to_owned();
+  let file = Upload::read(path).await?;
+  let mut name = file.name.clone();
   if Path::new(&name).extension().is_none()
-    && let Some(ext) = sniff(&data)
+    && let Some(ext) = sniff(&file.data)
   {
     name = format!("{name}.{ext}");
   }
@@ -169,7 +166,7 @@ async fn upload(api: &Api, channel: &str, path: &Path) -> Result<String> {
       "/files",
       vec![
         Part::text("channel_id", channel),
-        Part::file("files", data, &name, "application/octet-stream"),
+        Part::file("files", file.data, &name, file.mime),
       ],
     )
     .await?;
@@ -178,7 +175,7 @@ async fn upload(api: &Api, channel: &str, path: &Path) -> Result<String> {
 }
 
 pub async fn edit(api: &Api, arg: &str, text: &str) -> Result<Action> {
-  let id = refs::post(arg)?;
+  let id = refs::post_id(arg)?;
   api
     .put(&format!("/posts/{id}/patch"), json!({"message": text}))
     .await?;
@@ -186,13 +183,13 @@ pub async fn edit(api: &Api, arg: &str, text: &str) -> Result<Action> {
 }
 
 pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
-  let id = refs::post(arg)?;
+  let id = refs::post_id(arg)?;
   api.delete(&format!("/posts/{id}")).await?;
   Ok(Action::done("delete", id))
 }
 
 pub async fn react(api: &Api, arg: &str, emoji: &str, undo: bool) -> Result<Action> {
-  let id = refs::post(arg)?;
+  let id = refs::post_id(arg)?;
   let me = api.me().await?;
   let name = emoji_shortcode(emoji);
   if undo {
@@ -214,11 +211,11 @@ pub async fn react(api: &Api, arg: &str, emoji: &str, undo: bool) -> Result<Acti
 pub async fn pins(api: &Api, arg: &str) -> Result<Page<Post>> {
   let channel = chats::channel_id(api, arg).await?;
   let v = api.get(&format!("/channels/{channel}/pinned"), &[]).await?;
-  Ok(Page::last(convert(api, &parse::ordered(&v)).await?))
+  Ok(Page::last(posts(api, &parse::ordered(&v)).await?))
 }
 
 pub async fn pin(api: &Api, arg: &str, undo: bool) -> Result<Action> {
-  let id = refs::post(arg)?;
+  let id = refs::post_id(arg)?;
   let verb = if undo { "unpin" } else { "pin" };
   api
     .post(&format!("/posts/{id}/{verb}"), Value::Null)
@@ -226,8 +223,17 @@ pub async fn pin(api: &Api, arg: &str, undo: bool) -> Result<Action> {
   Ok(Action::done(verb, id))
 }
 
-/// Flagged (saved) posts.
-pub async fn flagged(api: &Api, page: &PageReq) -> Result<Page<Post>> {
+/// Flagged (saved) posts; only your own are visible.
+pub async fn favorites(api: &Api, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+  if user.is_some_and(|u| u != "me") {
+    return Err(
+      Error::unsupported("favorites USER").with_hint("only your own flagged posts are visible"),
+    );
+  }
+  flagged(api, page).await
+}
+
+async fn flagged(api: &Api, page: &PageReq) -> Result<Page<Post>> {
   let me = api.me().await?;
   let per_page = page.size_within(200);
   let no = page.number_or(0);
@@ -239,11 +245,11 @@ pub async fn flagged(api: &Api, page: &PageReq) -> Result<Page<Post>> {
     .await?;
   let rows = parse::ordered(&v);
   let next = (rows.len() >= per_page).then(|| (no + 1).to_string());
-  Ok(Page::new(convert(api, &rows).await?, next))
+  Ok(Page::new(posts(api, &rows).await?, next))
 }
 
 pub async fn flag(api: &Api, arg: &str, undo: bool) -> Result<Action> {
-  let id = refs::post(arg)?;
+  let id = refs::post_id(arg)?;
   let me = api.me().await?;
   let pref = json!([{"user_id": me, "category": "flagged_post", "name": id, "value": "true"}]);
   if undo {

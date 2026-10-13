@@ -1,12 +1,13 @@
 //! LINE Messaging API transport (`https://api.line.me/v2/bot/...`) with a
 //! channel access token, from `LINE_CHANNEL_ACCESS_TOKEN` or the session
-//! (`login --token`). Errors (`{message, details}`) map onto
+//! (`login --token`, kept as given). Errors (`{message, details}`) map onto
 //! `social_core::Error`; sends carry an `X-Line-Retry-Key` so a retried push
 //! is not delivered twice, and the `X-Line-Request-Id` of each send comes
 //! back (it identifies broadcasts in the message insights).
 
 use std::time::Duration;
 
+use social_core::credentials;
 use social_core::http::{Method, Resp};
 use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 
@@ -19,23 +20,22 @@ pub struct Api {
   env: Option<String>,
 }
 
+/// A random UUID (v4 layout) for `X-Line-Retry-Key`.
 fn retry_key() -> String {
-  let h = format!("{:032x}", rand::random::<u128>());
+  let hex = format!("{:032x}", rand::random::<u128>());
   format!(
     "{}-{}-4{}-a{}-{}",
-    &h[..8],
-    &h[8..12],
-    &h[13..16],
-    &h[17..20],
-    &h[20..32]
+    &hex[..8],
+    &hex[8..12],
+    &hex[13..16],
+    &hex[17..20],
+    &hex[20..32]
   )
 }
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let env = std::env::var("LINE_CHANNEL_ACCESS_TOKEN")
-      .ok()
-      .filter(|v| !v.trim().is_empty());
+    let env = credentials::env("LINE_CHANNEL_ACCESS_TOKEN");
     Self { ctx, env }
   }
 
@@ -59,7 +59,7 @@ impl Api {
   }
 
   pub fn save(&self, token: &str) {
-    self.ctx.set_extra(TOKEN_KEY, token);
+    credentials::save(&self.ctx, &[(TOKEN_KEY, token.trim())]);
   }
 
   pub async fn get(&self, path: &str) -> Result<Value> {
