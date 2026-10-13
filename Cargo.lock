@@ -3941,6 +3941,7 @@ dependencies = [
  "social-mp",
  "social-reddit",
  "social-telegram",
+ "social-tieba",
  "social-twitter",
  "social-weibo",
  "social-xhs",
@@ -4063,6 +4064,21 @@ dependencies = [
  "libc",
  "regex",
  "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-tieba"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
  "serde_json",
  "social-core",
  "tokio",
