@@ -19,5 +19,9 @@ fn main() -> ExitCode {
   .platform::<social_discord::Discord>()
   .platform::<social_tieba::Tieba>()
   .platform::<social_tiktok::TikTok>()
+  .platform::<social_onebot::OneBot>()
+  .platform::<social_kook::Kook>()
+  .platform::<social_satori::Satori>()
+  .platform::<social_qq::Qq>()
   .run()
 }

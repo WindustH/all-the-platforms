@@ -3938,8 +3938,12 @@ dependencies = [
  "social-core",
  "social-discord",
  "social-douyin",
+ "social-kook",
  "social-mp",
+ "social-onebot",
+ "social-qq",
  "social-reddit",
+ "social-satori",
  "social-telegram",
  "social-tieba",
  "social-tiktok",
@@ -4020,6 +4024,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "social-kook"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "social-mp"
 version = "0.1.0"
 dependencies = [
@@ -4037,6 +4055,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "social-onebot"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-qq"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "social-reddit"
 version = "0.1.0"
 dependencies = [
@@ -4049,6 +4098,22 @@ dependencies = [
  "social-core",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "social-satori"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
