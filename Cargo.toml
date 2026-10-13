@@ -33,6 +33,9 @@ social-douyin = { path = "crates/social-douyin" }
 social-discord = { path = "crates/social-discord" }
 social-tieba = { path = "crates/social-tieba" }
 social-tiktok = { path = "crates/social-tiktok" }
+social-feishu = { path = "crates/social-feishu" }
+social-dingtalk = { path = "crates/social-dingtalk" }
+social-wecom = { path = "crates/social-wecom" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -70,6 +73,9 @@ social-douyin.workspace = true
 social-discord.workspace = true
 social-tieba.workspace = true
 social-tiktok.workspace = true
+social-feishu.workspace = true
+social-dingtalk.workspace = true
+social-wecom.workspace = true
 
 [profile.release]
 lto = "thin"
