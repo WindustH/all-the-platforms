@@ -1,26 +1,26 @@
 # Architecture
 
-media-cli is one binary (`media`) that drives several social platforms through
+social-cli is one binary (`media`) that drives several social platforms through
 the same command set. The code is split so that each part stays small and
 knows as little as possible about the others.
 
 ```
 src/main.rs                 registry: lists the platforms, nothing else
-crates/media-core           platform-agnostic kernel
-crates/media-zhihu          Zhihu
-crates/media-xhs            Xiaohongshu
-crates/media-twitter        Twitter / X
-crates/media-bilibili       Bilibili
-crates/media-reddit         Reddit
-crates/media-youtube        YouTube
+crates/social-core           platform-agnostic kernel
+crates/social-zhihu          Zhihu
+crates/social-xhs            Xiaohongshu
+crates/social-twitter        Twitter / X
+crates/social-bilibili       Bilibili
+crates/social-reddit         Reddit
+crates/social-youtube        YouTube
 ```
 
 Dependencies only point downwards: the binary depends on every crate,
-platform crates depend on `media-core` only, and `media-core` knows no
+platform crates depend on `social-core` only, and `social-core` knows no
 platform. Adding a platform means adding a crate and one `.platform::<P>()`
 line in `src/main.rs`.
 
-## media-core
+## social-core
 
 | Module | Role |
 | --- | --- |
@@ -28,14 +28,14 @@ line in `src/main.rs`.
 | `ctx` | `Ctx`: what a platform works with (HTTP client with the session cookies, files, session extras, login hints, `#N` resolution) |
 | `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `Page<T>`, `Action`, `AuthStatus`, `Transcript`, and `Data` (everything a command can print) |
 | `cli` | shared subcommands (`CommonCommand`), per-platform clap command, dispatch to trait methods |
-| `app` | top-level program, `media platforms`, multi-call (`bili` symlink) |
+| `app` | top-level program, `social platforms`, multi-call (`bili` symlink) |
 | `account` | `login` (QR / browser / cookie string), `logout`, `status` |
 | `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, retries, streaming download |
 | `store` | session file (0600), TTL cache, `#N` short-index lists |
 | `paging` | `collect`: follow cursors until `--limit` items; `collect_window`: `--since` / `--until` |
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg) |
 | `file` | format detection by magic bytes, images to upload |
-| `guide` | `media guide`: topics from `crates/media-core/guide/*.md`, platform topics generated from the command set plus each crate's `GUIDE.md` |
+| `guide` | `social guide`: topics from `crates/social-core/guide/*.md`, platform topics generated from the command set plus each crate's `GUIDE.md` |
 | `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
 | `text` | counts (`1.2万`), durations, truncation, HTML to text, timestamps |
@@ -43,7 +43,7 @@ line in `src/main.rs`.
 
 ### The Platform contract
 
-A platform crate exports one type implementing `media_core::Platform`:
+A platform crate exports one type implementing `social_core::Platform`:
 
 - `const INFO: PlatformInfo` declares id, aliases, home page, cookie domains,
   required cookies, supported capabilities (`caps`), accepted option values
@@ -64,7 +64,7 @@ A platform crate exports one type implementing `media_core::Platform`:
 ### Flow of one command
 
 1. `app` parses arguments, picks the platform, starts a current-thread tokio runtime.
-2. `cli::execute` loads the session (`MEDIA_<ID>_COOKIE` wins over the saved
+2. `cli::execute` loads the session (`SOCIAL_<ID>_COOKIE` wins over the saved
    file), builds `Http` with those cookies and calls `P::new(ctx)`.
 3. The shared command maps to a trait method (listings go through `paging::collect`).
 4. Cookies changed by responses are written back to the session file (logged-in sessions only).

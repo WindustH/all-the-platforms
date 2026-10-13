@@ -2086,152 +2086,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "media-bilibili"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "md-5",
- "media-core",
- "rand 0.9.5",
- "regex",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "media-cli"
-version = "0.1.0"
-dependencies = [
- "media-bilibili",
- "media-core",
- "media-reddit",
- "media-twitter",
- "media-xhs",
- "media-youtube",
- "media-zhihu",
-]
-
-[[package]]
-name = "media-core"
-version = "0.1.0"
-dependencies = [
- "clap",
- "comfy-table",
- "csv",
- "dirs",
- "futures-util",
- "html2text",
- "image",
- "imagesize",
- "indicatif",
- "jiff",
- "libc",
- "owo-colors",
- "qrcode",
- "rand 0.9.5",
- "rookie",
- "rqrr",
- "serde",
- "serde-saphyr",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "unicode-width",
- "url",
- "wreq",
- "wreq-util",
-]
-
-[[package]]
-name = "media-reddit"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "media-core",
- "regex",
- "serde",
- "serde_json",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "media-twitter"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "media-core",
- "rand 0.9.5",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "media-xhs"
-version = "0.1.0"
-dependencies = [
- "aes",
- "base64 0.22.1",
- "cbc",
- "clap",
- "flate2",
- "md-5",
- "media-core",
- "rand 0.9.5",
- "regex",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "media-youtube"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "media-core",
- "serde",
- "serde_json",
- "sha1",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "media-zhihu"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "hmac",
- "jiff",
- "md-5",
- "media-core",
- "rand 0.9.5",
- "regex",
- "serde_json",
- "sha1",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3236,6 +3090,152 @@ name = "smallvec"
 version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9395f0f0eee849a9b707b2f06bb92a6a422090e2123bb2ef8e87a0e61892a8e"
+
+[[package]]
+name = "social-bilibili"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "social-cli"
+version = "0.1.0"
+dependencies = [
+ "social-bilibili",
+ "social-core",
+ "social-reddit",
+ "social-twitter",
+ "social-xhs",
+ "social-youtube",
+ "social-zhihu",
+]
+
+[[package]]
+name = "social-core"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "comfy-table",
+ "csv",
+ "dirs",
+ "futures-util",
+ "html2text",
+ "image",
+ "imagesize",
+ "indicatif",
+ "jiff",
+ "libc",
+ "owo-colors",
+ "qrcode",
+ "rand 0.9.5",
+ "rookie",
+ "rqrr",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-width",
+ "url",
+ "wreq",
+ "wreq-util",
+]
+
+[[package]]
+name = "social-reddit"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "regex",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-twitter"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "social-core",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-xhs"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "base64 0.22.1",
+ "cbc",
+ "clap",
+ "flate2",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-youtube"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "serde",
+ "serde_json",
+ "sha1",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-zhihu"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "hmac",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde_json",
+ "sha1",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
 
 [[package]]
 name = "socket2"
