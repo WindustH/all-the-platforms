@@ -18,7 +18,7 @@ use std::process::Stdio;
 use social_core::{Error, ErrorCode, Media, MediaKind, Post, Result, Value, ValueExt};
 
 use crate::api::{self, Api};
-use crate::{parse, refs, video};
+use crate::{parse, refs, videos};
 
 /// googlevideo takes byte ranges as this URL parameter.
 const RANGE_PARAM: &str = "range";
@@ -118,7 +118,7 @@ fn streams(v: &Value, audio_only: bool) -> Result<Vec<Media>> {
 
 pub async fn media(api: &Api, post: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
   let id = refs::video(post)?;
-  let v = video::mobile_player(api, &id).await?;
+  let v = videos::mobile_player(api, &id).await?;
   let mut p = parse::full_video(&v, &Value::Null).unwrap_or_else(|| Post {
     id: id.clone(),
     kind: "video".into(),

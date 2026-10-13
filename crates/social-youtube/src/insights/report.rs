@@ -155,12 +155,12 @@ pub fn label(dimension: &str, raw: &str) -> String {
   }
 }
 
-pub struct Client<'a> {
+pub struct Analytics<'a> {
   pub api: &'a Api,
   pub creds: &'a Credentials,
 }
 
-impl Client<'_> {
+impl Analytics<'_> {
   async fn get(&self, url: &str, query: &[(&str, String)]) -> Result<Value> {
     let ctx = &self.api.ctx;
     let token = self.creds.token(ctx).await?;

@@ -5,7 +5,7 @@
 use social_core::{Error, ErrorCode, Result, User, Value, ValueExt, json};
 
 use crate::api::{self, Api};
-use crate::{channel, parse, refs};
+use crate::{channels, parse, refs};
 
 /// Session extra with the account's channel id, so "mine" needs no lookup.
 const CHANNEL_KEY: &str = "channel_id";
@@ -95,7 +95,7 @@ pub async fn whoami(api: &Api) -> Result<User> {
   };
   let id = match (who.channel, &who.handle) {
     (Some(id), _) => Some(id),
-    (None, Some(h)) => channel::id(api, &format!("@{h}")).await.ok(),
+    (None, Some(h)) => channels::id(api, &format!("@{h}")).await.ok(),
     _ => None,
   };
   let Some(id) = id else {
@@ -111,7 +111,7 @@ pub async fn whoami(api: &Api) -> Result<User> {
     return Ok(u);
   };
   api.ctx.set_extra(CHANNEL_KEY, &id);
-  let mut user = match channel::profile(api, &id, false).await {
+  let mut user = match channels::profile(api, &id, false).await {
     Ok(u) => u,
     Err(e) => {
       tracing::debug!("channel of the account: {e}");
@@ -152,7 +152,7 @@ pub async fn is_mine(api: &Api, arg: &str) -> Result<bool> {
   if !api.logged_in() {
     return Ok(false);
   }
-  let (mine, theirs) = (my_channel(api).await?, channel::id(api, arg).await?);
+  let (mine, theirs) = (my_channel(api).await?, channels::id(api, arg).await?);
   Ok(mine == theirs)
 }
 

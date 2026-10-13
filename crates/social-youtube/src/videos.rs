@@ -1,17 +1,16 @@
 //! Watch pages: one video in full (`player` for the details, `next` for
-//! owner, likes and chapters), community posts, related videos and what
-//! YouTube offers in place of Trending.
+//! owner, likes and chapters), community posts, related videos, what
+//! YouTube offers in place of Trending, and liking.
 //!
 //! YouTube retired its Trending page in 2025 (`FEtrending` answers 400);
 //! [`hot`] reads the Hype leaderboard and the Explore destinations instead.
 
-use social_core::{Error, Page, PageReq, Post, Result, Value, ValueExt, json};
+use social_core::{Action, Error, Page, PageReq, Post, Result, Value, ValueExt, json};
 
-use crate::api::{self, Api};
-use crate::parse;
+use crate::api::Api;
 use crate::proto::Msg;
-use crate::refs::{self, PostRef};
-use crate::{browse, comment};
+use crate::refs::PostRef;
+use crate::{api, comments, parse, refs};
 
 /// `hot --category`: the leaderboard of hyped videos, then Explore pages.
 pub const HOT: &[(&str, &str)] = &[
@@ -24,6 +23,7 @@ pub const HOT: &[(&str, &str)] = &[
   ("learning", "UCtFRv9O2AHqOZjjynzrv-xg"),
   ("podcasts", "FEpodcasts_destination"),
 ];
+
 pub const HOT_CATEGORIES: &[&str] = &[
   "hype", "music", "gaming", "news", "sports", "live", "learning", "podcasts",
 ];
@@ -43,7 +43,9 @@ pub async fn mobile_player(api: &Api, id: &str) -> Result<Value> {
     "racyCheckOk": true,
     "playbackContext": { "contentPlaybackContext": { "html5Preference": "HTML5_PREF_WANTS" } },
   });
-  api.call_as(api::Client::AndroidVr, "player", body).await
+  api
+    .call_as(api::ClientType::AndroidVr, "player", body)
+    .await
 }
 
 pub async fn read(api: &Api, arg: &str) -> Result<Post> {
@@ -80,7 +82,7 @@ pub async fn video(api: &Api, id: &str) -> Result<Post> {
   post.metrics.comments = match comment_count(&next) {
     Some((n, true)) => Some(n),
     // Abbreviated (`1.5K`): the comments header has the exact number.
-    Some((n, false)) => Some(comment::count(api, id).await.ok().flatten().unwrap_or(n)),
+    Some((n, false)) => Some(comments::count(api, id).await.ok().flatten().unwrap_or(n)),
     None => None,
   };
   Ok(post)
@@ -96,7 +98,9 @@ pub async fn post_page(api: &Api, id: &str) -> Result<Value> {
   let (Some(browse_id), params) = (endpoint.str("browseId"), endpoint.str("params")) else {
     return Err(Error::not_found(format!("post {id} not found")));
   };
-  browse::page(api, &browse_id, params.as_deref(), &PageReq::default()).await
+  api
+    .browse(&browse_id, params.as_deref(), &PageReq::default())
+    .await
 }
 
 async fn community(api: &Api, id: &str) -> Result<Post> {
@@ -115,7 +119,7 @@ pub async fn hot(api: &Api, category: Option<&str>, req: &PageReq) -> Result<Pag
     .find(|(n, _)| *n == name)
     .map(|(_, id)| *id)
     .ok_or_else(|| Error::input(format!("unknown category `{name}`")))?;
-  let l = browse::listing(api, id, None, req).await?;
+  let l = parse::listing(&api.browse(id, None, req).await?);
   Ok(Page::new(l.posts, l.next))
 }
 
@@ -129,7 +133,7 @@ pub async fn hashtag(api: &Api, tag: &str, req: &PageReq) -> Result<Page<Post>> 
   let params = Msg::new()
     .msg(93, Msg::new().str(1, &tag).int(3, 1))
     .encode();
-  let l = browse::listing(api, "FEhashtag", Some(&params), req).await?;
+  let l = parse::listing(&api.browse("FEhashtag", Some(&params), req).await?);
   Ok(Page::new(l.posts, l.next))
 }
 
@@ -147,4 +151,17 @@ pub async fn related(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Post>> 
   };
   let l = parse::listing(&side);
   Ok(Page::new(l.posts, l.next))
+}
+
+pub async fn like(api: &Api, post: &str, undo: bool) -> Result<Action> {
+  let id = refs::video(post)?;
+  let (path, name) = if undo {
+    ("like/removelike", "unlike")
+  } else {
+    ("like/like", "like")
+  };
+  api
+    .write(path, json!({ "target": { "videoId": id } }))
+    .await?;
+  Ok(Action::done(name, &id).with_url(refs::video_url(&id)))
 }

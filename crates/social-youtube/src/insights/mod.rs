@@ -21,10 +21,10 @@ use jiff::tz::TimeZone;
 use social_core::{Breakdown, ErrorCode, Insights, PageReq, Result, Share, Value, ValueExt, json};
 
 use self::oauth::{Credentials, SETUP_HINT};
-use self::report::{BREAKDOWNS, Client, DAILY, METRICS, breakdown, label};
+use self::report::{Analytics, BREAKDOWNS, DAILY, METRICS, breakdown, label};
 use crate::api::Api;
-use crate::channel::{self, Tab};
-use crate::{account, refs, video};
+use crate::channels::{self, Tab};
+use crate::{account, refs, videos};
 
 pub use self::oauth::authorize;
 
@@ -59,8 +59,8 @@ fn soft<T>(ins: &mut Insights, what: &str, r: Result<T>) -> Result<Option<T>> {
 
 pub async fn insights(api: &Api, post: Option<&str>, days: u32) -> Result<Insights> {
   match (post, Credentials::from_env()) {
-    (Some(p), Some(c)) => video_report(&Client { api, creds: &c }, p, days).await,
-    (None, Some(c)) => account_report(&Client { api, creds: &c }, days).await,
+    (Some(p), Some(c)) => video_report(&Analytics { api, creds: &c }, p, days).await,
+    (None, Some(c)) => account_report(&Analytics { api, creds: &c }, days).await,
     (Some(p), None) => {
       let note = format!("public counters only: {SETUP_HINT}");
       public(api, p, vec![note]).await
@@ -71,7 +71,7 @@ pub async fn insights(api: &Api, post: Option<&str>, days: u32) -> Result<Insigh
 
 /// Totals, daily series and distributions of the channel or one video.
 async fn fill(
-  c: &Client<'_>,
+  c: &Analytics<'_>,
   ins: &mut Insights,
   totals: (&str, &str),
   series: (&str, &str),
@@ -166,7 +166,7 @@ fn demographics(rows: &[Vec<Value>]) -> Vec<Breakdown> {
     .collect()
 }
 
-async fn account_report(c: &Client<'_>, days: u32) -> Result<Insights> {
+async fn account_report(c: &Analytics<'_>, days: u32) -> Result<Insights> {
   let ch = c.channel().await?;
   let id = ch.str("id").unwrap_or_default();
   let (from, to) = window(days);
@@ -230,7 +230,7 @@ async fn account_report(c: &Client<'_>, days: u32) -> Result<Insights> {
   Ok(ins)
 }
 
-async fn video_report(c: &Client<'_>, arg: &str, days: u32) -> Result<Insights> {
+async fn video_report(c: &Analytics<'_>, arg: &str, days: u32) -> Result<Insights> {
   let id = refs::video(arg)?;
   let meta = c.videos(std::slice::from_ref(&id)).await?;
   let Some(meta) = meta.into_iter().next() else {
@@ -276,7 +276,7 @@ async fn video_report(c: &Client<'_>, arg: &str, days: u32) -> Result<Insights> 
 
 /// Current public counters of any video or post.
 async fn public(api: &Api, arg: &str, warnings: Vec<String>) -> Result<Insights> {
-  let post = video::read(api, arg).await?;
+  let post = videos::read(api, arg).await?;
   let m = &post.metrics;
   let mut ins = Insights {
     kind: "post".into(),
@@ -344,7 +344,7 @@ async fn account_snapshot(api: &Api, days: u32) -> Result<Insights> {
       cursor: None,
       size: 30,
     };
-    let uploads = channel::tab(api, &me.id, Tab::Videos, &page).await;
+    let uploads = channels::tab(api, &me.id, Tab::Videos, &page).await;
     if let Some(l) = soft(&mut ins, "uploads", uploads)? {
       let recent: Vec<Share> = l
         .posts

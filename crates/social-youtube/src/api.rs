@@ -1,15 +1,15 @@
 //! InnerTube transport: `POST https://www.youtube.com/youtubei/v1/<endpoint>`
 //! with a JSON body carrying the client `context`. No API key is needed.
 //!
-//! - [`Client::Web`] answers everything a browser shows. With a cookie
+//! - [`ClientType::Web`] answers everything a browser shows. With a cookie
 //!   session it carries the session cookies and the `SAPISIDHASH`
 //!   authorization ([`crate::sign`]) the web app sends.
-//! - [`Client::AndroidVr`] (the Oculus app) answers `player` with plain,
+//! - [`ClientType::AndroidVr`] (the Oculus app) answers `player` with plain,
 //!   unciphered stream URLs and caption tracks that return bytes, without a
 //!   proof-of-origin token. It does not take cookies, so it always runs
 //!   anonymously, with a visitor id: without one YouTube answers
 //!   "Sign in to confirm you're not a bot".
-//! - [`Client::Music`] (`WEB_REMIX`) is YouTube Music's web app, on
+//! - [`ClientType::Music`] (`WEB_REMIX`) is YouTube Music's web app, on
 //!   music.youtube.com, signed like the web client.
 //!
 //! The visitor id of anonymous calls (`responseContext.visitorData`) is kept
@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use std::time::Duration;
 
 use social_core::http::Resp;
-use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
+use social_core::{Ctx, Error, ErrorCode, PageReq, Result, Value, ValueExt};
 
 use crate::sign;
 
@@ -35,7 +35,7 @@ const BOT_HINT: &str = "YouTube asks this network to prove it is not a bot: log 
   (`social youtube login --browser`), wait a while, or use another network with --proxy";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Client {
+pub enum ClientType {
   Web,
   AndroidVr,
   /// YouTube Music's web app (`WEB_REMIX`) on music.youtube.com.
@@ -48,32 +48,32 @@ const MUSIC_VERSION: &str = "1.20261007.01.00";
 const VR_UA: &str = "com.google.android.apps.youtube.vr.oculus/1.65.10 \
   (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip";
 
-impl Client {
-  /// `X-Youtube-Client-Name` and `-Version`; they must match the context.
+impl ClientType {
+  /// `X-Youtube-ClientType-Name` and `-Version`; they must match the context.
   fn id(self) -> (&'static str, &'static str) {
     match self {
-      Client::Web => ("1", WEB_VERSION),
-      Client::AndroidVr => ("28", VR_VERSION),
-      Client::Music => ("67", MUSIC_VERSION),
+      ClientType::Web => ("1", WEB_VERSION),
+      ClientType::AndroidVr => ("28", VR_VERSION),
+      ClientType::Music => ("67", MUSIC_VERSION),
     }
   }
 
   /// Host of the client's API, also its `Origin` (and the signed origin).
   fn host(self) -> &'static str {
     match self {
-      Client::Music => MUSIC,
+      ClientType::Music => MUSIC,
       _ => WWW,
     }
   }
 
   fn context(self, visitor: Option<&str>) -> Value {
     let mut client = match self {
-      Client::Web => serde_json::json!({
+      ClientType::Web => serde_json::json!({
         "clientName": "WEB",
         "clientVersion": WEB_VERSION,
         "platform": "DESKTOP",
       }),
-      Client::AndroidVr => serde_json::json!({
+      ClientType::AndroidVr => serde_json::json!({
         "clientName": "ANDROID_VR",
         "clientVersion": VR_VERSION,
         "androidSdkVersion": 32,
@@ -84,7 +84,7 @@ impl Client {
         "platform": "MOBILE",
         "userAgent": VR_UA,
       }),
-      Client::Music => serde_json::json!({
+      ClientType::Music => serde_json::json!({
         "clientName": "WEB_REMIX",
         "clientVersion": MUSIC_VERSION,
         "platform": "DESKTOP",
@@ -130,12 +130,12 @@ impl Api {
 
   /// A read as the web client.
   pub async fn call(&self, endpoint: &str, body: Value) -> Result<Value> {
-    self.send(Client::Web, endpoint, body, 2).await
+    self.send(ClientType::Web, endpoint, body, 2).await
   }
 
   /// A read as another client.
-  pub async fn call_as(&self, client: Client, endpoint: &str, body: Value) -> Result<Value> {
-    if client == Client::AndroidVr && self.visitor.borrow().is_none() {
+  pub async fn call_as(&self, client: ClientType, endpoint: &str, body: Value) -> Result<Value> {
+    if client == ClientType::AndroidVr && self.visitor.borrow().is_none() {
       // Cheap (a few hundred bytes); the mobile player refuses callers without one.
       self
         .call("visitor_id", Value::Object(Default::default()))
@@ -152,18 +152,18 @@ impl Api {
       .http
       .pause(Duration::from_millis(800), Duration::from_millis(2000))
       .await;
-    self.send(Client::Web, endpoint, body, 0).await
+    self.send(ClientType::Web, endpoint, body, 0).await
   }
 
   async fn send(
     &self,
-    client: Client,
+    client: ClientType,
     endpoint: &str,
     mut body: Value,
     retries: u32,
   ) -> Result<Value> {
     // A cookie session has its own visitor; the cached one is for anonymous calls.
-    let signed = client != Client::AndroidVr && self.logged_in();
+    let signed = client != ClientType::AndroidVr && self.logged_in();
     let visitor = self.visitor.borrow().clone().filter(|_| !signed);
     body["context"] = client.context(visitor.as_deref());
     let (id, version) = client.id();
@@ -181,7 +181,7 @@ impl Api {
       req = req.header("x-goog-visitor-id", v);
     }
     match client {
-      Client::Web | Client::Music => {
+      ClientType::Web | ClientType::Music => {
         if let Some(auth) = sign::authorization(http, host) {
           req = req
             .header("authorization", auth)
@@ -189,13 +189,29 @@ impl Api {
             .header("x-goog-authuser", "0");
         }
       }
-      Client::AndroidVr => req = req.no_cookies().header("user-agent", VR_UA),
+      ClientType::AndroidVr => req = req.no_cookies().header("user-agent", VR_UA),
     }
     let v = self.check(req.send().await?)?;
     if !signed {
       self.remember_visitor(&v);
     }
     Ok(v)
+  }
+
+  /// One page with a `browseId` (channels, playlists, feeds, library pages)
+  /// and tab `params`, or the page after `req.cursor`.
+  pub async fn browse(&self, id: &str, params: Option<&str>, req: &PageReq) -> Result<Value> {
+    let body = match &req.cursor {
+      Some(token) => serde_json::json!({ "continuation": token }),
+      None => {
+        let mut body = serde_json::json!({ "browseId": id });
+        if let Some(p) = params {
+          body["params"] = Value::from(p);
+        }
+        body
+      }
+    };
+    self.call("browse", body).await
   }
 
   fn remember_visitor(&self, v: &Value) {

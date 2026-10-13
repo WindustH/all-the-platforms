@@ -276,7 +276,7 @@ pub async fn listen(api: &Api, videos: &[String], out: &Stream) -> Result<()> {
 pub async fn send(api: &Api, arg: &str, text: &str) -> Result<Action> {
   api.require_login()?;
   let video = refs::video(arg)?;
-  let player = crate::video::player(api, &video).await?;
+  let player = crate::videos::player(api, &video).await?;
   let channel = player
     .str("videoDetails.channelId")
     .ok_or_else(|| Error::not_found(format!("video {video} not found")))?;

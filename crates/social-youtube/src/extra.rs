@@ -8,11 +8,10 @@ use social_core::cli::PageArgs;
 use social_core::{Action, Data, Error, Page, Result, json};
 
 use crate::api::Api;
-use crate::channel::{self, Tab};
+use crate::channels::{self, Tab};
 use crate::music::{self, Found};
 use crate::{
-  account, caption, comment, insights, library, livechat, playlists, refs, rss, search, video,
-  write,
+  account, captions, comments, insights, library, live, playlists, refs, rss, search, videos,
 };
 
 #[derive(Debug, clap::Subcommand)]
@@ -130,7 +129,7 @@ pub enum Command {
   /// Notifications for a subscribed channel: all, personalized or none
   Bell {
     user: String,
-    #[arg(value_parser = clap::builder::PossibleValuesParser::new(write::BELL))]
+    #[arg(value_parser = clap::builder::PossibleValuesParser::new(channels::BELL))]
     level: String,
   },
   /// Create a playlist, optionally with videos
@@ -204,7 +203,7 @@ async fn shelves(api: &Api, user: &str, tab: Tab, page: &PageArgs) -> Result<Dat
   Ok(Data::Collections(
     page
       .collect(async |r| {
-        let l = channel::tab(api, &user, tab, &r).await?;
+        let l = channels::tab(api, &user, tab, &r).await?;
         Ok(Page::new(l.collections, l.next))
       })
       .await?,
@@ -216,7 +215,7 @@ async fn tab(api: &Api, user: &str, tab: Tab, page: &PageArgs) -> Result<Data> {
   Ok(Data::Posts(
     page
       .collect_dated(async |r| {
-        let l = channel::tab(api, &user, tab, &r).await?;
+        let l = channels::tab(api, &user, tab, &r).await?;
         Ok(social_core::Page::new(l.posts, l.next))
       })
       .await?,
@@ -228,7 +227,7 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;
   Ok(match command {
     C::Transcript { video, lang } => {
-      Data::Transcript(caption::transcript(api, &ctx.post_ref(&video)?, lang.as_deref()).await?)
+      Data::Transcript(captions::transcript(api, &ctx.post_ref(&video)?, lang.as_deref()).await?)
     }
     C::Playlist { playlist, page } => {
       let id = refs::playlist(&playlist)?;
@@ -245,13 +244,13 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       let v = ctx.post_ref(&video)?;
       Data::Posts(
         page
-          .collect_dated(async |r| video::related(api, &v, &r).await)
+          .collect_dated(async |r| videos::related(api, &v, &r).await)
           .await?,
       )
     }
     C::Hashtag { tag, page } => Data::Posts(
       page
-        .collect_dated(async |r| video::hashtag(api, &tag, &r).await)
+        .collect_dated(async |r| videos::hashtag(api, &tag, &r).await)
         .await?,
     ),
     C::Oauth => Data::Value(insights::authorize(ctx).await?),
@@ -268,12 +267,12 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       Data::Action(Action::done(name, &id).with_url(refs::video_url(&id)))
     }
     C::Suggest { query } => Data::Value(json!(search::suggest(api, &query).await?)),
-    C::Captions { video } => Data::Value(caption::tracks(api, &ctx.post_ref(&video)?).await?),
+    C::Captions { video } => Data::Value(captions::tracks(api, &ctx.post_ref(&video)?).await?),
     C::Chat { video, page } => {
       let v = ctx.post_ref(&video)?;
       Data::Posts(
         page
-          .collect(async |r| livechat::page(api, &v, &r).await)
+          .collect(async |r| live::page(api, &v, &r).await)
           .await?,
       )
     }
@@ -284,7 +283,7 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       Data::Posts(
         page
           .collect(async |r| {
-            let l = channel::search(api, &user, &query, &r).await?;
+            let l = channels::search(api, &user, &query, &r).await?;
             Ok(Page::new(l.posts, l.next))
           })
           .await?,
@@ -305,8 +304,10 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       comment: target,
       dislike,
       undo,
-    } => Data::Action(comment::rate(api, &ctx.post_ref(&video)?, &target, dislike, undo).await?),
-    C::Bell { user, level } => Data::Action(write::bell(api, &ctx.user_ref(&user)?, &level).await?),
+    } => Data::Action(comments::rate(api, &ctx.post_ref(&video)?, &target, dislike, undo).await?),
+    C::Bell { user, level } => {
+      Data::Action(channels::bell(api, &ctx.user_ref(&user)?, &level).await?)
+    }
     C::PlaylistCreate {
       title,
       videos,

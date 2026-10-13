@@ -6,20 +6,19 @@
 //! VR client (see [`api`]). Posts are videos, Shorts and community posts;
 //! users are channels (`UC…` ids, @handles or links); collections are
 //! playlists. Live chats are the chat side: `listen` follows them and
-//! `send` writes to them ([`livechat`]); YouTube Music is in [`music`].
+//! `send` writes to them ([`live`]); YouTube Music is in [`music`].
 
 mod account;
 mod api;
-mod browse;
-mod caption;
-mod channel;
-mod comment;
+mod captions;
+mod channels;
+mod comments;
 mod extra;
 mod insights;
 mod library;
-mod livechat;
+mod live;
 mod music;
-mod notify;
+mod notifications;
 mod parse;
 mod playlists;
 mod proto;
@@ -27,9 +26,8 @@ mod refs;
 mod rss;
 mod search;
 mod sign;
-mod stream;
-mod video;
-mod write;
+mod streams;
+mod videos;
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -41,7 +39,7 @@ use social_core::{
 };
 
 use crate::api::Api;
-use crate::channel::Tab;
+use crate::channels::Tab;
 
 pub struct YouTube {
   api: Api,
@@ -88,9 +86,9 @@ impl Platform for YouTube {
     choices: Choices {
       search_sort: search::SORTS,
       search_filter: search::FILTERS,
-      hot_category: video::HOT_CATEGORIES,
+      hot_category: videos::HOT_CATEGORIES,
       feed_kind: library::FEED_KINDS,
-      comment_sort: comment::SORTS,
+      comment_sort: comments::SORTS,
       notification_kind: &[],
     },
     min_interval: Duration::from_millis(1000),
@@ -140,7 +138,7 @@ impl Platform for YouTube {
   }
 
   async fn hot(&self, category: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    video::hot(&self.api, category, page).await
+    videos::hot(&self.api, category, page).await
   }
 
   async fn feed(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
@@ -148,7 +146,7 @@ impl Platform for YouTube {
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    video::read(&self.api, post).await
+    videos::read(&self.api, post).await
   }
 
   async fn comments(
@@ -157,11 +155,11 @@ impl Platform for YouTube {
     sort: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Comment>> {
-    comment::list(&self.api, post, sort, page).await
+    comments::list(&self.api, post, sort, page).await
   }
 
   async fn replies(&self, post: &str, comment: &str, page: &PageReq) -> Result<Page<Comment>> {
-    comment::replies(&self.api, post, comment, page).await
+    comments::replies(&self.api, post, comment, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
@@ -170,11 +168,11 @@ impl Platform for YouTube {
     } else {
       user.to_owned()
     };
-    channel::profile(&self.api, &user, true).await
+    channels::profile(&self.api, &user, true).await
   }
 
   async fn user_posts(&self, user: &str, page: &PageReq) -> Result<Page<Post>> {
-    let l = channel::tab(&self.api, user, Tab::Videos, page).await?;
+    let l = channels::tab(&self.api, user, Tab::Videos, page).await?;
     Ok(Page::new(l.posts, l.next))
   }
 
@@ -204,31 +202,31 @@ impl Platform for YouTube {
   }
 
   async fn notifications(&self, _kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    notify::list(&self.api, page).await
+    notifications::list(&self.api, page).await
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    notify::unread(&self.api).await
+    notifications::unread(&self.api).await
   }
 
   async fn like(&self, post: &str, undo: bool) -> Result<Action> {
-    write::like(&self.api, post, undo).await
+    videos::like(&self.api, post, undo).await
   }
 
   async fn favorite(&self, post: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
-    write::favorite(&self.api, post, folder, undo).await
+    library::favorite(&self.api, post, folder, undo).await
   }
 
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
-    comment::add(&self.api, post, &reply.text, reply.reply_to.as_deref()).await
+    comments::add(&self.api, post, &reply.text, reply.reply_to.as_deref()).await
   }
 
   async fn delete_comment(&self, post: &str, comment: &str) -> Result<Action> {
-    comment::delete(&self.api, post, comment).await
+    comments::delete(&self.api, post, comment).await
   }
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
-    write::follow(&self.api, user, undo).await
+    channels::follow(&self.api, user, undo).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
@@ -236,7 +234,7 @@ impl Platform for YouTube {
   }
 
   async fn media(&self, post: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
-    stream::media(&self.api, post, audio_only).await
+    streams::media(&self.api, post, audio_only).await
   }
 
   /// A message to the live chat of a stream.
@@ -246,12 +244,12 @@ impl Platform for YouTube {
         "send --attach / --reply-to to a live chat",
       ));
     }
-    livechat::send(&self.api, chat, &message.text).await
+    live::send(&self.api, chat, &message.text).await
   }
 
   /// Follow the live chats of streams.
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
-    livechat::listen(&self.api, chats, out).await
+    live::listen(&self.api, chats, out).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

@@ -8,7 +8,7 @@
 
 use social_core::{Collection, Error, Post, Result, User, Value, ValueExt, json};
 
-use crate::api::{Api, Client, MUSIC};
+use crate::api::{Api, ClientType, MUSIC};
 use crate::parse::{self, duration, text};
 
 /// `music search --type`: the param ytmusicapi sends for each kind.
@@ -175,7 +175,7 @@ pub async fn search(api: &Api, query: &str, kind: &str) -> Result<Found> {
     .ok_or_else(|| Error::input(format!("unknown kind `{kind}`")))?;
   let v = api
     .call_as(
-      Client::Music,
+      ClientType::Music,
       "search",
       json!({ "query": query, "params": params }),
     )
@@ -239,7 +239,11 @@ pub async fn tracks(api: &Api, id: &str) -> Result<Vec<Post>> {
     id.to_owned()
   };
   let v = api
-    .call_as(Client::Music, "browse", json!({ "browseId": browse_id }))
+    .call_as(
+      ClientType::Music,
+      "browse",
+      json!({ "browseId": browse_id }),
+    )
     .await?;
   let header = parse::first(&v, "musicResponsiveHeaderRenderer")
     .or_else(|| parse::first(&v, "musicImmersiveHeaderRenderer"))
@@ -285,7 +289,7 @@ pub async fn tracks(api: &Api, id: &str) -> Result<Vec<Post>> {
 pub async fn lyrics(api: &Api, video: &str) -> Result<Value> {
   let next = api
     .call_as(
-      Client::Music,
+      ClientType::Music,
       "next",
       json!({ "videoId": video, "isAudioOnly": true }),
     )
@@ -296,7 +300,11 @@ pub async fn lyrics(api: &Api, video: &str) -> Result<Value> {
     .find(|id| id.starts_with("MPLYt"))
     .ok_or_else(|| Error::not_found(format!("no lyrics for {video}")))?;
   let v = api
-    .call_as(Client::Music, "browse", json!({ "browseId": browse_id }))
+    .call_as(
+      ClientType::Music,
+      "browse",
+      json!({ "browseId": browse_id }),
+    )
     .await?;
   let shelf = parse::first(&v, "musicDescriptionShelfRenderer")
     .ok_or_else(|| Error::not_found(format!("no lyrics for {video}")))?;

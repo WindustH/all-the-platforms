@@ -6,7 +6,7 @@
 use social_core::{Cue, Error, ErrorCode, Result, Transcript, Value, ValueExt};
 
 use crate::api::{self, Api};
-use crate::{refs, video};
+use crate::{refs, videos};
 
 /// Caption track to fetch: `lang` exactly, then by prefix (`en` → `en-US`),
 /// human captions before automatic ones; otherwise a translation into `lang`.
@@ -88,7 +88,7 @@ fn track_url(base: &str, tlang: Option<&str>) -> Result<String> {
 
 pub async fn transcript(api: &Api, arg: &str, lang: Option<&str>) -> Result<Transcript> {
   let id = refs::video(arg)?;
-  let v = video::mobile_player(api, &id).await?;
+  let v = videos::mobile_player(api, &id).await?;
   api::playable(&v)?;
   let tracks = v.list("captions.playerCaptionsTracklistRenderer.captionTracks");
   if tracks.is_empty() {
@@ -136,7 +136,7 @@ pub async fn transcript(api: &Api, arg: &str, lang: Option<&str>) -> Result<Tran
 /// empty, so the web player's is used when it has one.
 pub async fn tracks(api: &Api, arg: &str) -> Result<Value> {
   let id = refs::video(arg)?;
-  let v = video::mobile_player(api, &id).await?;
+  let v = videos::mobile_player(api, &id).await?;
   api::playable(&v)?;
   let list = v.at("captions.playerCaptionsTracklistRenderer");
   let tracks: Vec<Value> = list
@@ -161,7 +161,7 @@ pub async fn tracks(api: &Api, arg: &str) -> Result<Value> {
   };
   let mut targets = codes(list);
   if targets.is_empty()
-    && let Ok(web) = video::player(api, &id).await
+    && let Ok(web) = videos::player(api, &id).await
   {
     targets = codes(web.at("captions.playerCaptionsTracklistRenderer"));
   }
