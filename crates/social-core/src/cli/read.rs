@@ -120,21 +120,11 @@ pub enum ReadCommand {
 
 pub(super) async fn run<P: Platform>(p: &P, cmd: ReadCommand) -> Result<Data> {
   let ctx = p.ctx();
-  Ok(match cmd {
-    ReadCommand::Search(args) => search(p, args).await?,
-    ReadCommand::Hot { category, page } => {
-      let category = category.as_deref();
-      Data::Posts(
-        page
-          .collect_dated(async |r| p.hot(category, &r).await)
-          .await?,
-      )
-    }
-    ReadCommand::Feed { kind, page } => {
-      let kind = kind.as_deref();
-      Data::Posts(page.collect_dated(async |r| p.feed(kind, &r).await).await?)
-    }
-    ReadCommand::Read { post } => Data::Post(Box::new(p.read(&ctx.post_ref(&post)?).await?)),
+  match cmd {
+    ReadCommand::Search(args) => search(p, args).await,
+    ReadCommand::Hot { category, page } => hot(p, category.as_deref(), page).await,
+    ReadCommand::Feed { kind, page } => feed(p, kind.as_deref(), page).await,
+    ReadCommand::Read { post } => Ok(Data::Post(Box::new(p.read(&ctx.post_ref(&post)?).await?))),
     ReadCommand::Comments {
       post,
       sort,
@@ -150,54 +140,87 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: ReadCommand) -> Result<Data> {
         replies,
         page,
       )
-      .await?
+      .await
     }
     ReadCommand::Replies {
       post,
       comment,
       page,
-    } => {
-      let post = ctx.post_ref(&post)?;
-      Data::Comments(
-        page
-          .collect_dated(async |r| p.replies(&post, &comment, &r).await)
-          .await?,
-      )
-    }
-    ReadCommand::Likers { post, page } => {
-      let post = ctx.post_ref(&post)?;
-      Data::Users(page.collect(async |r| p.likers(&post, &r).await).await?)
-    }
-    ReadCommand::Reposts { post, page } => {
-      let post = ctx.post_ref(&post)?;
-      Data::Posts(
-        page
-          .collect_dated(async |r| p.reposts(&post, &r).await)
-          .await?,
-      )
-    }
-    ReadCommand::Insights { post, days } => {
-      let post = post.map(|x| ctx.post_ref(&x)).transpose()?;
-      Data::Insights(Box::new(p.insights(post.as_deref(), days.max(1)).await?))
-    }
-    ReadCommand::User { user } => Data::User(Box::new(p.user(&ctx.user_ref(&user)?).await?)),
-    ReadCommand::UserPosts { user, page } => {
-      let user = user_or_me(p, user).await?;
-      Data::Posts(
-        page
-          .collect_dated(async |r| p.user_posts(&user, &r).await)
-          .await?,
-      )
-    }
-    ReadCommand::Followers { user, page } => {
-      let user = user_or_me(p, user).await?;
-      Data::Users(page.collect(async |r| p.followers(&user, &r).await).await?)
-    }
-    ReadCommand::Following { user, page } => {
-      let user = user_or_me(p, user).await?;
-      Data::Users(page.collect(async |r| p.following(&user, &r).await).await?)
-    }
-  })
+    } => comment_replies(p, &ctx.post_ref(&post)?, &comment, page).await,
+    ReadCommand::Likers { post, page } => likers(p, &ctx.post_ref(&post)?, page).await,
+    ReadCommand::Reposts { post, page } => reposts(p, &ctx.post_ref(&post)?, page).await,
+    ReadCommand::Insights { post, days } => insights(p, post, days).await,
+    ReadCommand::User { user } => Ok(Data::User(Box::new(p.user(&ctx.user_ref(&user)?).await?))),
+    ReadCommand::UserPosts { user, page } => user_posts(p, &user_or_me(p, user).await?, page).await,
+    ReadCommand::Followers { user, page } => followers(p, &user_or_me(p, user).await?, page).await,
+    ReadCommand::Following { user, page } => following(p, &user_or_me(p, user).await?, page).await,
+  }
+}
+
+async fn hot<P: Platform>(p: &P, category: Option<&str>, page: PageArgs) -> Result<Data> {
+  Ok(Data::Posts(
+    page
+      .collect_dated(async |r| p.hot(category, &r).await)
+      .await?,
+  ))
+}
+
+async fn feed<P: Platform>(p: &P, kind: Option<&str>, page: PageArgs) -> Result<Data> {
+  Ok(Data::Posts(
+    page.collect_dated(async |r| p.feed(kind, &r).await).await?,
+  ))
+}
+
+async fn comment_replies<P: Platform>(
+  p: &P,
+  post: &str,
+  comment: &str,
+  page: PageArgs,
+) -> Result<Data> {
+  let replies = page
+    .collect_dated(async |r| p.replies(post, comment, &r).await)
+    .await?;
+  Ok(Data::Comments(replies))
+}
+
+async fn likers<P: Platform>(p: &P, post: &str, page: PageArgs) -> Result<Data> {
+  Ok(Data::Users(
+    page.collect(async |r| p.likers(post, &r).await).await?,
+  ))
+}
+
+async fn reposts<P: Platform>(p: &P, post: &str, page: PageArgs) -> Result<Data> {
+  Ok(Data::Posts(
+    page
+      .collect_dated(async |r| p.reposts(post, &r).await)
+      .await?,
+  ))
+}
+
+async fn insights<P: Platform>(p: &P, post: Option<String>, days: u32) -> Result<Data> {
+  let post = post.map(|x| p.ctx().post_ref(&x)).transpose()?;
+  let insights = p.insights(post.as_deref(), days.max(1)).await?;
+  Ok(Data::Insights(Box::new(insights)))
+}
+
+async fn user_posts<P: Platform>(p: &P, user: &str, page: PageArgs) -> Result<Data> {
+  Ok(Data::Posts(
+    page
+      .collect_dated(async |r| p.user_posts(user, &r).await)
+      .await?,
+  ))
+}
+
+async fn followers<P: Platform>(p: &P, user: &str, page: PageArgs) -> Result<Data> {
+  Ok(Data::Users(
+    page.collect(async |r| p.followers(user, &r).await).await?,
+  ))
+}
+
+async fn following<P: Platform>(p: &P, user: &str, page: PageArgs) -> Result<Data> {
+  Ok(Data::Users(
+    page.collect(async |r| p.following(user, &r).await).await?,
+  ))
 }
 
 async fn search<P: Platform>(p: &P, args: SearchArgs) -> Result<Data> {

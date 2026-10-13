@@ -85,7 +85,16 @@ pub fn platform(info: &PlatformInfo, cmd: &clap::Command) -> String {
     out.push_str(&format!("Also answers to {}. ", aliases.join(", ")));
   }
   out.push_str(&format!("Home: {}\n\n", info.home));
+  out.push_str(&commands(info, cmd));
+  out.push_str(&option_values(cmd));
+  out.push_str(&session(info));
+  out.push_str(info.guide.trim());
+  out.push('\n');
+  out
+}
 
+/// The visible commands, shared ones first, in `--help` order.
+fn commands(info: &PlatformInfo, cmd: &clap::Command) -> String {
   let mut visible: Vec<&clap::Command> = cmd
     .get_subcommands()
     .filter(|c| !c.is_hide_set() && c.get_name() != "help")
@@ -95,7 +104,7 @@ pub fn platform(info: &PlatformInfo, cmd: &clap::Command) -> String {
   let (shared, own): (Vec<&clap::Command>, Vec<&clap::Command>) = visible
     .into_iter()
     .partition(|c| CommonCommand::has_subcommand(c.get_name()));
-  out.push_str("## Commands\n\n");
+  let mut out = String::from("## Commands\n\n");
   for c in &shared {
     out.push_str(&format!("- `{}`: {}\n", c.get_name(), about(c)));
   }
@@ -105,7 +114,11 @@ pub fn platform(info: &PlatformInfo, cmd: &clap::Command) -> String {
       out.push_str(&format!("- `{}`: {}\n", c.get_name(), about(c)));
     }
   }
+  out
+}
 
+/// The values the platform's shared options take (`search --sort` ...).
+fn option_values(cmd: &clap::Command) -> String {
   let mut values = String::new();
   for (sub, arg, flag) in CHOICES {
     let Some(c) = cmd.find_subcommand(sub).filter(|c| !c.is_hide_set()) else {
@@ -126,14 +139,17 @@ pub fn platform(info: &PlatformInfo, cmd: &clap::Command) -> String {
       values.push_str(&format!("- `{sub} {flag}`: {}\n", v.join(", ")));
     }
   }
-  if !values.is_empty() {
-    out.push_str("\n## Option values\n\n");
-    out.push_str(&values);
+  if values.is_empty() {
+    values
+  } else {
+    format!("\n## Option values\n\n{values}")
   }
+}
 
-  out.push_str("\n## Session\n\n");
+/// How to log in and what a session needs.
+fn session(info: &PlatformInfo) -> String {
   let ways = crate::platform::either(&info.login_ways());
-  out.push_str(&format!("Log in with {ways}. "));
+  let mut out = format!("\n## Session\n\nLog in with {ways}. ");
   if !info.required_cookies.is_empty() {
     let names: Vec<String> = info
       .required_cookies
@@ -153,8 +169,6 @@ pub fn platform(info: &PlatformInfo, cmd: &clap::Command) -> String {
     ));
   }
   out.push_str("\n\n");
-  out.push_str(info.guide.trim());
-  out.push('\n');
   out
 }
 
