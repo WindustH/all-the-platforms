@@ -48,6 +48,9 @@ social-misskey = { path = "crates/social-misskey" }
 social-matrix = { path = "crates/social-matrix" }
 social-vocechat = { path = "crates/social-vocechat" }
 social-line = { path = "crates/social-line" }
+social-meta = { path = "crates/social-meta" }
+social-facebook = { path = "crates/social-facebook" }
+social-instagram = { path = "crates/social-instagram" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -100,6 +103,8 @@ social-misskey.workspace = true
 social-matrix.workspace = true
 social-vocechat.workspace = true
 social-line.workspace = true
+social-facebook.workspace = true
+social-instagram.workspace = true
 
 [profile.release]
 lto = "thin"

@@ -1,0 +1,13 @@
+[package]
+name = "social-meta"
+description = "Meta Graph API transport and Marketing API commands shared by social-cli's Facebook and Instagram"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+jiff.workspace = true
+serde_json.workspace = true
+social-core.workspace = true
+tracing.workspace = true

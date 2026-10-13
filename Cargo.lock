@@ -3939,7 +3939,9 @@ dependencies = [
  "social-dingtalk",
  "social-discord",
  "social-douyin",
+ "social-facebook",
  "social-feishu",
+ "social-instagram",
  "social-kook",
  "social-line",
  "social-matrix",
@@ -4052,6 +4054,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "social-facebook"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "regex",
+ "serde_json",
+ "social-core",
+ "social-meta",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "social-feishu"
 version = "0.1.0"
 dependencies = [
@@ -4063,6 +4079,21 @@ dependencies = [
  "social-core",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "social-instagram"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde_json",
+ "social-core",
+ "social-meta",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -4120,6 +4151,17 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "social-meta"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "serde_json",
+ "social-core",
+ "tracing",
 ]
 
 [[package]]

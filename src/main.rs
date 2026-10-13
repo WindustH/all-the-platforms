@@ -34,5 +34,7 @@ fn main() -> ExitCode {
   .platform::<social_matrix::Matrix>()
   .platform::<social_vocechat::VoceChat>()
   .platform::<social_line::Line>()
+  .platform::<social_facebook::Facebook>()
+  .platform::<social_instagram::Instagram>()
   .run()
 }
