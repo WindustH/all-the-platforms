@@ -9,7 +9,7 @@ use social_core::http::{Req, Resp, status_error};
 use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt, json};
 
 use crate::graphql::Op;
-use crate::web::Web;
+use crate::webapp::WebApp;
 
 /// The public bearer token of the web client.
 const BEARER: &str = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
@@ -22,7 +22,7 @@ const LOGIN_HINT: &str = "log in with `social twitter login --cookie 'auth_token
 
 pub struct Api {
   pub ctx: Ctx,
-  web: Web,
+  webapp: WebApp,
   guest: RefCell<Option<String>>,
 }
 
@@ -36,7 +36,7 @@ impl Api {
   pub fn new(ctx: Ctx) -> Self {
     Self {
       ctx,
-      web: Web::default(),
+      webapp: WebApp::default(),
       guest: RefCell::new(None),
     }
   }
@@ -68,6 +68,13 @@ impl Api {
       .await;
   }
 
+  /// Run a GraphQL mutation as the logged-in user, after the write pause.
+  pub async fn mutate(&self, op: &Op, variables: Value) -> Result<Value> {
+    self.require_login()?;
+    self.write_pause().await;
+    self.graphql(op, variables).await
+  }
+
   /// Run a GraphQL operation; `data` of the response on success.
   pub async fn graphql(&self, op: &Op, variables: Value) -> Result<Value> {
     if !self.logged_in() && !op.guest {
@@ -76,7 +83,7 @@ impl Api {
     let mut refreshed = false;
     let mut renewed = false;
     loop {
-      let id = self.web.query_id(&self.ctx, op);
+      let id = self.webapp.query_id(&self.ctx, op);
       let url = format!("{GRAPHQL}/{id}/{}", op.name);
       let req = if op.post {
         let mut body = json!({ "variables": variables, "queryId": id });
@@ -100,7 +107,7 @@ impl Api {
       let resp = req.send().await?;
       if resp.status.as_u16() == 404 && !refreshed {
         refreshed = true;
-        if self.web.refresh(&self.ctx).await {
+        if self.webapp.refresh(&self.ctx).await {
           tracing::debug!("{} returned 404; retrying with refreshed ids", op.name);
           continue;
         }
@@ -194,7 +201,7 @@ impl Api {
     } else {
       req = req.header("x-guest-token", self.guest_token().await?);
     }
-    if let Some(m) = self.web.material(&self.ctx).await {
+    if let Some(m) = self.webapp.material(&self.ctx).await {
       req = req.header("x-client-transaction-id", m.transaction_id(verb, path));
     }
     Ok(req)

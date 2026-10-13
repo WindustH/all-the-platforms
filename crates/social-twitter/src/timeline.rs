@@ -9,6 +9,12 @@ use crate::api::Api;
 use crate::graphql::Op;
 use crate::parse;
 
+/// Where a user timeline keeps its `instructions` (older and newer shapes).
+pub const USER_PATHS: &[&str] = &[
+  "data.user.result.timeline.timeline.instructions",
+  "data.user.result.timeline_v2.timeline.instructions",
+];
+
 /// Upstream page size for timelines.
 pub const PAGE_MAX: usize = 40;
 

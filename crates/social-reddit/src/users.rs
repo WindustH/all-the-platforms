@@ -1,9 +1,10 @@
-//! Accounts: the logged-in user, profiles, people search and a user's comments.
+//! Accounts: the logged-in user, profiles, people search, a user's comments
+//! and blocking.
 
-use social_core::{Comment, Error, Page, PageReq, Query, Result, User};
+use social_core::{Action, Comment, Error, Page, PageReq, Query, Result, User, ValueExt};
 
 use crate::api::Api;
-use crate::{listing, parse, refs};
+use crate::{listings, parse, refs};
 
 pub async fn whoami(api: &Api) -> Result<User> {
   let me = api.me().await?;
@@ -24,7 +25,7 @@ pub async fn user(api: &Api, arg: &str) -> Result<User> {
 
 pub async fn search(api: &Api, q: &Query, req: &PageReq) -> Result<Page<User>> {
   let query = vec![("q", q.keyword.clone())];
-  listing::page(api, "/users/search", query, req, |t| {
+  listings::page(api, "/users/search", query, req, |t| {
     parse::data(t, "t2").and_then(parse::user)
   })
   .await
@@ -34,8 +35,29 @@ pub async fn search(api: &Api, q: &Query, req: &PageReq) -> Result<Page<User>> {
 pub async fn comments(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Comment>> {
   let name = refs::user(arg)?;
   let query = vec![("sort", "new".into())];
-  listing::page(api, &format!("/user/{name}/comments"), query, req, |t| {
+  listings::page(api, &format!("/user/{name}/comments"), query, req, |t| {
     parse::comment(t, None)
   })
   .await
+}
+
+/// Block a user, or unblock them.
+/// Block a user, or unblock with `undo`.
+pub async fn block(api: &Api, arg: &str, undo: bool) -> Result<Action> {
+  let name = refs::user(arg)?;
+  if undo {
+    let me = api.me().await?;
+    let container = format!("t2_{}", me.str("id").unwrap_or_default());
+    let form = vec![
+      ("container", container),
+      ("name", name.clone()),
+      ("type", "enemy".into()),
+    ];
+    api.post("/r/all/api/unfriend", form).await?;
+    return Ok(Action::done("unblock", format!("u/{name}")));
+  }
+  api
+    .post("/api/block_user", vec![("name", name.clone())])
+    .await?;
+  Ok(Action::done("block", format!("u/{name}")))
 }

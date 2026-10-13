@@ -9,10 +9,10 @@ use super::window::{self, Window};
 use super::{Raw, denied, finish, granted, own_id, premium_required, public_counters};
 use crate::api::Api;
 use crate::graphql::{POST_AUDIENCE, POST_SERIES, POST_TOTALS};
-use crate::tweets;
+use crate::posts;
 
 pub async fn post(api: &Api, arg: &str, days: u32) -> Result<Insights> {
-  let post = tweets::read(api, arg).await?;
+  let post = posts::read(api, arg).await?;
   let text = post.title.clone().or_else(|| post.text.clone());
   let mut out = Insights {
     kind: "post".into(),

@@ -12,7 +12,7 @@ use crate::api::Api;
 use crate::graphql::{ACCOUNT_AUDIENCE, ACCOUNT_SERIES, CONTENT, FREE_ROLLUP};
 use crate::refs::{UserRef, tweet_url};
 use crate::timeline::PAGE_MAX;
-use crate::{tweets, users};
+use crate::{posts, users};
 
 /// Timeline pages to read for the posts of the window (without Premium).
 const MAX_PAGES: usize = 5;
@@ -88,6 +88,12 @@ async fn premium(
   out: &mut Insights,
   raw: &mut Raw,
 ) {
+  audience(api, window, out, raw).await;
+  content(api, id, handle, window, out, raw).await;
+}
+
+/// Engagements by age, gender, app, network and country; views by hour.
+async fn audience(api: &Api, window: Window, out: &mut Insights, raw: &mut Raw) {
   let (from, to) = window.millis();
   let variables = json!({
     "dimensions": DIMENSIONS,
@@ -115,6 +121,17 @@ async fn premium(
     }
     Err(e) => tracing::warn!("audience analytics: {e:?}"),
   }
+}
+
+/// The posts of the window ranked by views (the "Content" tab).
+async fn content(
+  api: &Api,
+  id: &str,
+  handle: Option<&str>,
+  window: Window,
+  out: &mut Insights,
+  raw: &mut Raw,
+) {
   let variables = json!({
     "rest_id": id,
     "from_time": window.start_iso(),
@@ -146,7 +163,13 @@ async fn premium(
 /// else of the last week, in `extra`), and totals of the posts published in
 /// the window (their current public counters).
 async fn free(api: &Api, id: &str, days: u32, out: &mut Insights, raw: &mut Raw) -> Result<()> {
-  let window = Window::last(days);
+  let has_rollup = rollup(api, id, days, out, raw).await;
+  own_posts(api, id, Window::last(days), has_rollup, out).await
+}
+
+/// The free metrics rollup; whether it covers the whole window (its totals
+/// are then the account's).
+async fn rollup(api: &Api, id: &str, days: u32, out: &mut Insights, raw: &mut Raw) -> bool {
   let recent = Window::last(days.min(FREE_DAYS));
   let variables = json!({
     "rest_id": id,
@@ -154,8 +177,7 @@ async fn free(api: &Api, id: &str, days: u32, out: &mut Insights, raw: &mut Raw)
     "to_time": recent.end_iso(),
     "requested_metrics": metrics::FREE_METRICS,
   });
-  let rollup = api.graphql(&FREE_ROLLUP, variables).await.and_then(granted);
-  let has_rollup = match rollup {
+  match api.graphql(&FREE_ROLLUP, variables).await.and_then(granted) {
     Ok(data) => {
       let sums = metrics::totals(data.list("data.result.result.free_metrics_rollup"));
       if days <= FREE_DAYS {
@@ -175,7 +197,18 @@ async fn free(api: &Api, id: &str, days: u32, out: &mut Insights, raw: &mut Raw)
       tracing::warn!("free analytics rollup: {e:?}");
       false
     }
-  };
+  }
+}
+
+/// Posts published in the window: their public counters summed (the totals
+/// when there is no rollup), posts per day and the top posts.
+async fn own_posts(
+  api: &Api,
+  id: &str,
+  window: Window,
+  has_rollup: bool,
+  out: &mut Insights,
+) -> Result<()> {
   let posts = recent_posts(api, id, window).await?;
   let mut sums: BTreeMap<String, u64> = BTreeMap::new();
   let mut per_day: BTreeMap<String, u64> = BTreeMap::new();
@@ -222,7 +255,7 @@ async fn recent_posts(api: &Api, id: &str, window: Window) -> Result<Vec<Post>> 
     size: PAGE_MAX,
   };
   for _ in 0..MAX_PAGES {
-    let page = tweets::user_posts(api, id, &req).await?;
+    let page = posts::user_posts(api, id, &req).await?;
     let own: Vec<Post> = page
       .items
       .into_iter()

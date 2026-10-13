@@ -4,7 +4,7 @@
 use social_core::{Error, ErrorCode, Media, Page, PageReq, Post, Query, Result, ValueExt};
 
 use crate::api::Api;
-use crate::{listing, parse, refs, video};
+use crate::{listings, parse, refs, videos};
 
 pub const SEARCH_SORTS: &[&str] = &["relevance", "hot", "top", "new", "comments"];
 pub const TIME_RANGES: &[&str] = &["hour", "day", "week", "month", "year", "all"];
@@ -22,13 +22,13 @@ pub async fn search(api: &Api, q: &Query, req: &PageReq) -> Result<Page<Post>> {
   if let Some(t) = &q.filter {
     query.push(("t", t.clone()));
   }
-  listing::posts(api, "/search", query, req).await
+  listings::posts(api, "/search", query, req).await
 }
 
 /// `r/popular` (default) or `r/all`, hot first.
 pub async fn hot(api: &Api, category: Option<&str>, req: &PageReq) -> Result<Page<Post>> {
   let sub = category.unwrap_or("popular");
-  listing::posts(api, &format!("/r/{sub}/hot"), Vec::new(), req).await
+  listings::posts(api, &format!("/r/{sub}/hot"), Vec::new(), req).await
 }
 
 /// The front page of a logged-in account, `r/popular` otherwise.
@@ -40,7 +40,7 @@ pub async fn feed(api: &Api, kind: Option<&str>, req: &PageReq) -> Result<Page<P
     let kind = kind.filter(|k| *k != "best").unwrap_or("hot");
     format!("/r/popular/{kind}")
   };
-  listing::posts(api, &path, Vec::new(), req).await
+  listings::posts(api, &path, Vec::new(), req).await
 }
 
 /// One subreddit in `sort` order; `time` ranges `top` and `controversial`.
@@ -53,13 +53,13 @@ pub async fn subreddit(
 ) -> Result<Page<Post>> {
   let name = refs::subreddit(sub)?;
   let query = time.map(|t| ("t", t.to_owned())).into_iter().collect();
-  listing::posts(api, &format!("/r/{name}/{sort}"), query, req).await
+  listings::posts(api, &format!("/r/{name}/{sort}"), query, req).await
 }
 
 pub async fn user_posts(api: &Api, user: &str, req: &PageReq) -> Result<Page<Post>> {
   let name = refs::user(user)?;
   let query = vec![("sort", "new".into())];
-  listing::posts(api, &format!("/user/{name}/submitted"), query, req).await
+  listings::posts(api, &format!("/user/{name}/submitted"), query, req).await
 }
 
 /// `saved` or `upvoted` posts; Reddit shows them to their owner only.
@@ -70,7 +70,7 @@ pub async fn own(api: &Api, user: Option<&str>, which: &str, req: &PageReq) -> R
     None => api.username().await?,
   };
   let query = vec![("type", "links".into())];
-  listing::posts(api, &format!("/user/{name}/{which}"), query, req).await
+  listings::posts(api, &format!("/user/{name}/{which}"), query, req).await
 }
 
 /// Crossposts of a post, newest first (`/duplicates/<id>`, which lists them
@@ -80,15 +80,15 @@ pub async fn crossposts(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Post
   let id = refs::post(&api.ctx, arg).await?;
   let query = vec![("crossposts_only", "true".into()), ("sort", "new".into())];
   let path = format!("/duplicates/{id}");
-  let v = api.get(&path, &listing::paged(query, req)).await?;
-  let mut page = listing::of(v.at("1"), listing::post);
+  let v = api.get(&path, &listings::paged(query, req)).await?;
+  let mut page = listings::of(v.at("1"), listings::post);
   let mut seen = std::collections::HashSet::new();
   page.items.retain(|p| seen.insert(p.id.clone()));
   Ok(page)
 }
 
 /// A post without its comments.
-pub async fn fetch(api: &Api, arg: &str) -> Result<Post> {
+pub async fn post(api: &Api, arg: &str) -> Result<Post> {
   let id = refs::post(&api.ctx, arg).await?;
   let missing = || Error::not_found(format!("post {id} not found"));
   let query = [("limit", "1".into()), ("depth", "1".into())];
@@ -102,8 +102,8 @@ pub async fn fetch(api: &Api, arg: &str) -> Result<Post> {
 }
 
 pub async fn read(api: &Api, arg: &str) -> Result<Post> {
-  let mut post = fetch(api, arg).await?;
-  if let Err(e) = video::add_audio(api, &mut post).await {
+  let mut post = post(api, arg).await?;
+  if let Err(e) = videos::add_audio(api, &mut post).await {
     tracing::debug!("no audio track for {}: {e}", post.id);
   }
   Ok(post)
@@ -111,8 +111,8 @@ pub async fn read(api: &Api, arg: &str) -> Result<Post> {
 
 /// Media to download: the post's own, or the crossposted original's.
 pub async fn media(api: &Api, arg: &str) -> Result<(Post, Vec<Media>)> {
-  let mut post = fetch(api, arg).await?;
-  video::add_audio(api, &mut post).await?;
+  let mut post = post(api, arg).await?;
+  videos::add_audio(api, &mut post).await?;
   let media = match (&post.quoted, post.media.is_empty()) {
     (Some(parent), true) => parent.media.clone(),
     _ => post.media.clone(),

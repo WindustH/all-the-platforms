@@ -9,14 +9,14 @@ use social_core::{
 
 use crate::api::{Api, WWW};
 use crate::refs::{self, sub_url};
-use crate::{listing, parse};
+use crate::{listings, parse};
 
 /// Comments you saved.
 pub async fn saved_comments(api: &Api, req: &PageReq) -> Result<Page<Comment>> {
   api.require_login()?;
   let name = api.username().await?;
   let query = vec![("type", "comments".into())];
-  listing::page(api, &format!("/user/{name}/saved"), query, req, |t| {
+  listings::page(api, &format!("/user/{name}/saved"), query, req, |t| {
     parse::comment(t, None)
   })
   .await
@@ -108,7 +108,7 @@ pub async fn search_in(
   if let Some(t) = time {
     query.push(("t", t.to_owned()));
   }
-  listing::posts(api, &format!("/r/{name}/search"), query, req).await
+  listings::posts(api, &format!("/r/{name}/search"), query, req).await
 }
 
 /// Posts linking to a domain (`github.com`).
@@ -128,5 +128,5 @@ pub async fn domain(
     return Err(Error::input(format!("not a domain: {domain}")));
   }
   let query = time.map(|t| ("t", t.to_owned())).into_iter().collect();
-  listing::posts(api, &format!("/domain/{host}/{sort}"), query, req).await
+  listings::posts(api, &format!("/domain/{host}/{sort}"), query, req).await
 }

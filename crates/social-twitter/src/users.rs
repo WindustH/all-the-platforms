@@ -3,7 +3,7 @@
 //! shown as collections.
 
 use social_core::{
-  Collection, Error, ErrorCode, Page, PageReq, Query, Result, User, Value, ValueExt, json,
+  Collection, Error, ErrorCode, Page, PageReq, Query, Result, User, ValueExt, json,
 };
 
 use crate::api::{Api, REST};
@@ -12,14 +12,10 @@ use crate::graphql::{
   USER_BY_REST_ID, USER_BY_SCREEN_NAME,
 };
 use crate::parse;
-use crate::refs::{self, UserRef, list_url};
+use crate::posts;
+use crate::refs::{self, UserRef};
 use crate::timeline::{self, Timeline, vars, with};
-use crate::tweets;
 
-const USER_TIMELINE: &[&str] = &[
-  "data.user.result.timeline.timeline.instructions",
-  "data.user.result.timeline_v2.timeline.instructions",
-];
 pub const SEARCH_TIMELINE: &[&str] =
   &["data.search_by_raw_query.search_timeline.timeline.instructions"];
 
@@ -87,7 +83,15 @@ async fn people(api: &Api, op: &Op, arg: &str, req: &PageReq) -> Result<Page<Use
     vars(req),
     json!({ "userId": id, "includePromotedContent": false }),
   );
-  timeline::page(api, op, variables, USER_TIMELINE, req, timeline::users).await
+  timeline::page(
+    api,
+    op,
+    variables,
+    timeline::USER_PATHS,
+    req,
+    timeline::users,
+  )
+  .await
 }
 
 pub async fn followers(api: &Api, arg: &str, req: &PageReq) -> Result<Page<User>> {
@@ -125,7 +129,7 @@ pub async fn likers(api: &Api, arg: &str, req: &PageReq) -> Result<Page<User>> {
   let path = "data.favoriters_timeline.timeline.instructions";
   let page = engaged(api, &FAVORITERS, &id, path, req).await?;
   if page.items.is_empty() && req.cursor.is_none() {
-    let tweet = tweets::read(api, &id).await?;
+    let tweet = posts::read(api, &id).await?;
     let own = user_id_or_self(api, None).await?;
     if tweet.author.as_ref().is_some_and(|a| a.id != own) {
       let hint =
@@ -180,7 +184,7 @@ pub async fn search_lists(api: &Api, q: &Query, req: &PageReq) -> Result<Page<Co
     req,
     |tl: &Timeline| {
       tl.items()
-        .filter_map(|(_, item)| list(item.at("list")))
+        .filter_map(|(_, item)| parse::list(item.at("list")))
         .collect()
     },
   )
@@ -198,35 +202,15 @@ pub async fn lists(api: &Api, arg: Option<&str>, req: &PageReq) -> Result<Page<C
     api,
     &LIST_OWNERSHIPS,
     variables,
-    USER_TIMELINE,
+    timeline::USER_PATHS,
     req,
     |tl: &Timeline| {
       tl.items()
-        .filter_map(|(_, item)| list(item.at("list")))
+        .filter_map(|(_, item)| parse::list(item.at("list")))
         .collect()
     },
   )
   .await
-}
-
-pub fn list(v: &Value) -> Option<Collection> {
-  let id = v.str("id_str")?;
-  let mut c = Collection {
-    kind: "list".into(),
-    name: v.str("name").unwrap_or_default(),
-    description: v.str("description"),
-    url: Some(list_url(&id)),
-    items: v.count("member_count"),
-    followers: v.count("subscriber_count"),
-    owner: parse::user(v.at("user_results.result")),
-    raw: Some(v.clone()),
-    id,
-    ..Collection::default()
-  };
-  if let Some(mode) = v.str("mode") {
-    c.extra.insert("mode".into(), mode.to_lowercase().into());
-  }
-  Some(c)
 }
 
 /// Bookmark folders of the logged-in account (a Premium feature).

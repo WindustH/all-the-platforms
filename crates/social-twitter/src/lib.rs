@@ -9,24 +9,24 @@
 mod account;
 mod api;
 mod comments;
-mod community;
-mod dm;
+mod communities;
 mod extra;
 mod graphql;
 mod insights;
 mod lists;
-mod notify;
+mod messages;
+mod notifications;
 mod parse;
+mod posts;
 mod refs;
 mod sign;
 mod spaces;
 mod tabs;
 mod timeline;
 mod trends;
-mod tweets;
-mod upload;
+mod uploads;
 mod users;
-mod web;
+mod webapp;
 mod write;
 
 use std::time::Duration;
@@ -120,7 +120,7 @@ impl Platform for Twitter {
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    tweets::search(&self.api, query, page).await
+    posts::search(&self.api, query, page).await
   }
 
   async fn search_users(&self, query: &Query, page: &PageReq) -> Result<Page<User>> {
@@ -137,11 +137,11 @@ impl Platform for Twitter {
   }
 
   async fn feed(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    tweets::feed(&self.api, kind, page).await
+    posts::feed(&self.api, kind, page).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    tweets::read(&self.api, post).await
+    posts::read(&self.api, post).await
   }
 
   async fn comments(
@@ -164,7 +164,7 @@ impl Platform for Twitter {
 
   /// Quotes; retweets have no post of their own (`retweeters` lists their accounts).
   async fn reposts(&self, post: &str, page: &PageReq) -> Result<Page<Post>> {
-    tweets::quotes(&self.api, post, page).await
+    posts::quotes(&self.api, post, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
@@ -172,7 +172,7 @@ impl Platform for Twitter {
   }
 
   async fn user_posts(&self, user: &str, page: &PageReq) -> Result<Page<Post>> {
-    tweets::user_posts(&self.api, user, page).await
+    posts::user_posts(&self.api, user, page).await
   }
 
   async fn followers(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
@@ -193,15 +193,15 @@ impl Platform for Twitter {
     folder: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Post>> {
-    tweets::bookmarks(&self.api, user, folder, page).await
+    posts::bookmarks(&self.api, user, folder, page).await
   }
 
   async fn likes(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    tweets::likes(&self.api, user, page).await
+    posts::likes(&self.api, user, page).await
   }
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    notify::list(&self.api, kind, page).await
+    notifications::list(&self.api, kind, page).await
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
@@ -238,9 +238,10 @@ impl Platform for Twitter {
 
   /// A post, or a direct message (`CONVERSATION/MESSAGE`).
   async fn delete(&self, post: &str) -> Result<Action> {
-    match dm::message_ref(post).filter(|_| dm::is_dm_ref(post)) {
-      Some((conv, id)) => dm::delete(&self.api, &conv, &id).await,
-      None => write::delete(&self.api, post, "delete").await,
+    if messages::is_dm_ref(post) {
+      messages::delete(&self.api, post).await
+    } else {
+      write::delete(&self.api, post, "delete").await
     }
   }
 
@@ -250,32 +251,27 @@ impl Platform for Twitter {
 
   /// Direct-message conversations.
   async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
-    if parent.is_some() {
-      return Err(social_core::Error::input(
-        "direct messages have no parents; for communities use `community`",
-      ));
-    }
-    dm::chats(&self.api, page).await
+    messages::chats(&self.api, parent, page).await
   }
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
-    dm::messages(&self.api, chat, page).await
+    messages::messages(&self.api, chat, page).await
   }
 
   async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
-    dm::send(&self.api, chat, message).await
+    messages::send(&self.api, chat, message).await
   }
 
   async fn members(&self, chat: &str, _page: &PageReq) -> Result<Page<User>> {
-    dm::members(&self.api, chat).await
+    messages::members(&self.api, chat).await
   }
 
   async fn react(&self, post: &str, emoji: &str, undo: bool) -> Result<Action> {
-    dm::react(&self.api, post, emoji, undo).await
+    messages::react(&self.api, post, emoji, undo).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
-    dm::listen(&self.api, chats, out).await
+    messages::listen(&self.api, chats, out).await
   }
 
   /// Full analytics need X Premium; see `insights` for what is left without it.

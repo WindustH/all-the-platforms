@@ -13,11 +13,6 @@ use crate::refs;
 use crate::timeline::{self, vars, with};
 use crate::users;
 
-const USER_TIMELINE: &[&str] = &[
-  "data.user.result.timeline.timeline.instructions",
-  "data.user.result.timeline_v2.timeline.instructions",
-];
-
 /// A profile tab other than the posts (`user-posts`).
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum Tab {
@@ -57,7 +52,7 @@ pub async fn tab(api: &Api, arg: &str, tab: Tab, req: &PageReq) -> Result<Page<P
     api,
     tab.op(),
     variables,
-    USER_TIMELINE,
+    timeline::USER_PATHS,
     req,
     timeline::posts,
   )
@@ -77,7 +72,15 @@ pub async fn followers(api: &Api, arg: &str, verified: bool, req: &PageReq) -> R
     vars(req),
     json!({ "userId": id, "includePromotedContent": false }),
   );
-  timeline::page(api, op, variables, USER_TIMELINE, req, timeline::users).await
+  timeline::page(
+    api,
+    op,
+    variables,
+    timeline::USER_PATHS,
+    req,
+    timeline::users,
+  )
+  .await
 }
 
 /// Posts X considers similar to a tweet (Premium accounts see them).

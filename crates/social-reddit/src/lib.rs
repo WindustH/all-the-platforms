@@ -9,26 +9,23 @@
 
 mod api;
 mod comments;
-mod community;
 mod extra;
-mod inbox;
 mod insights;
 mod library;
-mod listen;
-mod listing;
-mod manage;
+mod listings;
+mod live;
+mod messages;
+mod moderation;
 mod multis;
+mod notifications;
 mod oauth;
 mod parse;
-mod pm;
 mod posts;
-mod poststats;
 mod refs;
-mod subs;
-mod thread;
-mod upload;
+mod subreddits;
+mod uploads;
 mod users;
-mod video;
+mod videos;
 mod write;
 
 use std::collections::BTreeMap;
@@ -95,7 +92,7 @@ impl Platform for Reddit {
       hot_category: &["popular", "all"],
       feed_kind: posts::FEED_KINDS,
       comment_sort: comments::SORTS,
-      notification_kind: inbox::KINDS,
+      notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_millis(1000),
     guide: include_str!("../GUIDE.md"),
@@ -136,7 +133,7 @@ impl Platform for Reddit {
   }
 
   async fn search_topics(&self, query: &Query, page: &PageReq) -> Result<Page<Collection>> {
-    subs::search(&self.api, query, page).await
+    subreddits::search(&self.api, query, page).await
   }
 
   async fn hot(&self, category: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
@@ -155,19 +152,19 @@ impl Platform for Reddit {
     if parent.is_some() {
       return Err(Error::input("Reddit message threads have no parent"));
     }
-    pm::chats(&self.api, page).await
+    messages::chats(&self.api, page).await
   }
 
   async fn messages(&self, chat: &str, _page: &PageReq) -> Result<Page<Post>> {
-    pm::messages(&self.api, chat).await
+    messages::messages(&self.api, chat).await
   }
 
   async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
-    pm::send(&self.api, chat, message).await
+    messages::send(&self.api, chat, message).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
-    listen::run(&self.api, chats, out).await
+    live::listen(&self.api, chats, out).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
@@ -200,7 +197,7 @@ impl Platform for Reddit {
   }
 
   async fn collections(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
-    subs::subscriptions(&self.api, user, page).await
+    subreddits::subscriptions(&self.api, user, page).await
   }
 
   async fn favorites(
@@ -220,11 +217,11 @@ impl Platform for Reddit {
   }
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    inbox::list(&self.api, kind, page).await
+    notifications::list(&self.api, kind, page).await
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    inbox::unread(&self.api).await
+    notifications::unread(&self.api).await
   }
 
   async fn like(&self, post: &str, undo: bool) -> Result<Action> {
@@ -245,7 +242,7 @@ impl Platform for Reddit {
   }
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
-    subs::subscribe(&self.api, user, undo).await
+    subreddits::subscribe(&self.api, user, undo).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {

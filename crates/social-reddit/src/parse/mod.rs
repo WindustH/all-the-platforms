@@ -1,17 +1,21 @@
 //! Reddit JSON → core models. Things arrive as `{kind, data}`: `t1`
 //! comments, `t2` accounts, `t3` posts, `t4` messages, `t5` subreddits.
 
+mod collections;
 mod comment;
 mod media;
+mod messages;
 
 use social_core::text::{from_secs, html_to_text};
-use social_core::{Collection, Metrics, Notification, Post, User, UserStats, Value, ValueExt};
+use social_core::{Metrics, Notification, Post, User, UserStats, Value, ValueExt};
 
 use crate::api::WWW;
-use crate::refs::{post_url, sub_url, user_url};
+use crate::refs::{post_url, user_url};
 
+pub use collections::{multireddit, subreddit};
 pub use comment::{comment, comment_node};
 pub use media::reddit_video;
+pub use messages::thread;
 
 /// The `data` of a thing of this kind.
 pub fn data<'a>(thing: &'a Value, kind: &str) -> Option<&'a Value> {
@@ -44,13 +48,18 @@ fn flag(d: &Value, key: &str) -> Option<Value> {
 /// The author of a post or comment (`None` for deleted accounts).
 fn author(d: &Value) -> Option<User> {
   let name = d.str("author").filter(|n| n != "[deleted]")?;
-  Some(User {
-    id: d.str("author_fullname").unwrap_or_else(|| name.clone()),
-    url: Some(user_url(&name)),
-    handle: Some(name.clone()),
-    name,
+  Some(named(&name, d.str("author_fullname")))
+}
+
+/// An account known by its name only (and its id, when given).
+pub fn named(name: &str, id: Option<String>) -> User {
+  User {
+    id: id.unwrap_or_else(|| name.to_owned()),
+    url: Some(user_url(name)),
+    handle: Some(name.to_owned()),
+    name: name.to_owned(),
     ..User::default()
-  })
+  }
 }
 
 /// `likes` is the logged-in account's vote: true, false or null.
@@ -218,55 +227,6 @@ pub fn user(d: &Value) -> Option<User> {
   put(x, "nsfw", flag(profile, "over_18"));
   put(x, "inbox_count", d.u64("inbox_count").map(Value::from));
   Some(user)
-}
-
-/// A `t5` subreddit as a collection (`kind` is `user` for profile subreddits).
-pub fn subreddit(d: &Value) -> Option<Collection> {
-  let name = d.str("display_name")?;
-  let is_user = d.str("subreddit_type").as_deref() == Some("user");
-  let mut c = Collection {
-    kind: if is_user { "user" } else { "subreddit" }.into(),
-    name: d
-      .str("display_name_prefixed")
-      .unwrap_or_else(|| name.clone()),
-    description: d
-      .first_str(&["public_description", "title"])
-      .map(|t| t.trim().to_owned()),
-    url: Some(
-      d.str("url")
-        .map(|u| format!("{WWW}{u}"))
-        .unwrap_or_else(|| sub_url(&name)),
-    ),
-    followers: d.count("subscribers"),
-    raw: Some(d.clone()),
-    id: name,
-    ..Collection::default()
-  };
-  let x = &mut c.extra;
-  put(x, "title", d.str("title").map(Value::from));
-  put(x, "fullname", d.str("name").map(Value::from));
-  put(
-    x,
-    "active",
-    d.first_count(&["active_user_count", "accounts_active"])
-      .map(Value::from),
-  );
-  put(
-    x,
-    "created_at",
-    time(d, "created_utc").map(|t| t.to_string().into()),
-  );
-  put(
-    x,
-    "icon",
-    d.first_str(&["community_icon", "icon_img"])
-      .map(|u| u.split('?').next().unwrap_or_default().to_owned())
-      .filter(|u| !u.is_empty())
-      .map(Value::from),
-  );
-  put(x, "nsfw", flag(d, "over18"));
-  put(x, "subscribed", flag(d, "user_is_subscriber"));
-  Some(c)
 }
 
 /// An inbox item: `t1` (comment reply, post reply, mention) or `t4` message.
