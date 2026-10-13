@@ -3118,6 +3118,7 @@ version = "0.1.0"
 dependencies = [
  "social-bilibili",
  "social-core",
+ "social-mp",
  "social-reddit",
  "social-twitter",
  "social-xhs",
@@ -3155,6 +3156,21 @@ dependencies = [
  "url",
  "wreq",
  "wreq-util",
+]
+
+[[package]]
+name = "social-mp"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "regex",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tracing",
+ "url",
 ]
 
 [[package]]

@@ -12,5 +12,6 @@ fn main() -> ExitCode {
   .platform::<social_bilibili::Bilibili>()
   .platform::<social_reddit::Reddit>()
   .platform::<social_youtube::YouTube>()
+  .platform::<social_mp::Mp>()
   .run()
 }

@@ -26,6 +26,7 @@ social-twitter = { path = "crates/social-twitter" }
 social-bilibili = { path = "crates/social-bilibili" }
 social-reddit = { path = "crates/social-reddit" }
 social-youtube = { path = "crates/social-youtube" }
+social-mp = { path = "crates/social-mp" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -56,6 +57,7 @@ social-twitter.workspace = true
 social-bilibili.workspace = true
 social-reddit.workspace = true
 social-youtube.workspace = true
+social-mp.workspace = true
 
 [profile.release]
 lto = "thin"
