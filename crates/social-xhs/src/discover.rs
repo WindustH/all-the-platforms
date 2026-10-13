@@ -1,17 +1,26 @@
-//! Note search and the home / category feeds.
+//! Note search, search suggestions and trending queries, and the home /
+//! channel feeds.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use social_core::{Error, Page, PageReq, Post, Query, Result, Value, ValueExt, json};
+use social_core::{Collection, Error, Page, PageReq, Post, Query, Result, Value, ValueExt, json};
 
 use crate::api::Client;
 use crate::refs::{self, SOURCE_FEED, SOURCE_SEARCH};
 use crate::{parse, sign};
 
 const SEARCH_NOTES: &str = "/api/sns/web/v1/search/notes";
+const SUGGEST: &str = "/api/sns/web/v1/search/recommend";
+const TRENDING: &str = "/api/sns/web/v1/search/trending/query";
 const HOMEFEED: &str = "/api/sns/web/v1/homefeed";
+const CHANNELS: &str = "/api/sns/web/v1/homefeed/category";
+
+/// `search --sort` values.
+pub const SEARCH_SORTS: &[&str] = &["general", "popular", "latest", "comments", "collects"];
+/// `search --filter` values: note type or publication time.
+pub const SEARCH_FILTERS: &[&str] = &["video", "image", "day", "week", "half-year"];
 
 /// `hot --category` values.
 pub const HOT_CATEGORIES: &[&str] = &[
@@ -25,6 +34,23 @@ pub const HOT_CATEGORIES: &[&str] = &[
   "gaming",
   "travel",
   "fitness",
+  "video",
+];
+
+/// `feed --type` values: the recommended feed, then the channels.
+pub const FEED_KINDS: &[&str] = &[
+  "recommend",
+  "fashion",
+  "food",
+  "cosmetics",
+  "movie",
+  "career",
+  "love",
+  "home",
+  "gaming",
+  "travel",
+  "fitness",
+  "video",
 ];
 const DEFAULT_HOT: &str = "food";
 
@@ -41,6 +67,7 @@ fn channel(category: &str) -> Option<&'static str> {
     "gaming" => "homefeed.gaming_v3",
     "travel" => "homefeed.travel_v3",
     "fitness" => "homefeed.fitness_v3",
+    "video" => "homefeed.video_v3",
     _ => return None,
   })
 }
@@ -53,17 +80,24 @@ pub async fn search(c: &Client, q: &Query, page: &PageReq) -> Result<Page<Post>>
     "general" => "general",
     "popular" => "popularity_descending",
     "latest" => "time_descending",
+    "comments" => "comment_descending",
+    "collects" => "collect_descending",
     other => return Err(Error::input(format!("unknown sort `{other}`"))),
   };
-  let note_type = match q.filter.as_deref() {
-    None | Some("all") => 0,
-    Some("video") => 1,
-    Some("image") => 2,
+  // One filter at a time: a note type, or how recent the notes are.
+  let (note_type, time) = match q.filter.as_deref() {
+    None | Some("all") => (0, "不限"),
+    Some("video") => (1, "不限"),
+    Some("image") => (2, "不限"),
+    Some("day") => (0, "一天内"),
+    Some("week") => (0, "一周内"),
+    Some("half-year") => (0, "半年内"),
     Some(other) => return Err(Error::input(format!("unknown filter `{other}`"))),
   };
+  let type_tag = ["不限", "视频笔记", "普通笔记"][usize::from(note_type)];
   let keyword = q.keyword.trim();
   let page_no = page.number_or(1);
-  let (search_id, fresh) = search_session(c, keyword, sort, note_type);
+  let (search_id, fresh) = search_session(c, keyword, &format!("{sort}/{time}"), note_type);
   if fresh {
     prewarm(c, keyword, &search_id).await;
   }
@@ -77,9 +111,9 @@ pub async fn search(c: &Client, q: &Query, page: &PageReq) -> Result<Page<Post>>
     "note_type": note_type,
     "ext_flags": [],
     "filters": [
-      {"tags": ["general"], "type": "sort_type"},
-      {"tags": ["不限"], "type": "filter_note_type"},
-      {"tags": ["不限"], "type": "filter_note_time"},
+      {"tags": [sort], "type": "sort_type"},
+      {"tags": [type_tag], "type": "filter_note_type"},
+      {"tags": [time], "type": "filter_note_time"},
       {"tags": ["不限"], "type": "filter_note_range"},
       {"tags": ["不限"], "type": "filter_pos_distance"},
     ],
@@ -142,6 +176,82 @@ fn search_session(c: &Client, keyword: &str, sort: &str, note_type: u8) -> (Stri
   let id = session.id.clone();
   store.cache_put("search-sessions", &map);
   (id, fresh)
+}
+
+/// Completions the search box offers for `keyword`.
+pub async fn suggest(c: &Client, keyword: &str) -> Result<Page<Collection>> {
+  c.require_login()?;
+  let data = c.get(SUGGEST, &[("keyword", keyword.trim())]).await?;
+  let items = data
+    .list("sug_items")
+    .iter()
+    .filter_map(|s| query(s.str("text")?, s.str("type")))
+    .collect();
+  Ok(Page::last(items))
+}
+
+/// What the search box suggests before typing (猜你想搜 / 热搜), personalized.
+pub async fn trending(c: &Client) -> Result<Page<Collection>> {
+  c.require_login()?;
+  let params = [
+    ("source", "Explore"),
+    ("search_type", "trend"),
+    ("last_query", ""),
+    ("last_query_time", "0"),
+    ("word_request_situation", "FIRST_ENTER"),
+    ("hint_word", ""),
+    ("hint_word_type", ""),
+    ("hint_word_request_id", ""),
+  ];
+  let data = c.get(TRENDING, &params).await?;
+  let items = data
+    .list("queries")
+    .iter()
+    .filter_map(|q| {
+      let word = q.first_str(&["search_word", "title"])?;
+      // `type` is `<recall>#<strategy>#…`; the strategy says why it is offered.
+      let why = q
+        .str("type")
+        .map(|t| t.split('#').nth(1).unwrap_or(&t).to_owned());
+      query(word, why)
+    })
+    .collect();
+  Ok(Page::last(items))
+}
+
+fn query(word: String, why: Option<String>) -> Option<Collection> {
+  Some(Collection {
+    id: word.clone(),
+    kind: "query".into(),
+    name: word,
+    description: why,
+    ..Collection::default()
+  })
+}
+
+/// The home page's channels, as `feed --type` / `hot --category` take them.
+pub async fn channels(c: &Client) -> Result<Page<Collection>> {
+  c.require_login()?;
+  let data = c.get(CHANNELS, &[]).await?;
+  let items = data
+    .list("categories")
+    .iter()
+    .filter_map(|ch| {
+      let id = ch.str("id")?;
+      let kind = HOT_CATEGORIES
+        .iter()
+        .find(|k| channel(k) == Some(id.as_str()))
+        .map(|k| (*k).to_owned());
+      Some(Collection {
+        name: ch.str("name").unwrap_or_default(),
+        kind: "channel".into(),
+        description: kind.map(|k| format!("feed --type {k}")),
+        id,
+        ..Collection::default()
+      })
+    })
+    .collect();
+  Ok(Page::last(items))
 }
 
 // ── feeds ───────────────────────────────────────────────────────────────

@@ -38,6 +38,24 @@ pub async fn notifications(
   Ok(Page::new(items, next))
 }
 
+/// Mark one notification tab (or all of them) as read.
+pub async fn mark_read(c: &Client, kind: Option<&str>) -> Result<social_core::Action> {
+  c.require_login()?;
+  let kinds: Vec<&str> = match kind {
+    Some(k) if KINDS.contains(&k) => vec![k],
+    Some(other) => return Err(Error::input(format!("unknown notification type `{other}`"))),
+    None => KINDS.to_vec(),
+  };
+  for k in &kinds {
+    c.post(
+      "/api/sns/web/v1/message/read",
+      &social_core::json!({"type": k}),
+    )
+    .await?;
+  }
+  Ok(social_core::Action::done("mark-read", kinds.join(",")))
+}
+
 /// `unread_count`, `mentions`, `likes`, `connections` and any other counter.
 pub async fn unread(c: &Client) -> Result<BTreeMap<String, u64>> {
   c.require_login()?;
