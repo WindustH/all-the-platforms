@@ -129,3 +129,41 @@ pub async fn transcript(api: &Api, arg: &str, lang: Option<&str>) -> Result<Tran
     cues: cues(&body),
   })
 }
+
+/// The caption tracks of a video (language, name, automatic or not) and the
+/// languages YouTube translates them into. Tracks come from the VR player
+/// (the web player may refuse the video); its translation list is often
+/// empty, so the web player's is used when it has one.
+pub async fn tracks(api: &Api, arg: &str) -> Result<Value> {
+  let id = refs::video(arg)?;
+  let v = video::mobile_player(api, &id).await?;
+  api::playable(&v)?;
+  let list = v.at("captions.playerCaptionsTracklistRenderer");
+  let tracks: Vec<Value> = list
+    .list("captionTracks")
+    .iter()
+    .map(|t| {
+      serde_json::json!({
+        "lang": t.str("languageCode"),
+        "name": crate::parse::text(t.at("name")),
+        "auto": t.str("kind").as_deref() == Some("asr"),
+        "translatable": t.bool("isTranslatable").unwrap_or(false),
+      })
+    })
+    .collect();
+  let codes = |list: &Value| -> Vec<Value> {
+    list
+      .list("translationLanguages")
+      .iter()
+      .filter_map(|l| l.str("languageCode"))
+      .map(Value::from)
+      .collect()
+  };
+  let mut targets = codes(list);
+  if targets.is_empty()
+    && let Ok(web) = video::player(api, &id).await
+  {
+    targets = codes(web.at("captions.playerCaptionsTracklistRenderer"));
+  }
+  Ok(serde_json::json!({ "video": id, "tracks": tracks, "translations": targets }))
+}

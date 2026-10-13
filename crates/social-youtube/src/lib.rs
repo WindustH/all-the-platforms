@@ -5,7 +5,8 @@
 //! (signed with `SAPISIDHASH`); streams and captions come from the Android
 //! VR client (see [`api`]). Posts are videos, Shorts and community posts;
 //! users are channels (`UC…` ids, @handles or links); collections are
-//! playlists.
+//! playlists. Live chats are the chat side: `listen` follows them and
+//! `send` writes to them ([`livechat`]); YouTube Music is in [`music`].
 
 mod account;
 mod api;
@@ -16,10 +17,14 @@ mod comment;
 mod extra;
 mod insights;
 mod library;
+mod livechat;
+mod music;
 mod notify;
 mod parse;
+mod playlists;
 mod proto;
 mod refs;
+mod rss;
 mod search;
 mod sign;
 mod stream;
@@ -29,9 +34,10 @@ mod write;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use social_core::output::Stream;
 use social_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Insights, Media, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Error, Insights, Media, Message,
+  Notification, Page, PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -76,6 +82,8 @@ impl Platform for YouTube {
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
+      Cap::Send,
+      Cap::Listen,
     ],
     choices: Choices {
       search_sort: search::SORTS,
@@ -229,6 +237,21 @@ impl Platform for YouTube {
 
   async fn media(&self, post: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
     stream::media(&self.api, post, audio_only).await
+  }
+
+  /// A message to the live chat of a stream.
+  async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
+    if !message.files.is_empty() || message.reply_to.is_some() {
+      return Err(Error::unsupported(
+        "send --attach / --reply-to to a live chat",
+      ));
+    }
+    livechat::send(&self.api, chat, &message.text).await
+  }
+
+  /// Follow the live chats of streams.
+  async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
+    livechat::listen(&self.api, chats, out).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

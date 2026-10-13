@@ -2,7 +2,7 @@
 //! playlists (Watch later `WL`, Liked videos `LL`, own ones), history; and
 //! any public playlist.
 
-use social_core::{Collection, Error, Page, PageReq, Post, Result, User};
+use social_core::{Action, Collection, Error, Page, PageReq, Post, Result, User, ValueExt, json};
 
 use crate::api::Api;
 use crate::channel::{self, Tab};
@@ -89,4 +89,47 @@ pub async fn history(api: &Api, req: &PageReq) -> Result<Page<Post>> {
   api.require_login()?;
   let l = browse::listing(api, "FEhistory", None, req).await?;
   Ok(Page::new(l.posts, l.next))
+}
+
+/// Remove a video from the watch history: its history entry carries the
+/// feedback token of "Remove from watch history" (YouTube.js
+/// `History.removeVideo`). Looks through the first `pages` pages.
+pub async fn forget(api: &Api, arg: &str, pages: usize) -> Result<Action> {
+  api.require_login()?;
+  let id = refs::video(arg)?;
+  let mut req = PageReq::default();
+  for _ in 0..pages.max(1) {
+    let l = browse::listing(api, "FEhistory", None, &req).await?;
+    let token = l.posts.iter().filter(|p| p.id == id).find_map(|p| {
+      let raw = p.raw.as_ref()?;
+      crate::parse::find(raw, "feedbackEndpoint")
+        .into_iter()
+        .find_map(|f| f.str("feedbackToken"))
+    });
+    if let Some(token) = token {
+      let body = json!({
+        "feedbackTokens": [token],
+        "isFeedbackTokenUnencrypted": false,
+        "shouldMerge": false,
+      });
+      let v = api.write("feedback", body).await?;
+      let ok = v
+        .list("feedbackResponses")
+        .iter()
+        .all(|r| r.bool("isProcessed") != Some(false));
+      if !ok {
+        return Err(Error::upstream(
+          "YouTube did not remove the video from history",
+        ));
+      }
+      return Ok(Action::done("history_remove", &id).with_url(refs::video_url(&id)));
+    }
+    match l.next {
+      Some(next) => req.cursor = Some(next),
+      None => break,
+    }
+  }
+  Err(Error::not_found(format!(
+    "{id} is not in the first {pages} pages of your watch history"
+  )))
 }

@@ -155,3 +155,38 @@ pub async fn is_mine(api: &Api, arg: &str) -> Result<bool> {
   let (mine, theirs) = (my_channel(api).await?, channel::id(api, arg).await?);
   Ok(mine == theirs)
 }
+
+/// Every channel the session can switch to (the account's own and brand
+/// accounts), from the channel switcher; the active one is `selected`.
+pub async fn accounts(api: &Api) -> Result<Vec<User>> {
+  api.require_login()?;
+  let body = json!({
+    "requestType": "ACCOUNTS_LIST_REQUEST_TYPE_CHANNEL_SWITCHER",
+    "callCircumstance": "SWITCHING_USERS_FULL",
+  });
+  let v = api.call("account/accounts_list", body).await?;
+  logged_in(api, &v)?;
+  Ok(
+    parse::find(&v, "accountItem")
+      .into_iter()
+      .map(|item| {
+        let name = parse::text(item.at("accountName")).unwrap_or_default();
+        let handle = handle(item);
+        let mut u = User {
+          id: handle.clone().unwrap_or_else(|| name.clone()),
+          avatar: parse::image(item.at("accountPhoto")),
+          handle,
+          name,
+          ..User::default()
+        };
+        if item.bool("isSelected") == Some(true) {
+          u.extra.insert("selected".into(), true.into());
+        }
+        if let Some(has) = item.bool("hasChannel") {
+          u.extra.insert("has_channel".into(), has.into());
+        }
+        u
+      })
+      .collect(),
+  )
+}

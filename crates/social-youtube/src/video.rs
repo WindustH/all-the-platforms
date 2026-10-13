@@ -86,23 +86,26 @@ pub async fn video(api: &Api, id: &str) -> Result<Post> {
   Ok(post)
 }
 
-/// A community post: `/post/<id>` resolves to its detail page.
-async fn community(api: &Api, id: &str) -> Result<Post> {
+/// The detail page of a community post: `/post/<id>` resolves to it.
+pub async fn post_page(api: &Api, id: &str) -> Result<Value> {
   let url = refs::post_url(id);
-  let missing = || Error::not_found(format!("post {id} not found"));
   let v = api
     .call("navigation/resolve_url", json!({ "url": url }))
     .await?;
   let endpoint = v.at("endpoint.browseEndpoint");
   let (Some(browse_id), params) = (endpoint.str("browseId"), endpoint.str("params")) else {
-    return Err(missing());
+    return Err(Error::not_found(format!("post {id} not found")));
   };
-  let page = browse::listing(api, &browse_id, params.as_deref(), &PageReq::default()).await?;
+  browse::page(api, &browse_id, params.as_deref(), &PageReq::default()).await
+}
+
+async fn community(api: &Api, id: &str) -> Result<Post> {
+  let page = parse::listing(&post_page(api, id).await?);
   page
     .posts
     .into_iter()
     .find(|p| p.id == id)
-    .ok_or_else(missing)
+    .ok_or_else(|| Error::not_found(format!("post {id} not found")))
 }
 
 pub async fn hot(api: &Api, category: Option<&str>, req: &PageReq) -> Result<Page<Post>> {

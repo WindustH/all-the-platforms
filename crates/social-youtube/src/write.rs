@@ -2,9 +2,12 @@
 //! bodies of YouTube.js `InteractionManager` / `PlaylistManager` and the web
 //! app's own `playlistEditEndpoint`s.
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use social_core::{Action, Error, Result, Value, ValueExt, json};
 
 use crate::api::Api;
+use crate::proto::Msg;
 use crate::{channel, refs};
 
 pub async fn like(api: &Api, post: &str, undo: bool) -> Result<Action> {
@@ -61,4 +64,39 @@ pub async fn follow(api: &Api, user: &str, undo: bool) -> Result<Action> {
     .write(path, json!({ "channelIds": [id], "params": params }))
     .await?;
   Ok(Action::done(name, &id).with_url(refs::channel_url(&id)))
+}
+
+pub const BELL: &[&str] = &["all", "personalized", "none"];
+
+/// The bell of a subscription: all, personalized or no notifications.
+/// Params as YouTube.js `setNotificationPreferences` writes them:
+/// `{1: channel, 2: {1: level}, 3: 0, 4: 4}`, base64 then URI-escaped.
+pub async fn bell(api: &Api, user: &str, level: &str) -> Result<Action> {
+  api.require_login()?;
+  let id = channel::id(api, user).await?;
+  let index = match level {
+    "personalized" => 1,
+    "all" => 2,
+    "none" => 3,
+    other => return Err(Error::input(format!("unknown bell setting `{other}`"))),
+  };
+  let raw = Msg::new()
+    .str(1, &id)
+    .msg(2, Msg::new().int(1, index))
+    .int(3, 0)
+    .int(4, 4)
+    .into_bytes();
+  let b64 = STANDARD.encode(raw);
+  let params: String = url::form_urlencoded::byte_serialize(b64.as_bytes()).collect();
+  api
+    .write(
+      "notification/modify_channel_preference",
+      json!({ "params": params }),
+    )
+    .await?;
+  Ok(
+    Action::done("bell", &id)
+      .with_url(refs::channel_url(&id))
+      .with_message(format!("notifications: {level}")),
+  )
 }
