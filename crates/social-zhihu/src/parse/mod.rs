@@ -3,6 +3,7 @@
 //! Bodies arrive as HTML (answers, articles, question details, comments) and
 //! are rendered with `html_to_text`; images inside them become `media`.
 
+mod discover;
 mod post;
 mod social;
 pub mod stats;
@@ -12,8 +13,9 @@ use social_core::{User, UserStats, Value, ValueExt};
 
 use crate::refs::people_url;
 
-pub use post::{answer, article, hot_item, pin, post, question};
-pub use social::{comment, folder, notification, topic};
+pub use discover::{column, daily_story, query};
+pub use post::{activity, answer, article, history_item, hot_item, pin, post, question, zvideo};
+pub use social::{card, comment, folder, notification, topic};
 
 pub fn user(v: &Value) -> User {
   let token = v.str("url_token");

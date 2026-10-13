@@ -184,6 +184,7 @@ pub async fn post(ctx: &Ctx, target: &Target, days: u32) -> Result<Insights> {
     Target::Answer(_) => "answer",
     Target::Article(_) => "article",
     Target::Pin(_) => "pin",
+    Target::Zvideo(_) => "zvideo",
   };
   let (from, to) = window(days);
   let one = [("type", kind), ("token", target.id())];

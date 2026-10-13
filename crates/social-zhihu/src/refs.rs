@@ -11,10 +11,13 @@ pub enum Target {
   Answer(String),
   Article(String),
   Pin(String),
+  /// A video (`https://www.zhihu.com/zvideo/<id>`).
+  Zvideo(String),
 }
 
 impl Target {
-  /// `q:<id>`, `a:<id>`, `p:<id>` (pin), `article:<id>`, a bare number (answer) or a URL.
+  /// `q:<id>`, `a:<id>`, `p:<id>` (pin), `article:<id>`, `v:<id>` (video), a
+  /// bare number (answer) or a URL.
   pub fn parse(arg: &str) -> Result<Self> {
     let arg = arg.trim();
     if let Some((prefix, id)) = arg.split_once(':')
@@ -26,6 +29,7 @@ impl Target {
         "a" | "answer" => Ok(Self::Answer(id)),
         "p" | "pin" => Ok(Self::Pin(id)),
         "article" => Ok(Self::Article(id)),
+        "v" | "zvideo" => Ok(Self::Zvideo(id)),
         _ => Err(bad(arg)),
       };
     }
@@ -54,6 +58,7 @@ impl Target {
           .map(Self::Question)
       })
       .or_else(|| find("pin").or_else(|| find("pins")).map(Self::Pin))
+      .or_else(|| find("zvideo").or_else(|| find("zvideos")).map(Self::Zvideo))
       .or_else(|| find("articles").or_else(|| find("p")).map(Self::Article))
       .ok_or_else(|| bad(arg))
   }
@@ -72,7 +77,11 @@ impl Target {
 
   pub fn id(&self) -> &str {
     match self {
-      Self::Question(id) | Self::Answer(id) | Self::Article(id) | Self::Pin(id) => id,
+      Self::Question(id)
+      | Self::Answer(id)
+      | Self::Article(id)
+      | Self::Pin(id)
+      | Self::Zvideo(id) => id,
     }
   }
 
@@ -83,6 +92,7 @@ impl Target {
       Self::Answer(_) => "answer",
       Self::Article(_) => "article",
       Self::Pin(_) => "pin",
+      Self::Zvideo(_) => "zvideo",
     }
   }
 
@@ -93,6 +103,7 @@ impl Target {
       Self::Answer(_) => "answers",
       Self::Article(_) => "articles",
       Self::Pin(_) => "pins",
+      Self::Zvideo(_) => "zvideos",
     }
   }
 
@@ -102,6 +113,7 @@ impl Target {
       Self::Answer(id) => format!("{WWW}/answer/{id}"),
       Self::Article(id) => article_url(id),
       Self::Pin(id) => format!("{WWW}/pin/{id}"),
+      Self::Zvideo(id) => format!("{WWW}/zvideo/{id}"),
     }
   }
 }

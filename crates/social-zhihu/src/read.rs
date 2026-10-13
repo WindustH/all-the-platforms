@@ -11,6 +11,7 @@ use crate::refs::Target;
 const ANSWER_INCLUDE: &str = "content,excerpt,voteup_count,comment_count,thanks_count,favlists_count,visit_count,reaction,created_time,updated_time,author,question";
 
 /// The hot list (热榜). The web endpoint needs a login; the mobile one serves the same list anonymously.
+/// Both ignore the old category names (`science`, `digital` ...): every one gives the full list.
 pub async fn hot(ctx: &Ctx) -> Result<Page<Post>> {
   let req = if ctx.http.has_cookie("z_c0") {
     api::get(ctx, &format!("{V3}/feed/topstory/hot-lists/total")).query("desktop", "true")
@@ -54,6 +55,7 @@ pub async fn read(ctx: &Ctx, target: &Target) -> Result<Post> {
     ),
     Target::Article(id) => (format!("{ZHUANLAN}/articles/{id}"), None, parse::article),
     Target::Pin(id) => (format!("{V4}/pins/{id}"), None, parse::pin),
+    Target::Zvideo(id) => (format!("{V4}/zvideos/{id}"), None, parse::zvideo),
   };
   let mut req = api::get(ctx, &url);
   if let Some(include) = include {

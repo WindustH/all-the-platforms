@@ -8,8 +8,12 @@
 mod account;
 mod api;
 mod comments;
+mod discover;
 mod extra;
+mod feeds;
+mod inbox;
 mod insights;
+mod lists;
 mod markup;
 mod parse;
 mod people;
@@ -60,6 +64,7 @@ impl Platform for Zhihu {
       Cap::Following,
       Cap::Collections,
       Cap::Favorites,
+      Cap::History,
       Cap::Notifications,
       Cap::Unread,
       Cap::Like,
@@ -76,7 +81,9 @@ impl Platform for Zhihu {
     choices: Choices {
       search_sort: &["default", "upvoted", "newest"],
       search_filter: &["answer", "article"],
+      feed_kind: &["recommend", "follow"],
       comment_sort: &["score", "ts"],
+      notification_kind: inbox::KINDS,
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(600),
@@ -126,8 +133,11 @@ impl Platform for Zhihu {
     read::hot(&self.ctx).await
   }
 
-  async fn feed(&self, _kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    read::feed(&self.ctx, page).await
+  async fn feed(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+    match kind {
+      Some("follow") => feeds::follow(&self.ctx, page).await,
+      _ => read::feed(&self.ctx, page).await,
+    }
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
@@ -189,8 +199,12 @@ impl Platform for Zhihu {
     people::folder_items(&self.ctx, &folder, page).await
   }
 
-  async fn notifications(&self, _kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    people::notifications(&self.ctx, page).await
+  async fn history(&self, page: &PageReq) -> Result<Page<Post>> {
+    feeds::history(&self.ctx, page).await
+  }
+
+  async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
+    inbox::notifications(&self.ctx, kind, page).await
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {

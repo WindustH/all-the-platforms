@@ -113,6 +113,74 @@ pub fn notification(v: &Value) -> Notification {
   }
 }
 
+/// A card of the app's notification timelines (`notifications/v3/...`):
+/// `title` is who, `sub_title` what they did, `text` the content it is about
+/// and `abstract_text` their words. Time-slice separators give `None`.
+pub fn card(v: &Value) -> Option<Notification> {
+  if v.str("card_type").as_deref() == Some("noti_time_slice")
+    || v.str("type").as_deref() == Some("empty")
+  {
+    return None;
+  }
+  let content = v.at("content");
+  let head = v.at("head");
+  let who = content.str("title").unwrap_or_default();
+  let did = content.str("sub_title").unwrap_or_default();
+  let mut text = format!("{who} {did}").trim().to_owned();
+  if let Some(said) = content.str("abstract_text") {
+    text = format!("{text}: {said}");
+  }
+  let token = head
+    .str("author.url_token")
+    .filter(|t| !t.is_empty() && !t.starts_with('-'))
+    .or_else(|| {
+      head
+        .str("target_link")
+        .and_then(|l| crate::refs::user(&l).ok())
+    });
+  let actor = (!who.is_empty()).then(|| User {
+    id: head
+      .str("author.id")
+      .or_else(|| token.clone())
+      .unwrap_or_default(),
+    name: head
+      .str("author.name")
+      .filter(|n| !n.is_empty())
+      .unwrap_or(who),
+    url: token.as_deref().map(people_url),
+    handle: token,
+    avatar: head.str("avatar_url"),
+    ..User::default()
+  });
+  let kind = match v.str("noti_type").as_deref() {
+    Some("comment") if did.contains("回复") => "reply",
+    Some("comment") if did.contains("提到") || did.contains('@') => "mention",
+    Some("comment") => "comment",
+    Some("like") => "like",
+    Some("favlist_me") => "favorite",
+    Some("follow") => "follow",
+    Some("message") => "message",
+    Some(_) | None => kind_of(&did),
+  };
+  let link = |l: Option<String>| l.filter(|l| l.starts_with("http"));
+  Some(Notification {
+    id: v.str("id").unwrap_or_default(),
+    kind: kind.into(),
+    text,
+    actor,
+    target: content
+      .str("text")
+      .or_else(|| v.str("target_source.text"))
+      .filter(|t| !t.is_empty()),
+    url: link(content.str("target_link"))
+      .or_else(|| link(v.str("target_source.target_link")))
+      .or_else(|| link(head.str("target_link"))),
+    created_at: time(v, &["created"]),
+    unread: v.bool("is_read").map(|r| !r),
+    raw: Some(v.clone()),
+  })
+}
+
 /// Coarse notification kind from Zhihu's verb phrase (`赞同了你的回答` ...);
 /// the first matching word wins, so `回复了你的评论` is a reply.
 fn kind_of(verb: &str) -> &'static str {

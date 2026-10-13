@@ -6,7 +6,7 @@ use social_core::cli::PageArgs;
 use social_core::{Ctx, Data, Error, Page, Result};
 
 use crate::refs::{self, Target};
-use crate::{insights, people, publish, read, write};
+use crate::{discover, feeds, insights, lists, people, publish, read, write};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Extra {
@@ -90,6 +90,108 @@ pub enum Extra {
     #[command(flatten)]
     page: PageArgs,
   },
+  /// What a user did lately: answered, posted, voted, followed (动态); yours without USER
+  Activities {
+    user: Option<String>,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Questions a user asked; yours without USER
+  UserQuestions {
+    user: Option<String>,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Videos of a user; yours without USER
+  UserVideos {
+    user: Option<String>,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Columns (专栏) a user writes in; yours without USER
+  UserColumns {
+    user: Option<String>,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Questions, topics, columns or favorites folders a user follows; yours without USER
+  UserFollowing {
+    user: Option<String>,
+    /// What to list
+    #[arg(short = 't', long = "type", default_value = "questions", value_parser = ["questions", "topics", "columns", "folders"])]
+    kind: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Who follows a question
+  QuestionFollowers {
+    /// Question id, q:<id> or URL
+    question: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Who follows a topic
+  TopicFollowers {
+    /// Topic id or URL
+    topic: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Articles of a column (专栏), newest first
+  Column {
+    /// Column id or URL (`https://zhuanlan.zhihu.com/<id>`)
+    column: String,
+    /// Show the column itself instead of its articles
+    #[arg(long)]
+    info: bool,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// What people search for right now (热搜)
+  HotSearch,
+  /// Zhihu Daily (知乎日报) stories, newest day first; no login needed
+  Daily {
+    /// Start at this day (YYYYMMDD)
+    #[arg(long)]
+    date: Option<String>,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Vote on an answer: up, down (反对) or neutral
+  Vote {
+    post: String,
+    #[arg(value_parser = ["up", "down", "neutral"])]
+    direction: String,
+  },
+  /// Like a comment, or take the like back
+  LikeComment {
+    /// Comment id
+    comment: String,
+    #[arg(long)]
+    undo: bool,
+  },
+  /// Block a user (屏蔽), or unblock with --undo
+  Block {
+    user: String,
+    #[arg(long)]
+    undo: bool,
+  },
+  /// Create a favorites folder (收藏夹)
+  CreateFolder {
+    title: String,
+    #[arg(short, long, default_value = "")]
+    description: String,
+    /// Only you can see it
+    #[arg(long)]
+    private: bool,
+  },
+  /// Delete one of your favorites folders
+  DeleteFolder {
+    /// Folder id (see `collections`)
+    folder: String,
+    #[arg(short, long)]
+    yes: bool,
+  },
   /// Your own posts with their lifetime numbers from the creator center (内容分析)
   Creations {
     /// Content type
@@ -152,7 +254,7 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
       ))
     }
     Extra::Topic { id, essence, page } => {
-      let id = topic_id(&id)?;
+      let id = topic_id(&ctx.collection_ref(&id)?)?;
       if essence {
         let posts = page.collect_dated(async |r| read::topic_essence(ctx, &id, &r).await);
         Ok(Data::Posts(posts.await?))
@@ -170,6 +272,89 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
       let token = refs::user(&ctx.user_ref(&user)?)?;
       let posts = page.collect_dated(async |r| people::pins(ctx, &token, &r).await);
       Ok(Data::Posts(posts.await?))
+    }
+    Extra::Activities { user, page } => {
+      let token = owner(ctx, user).await?;
+      let posts = page.collect_dated(async |r| feeds::activities(ctx, &token, &r).await);
+      Ok(Data::Posts(posts.await?))
+    }
+    Extra::UserQuestions { user, page } => {
+      let token = owner(ctx, user).await?;
+      let posts = page.collect_dated(async |r| lists::questions(ctx, &token, &r).await);
+      Ok(Data::Posts(posts.await?))
+    }
+    Extra::UserVideos { user, page } => {
+      let token = owner(ctx, user).await?;
+      let posts = page.collect_dated(async |r| lists::videos(ctx, &token, &r).await);
+      Ok(Data::Posts(posts.await?))
+    }
+    Extra::UserColumns { user, page } => {
+      let token = owner(ctx, user).await?;
+      let columns = page.collect(async |r| lists::columns(ctx, &token, &r).await);
+      Ok(Data::Collections(columns.await?))
+    }
+    Extra::UserFollowing { user, kind, page } => {
+      let token = owner(ctx, user).await?;
+      if kind == "questions" {
+        let posts = page.collect(async |r| lists::following_questions(ctx, &token, &r).await);
+        return Ok(Data::Posts(posts.await?));
+      }
+      let items = page.collect(async |r| lists::following(ctx, &token, &kind, &r).await);
+      Ok(Data::Collections(items.await?))
+    }
+    Extra::QuestionFollowers { question, page } => {
+      let id = Target::question(&ctx.post_ref(&question)?)?;
+      let users = page.collect(async |r| lists::question_followers(ctx, &id, &r).await);
+      Ok(Data::Users(users.await?))
+    }
+    Extra::TopicFollowers { topic, page } => {
+      let id = topic_id(&ctx.collection_ref(&topic)?)?;
+      let users = page.collect(async |r| lists::topic_followers(ctx, &id, &r).await);
+      Ok(Data::Users(users.await?))
+    }
+    Extra::Column { column, info, page } => {
+      let id = column_id(&ctx.collection_ref(&column)?)?;
+      if info {
+        let column = lists::column(ctx, &id).await?;
+        return Ok(Data::Collections(Page::last(vec![column])));
+      }
+      let posts = page.collect_dated(async |r| lists::column_items(ctx, &id, &r).await);
+      Ok(Data::Posts(posts.await?))
+    }
+    Extra::HotSearch => Ok(Data::Collections(discover::hot_search(ctx).await?)),
+    Extra::Daily { date, page } => {
+      let date = date.as_deref();
+      let posts = page.collect(async |r| discover::daily(ctx, date, &r).await);
+      Ok(Data::Posts(posts.await?))
+    }
+    Extra::Vote { post, direction } => {
+      let target = Target::parse(&ctx.post_ref(&post)?)?;
+      Ok(Data::Action(write::vote(ctx, &target, &direction).await?))
+    }
+    Extra::LikeComment { comment, undo } => Ok(Data::Action(
+      write::like_comment(ctx, comment.trim(), undo).await?,
+    )),
+    Extra::Block { user, undo } => {
+      let token = refs::user(&ctx.user_ref(&user)?)?;
+      Ok(Data::Action(write::block(ctx, &token, undo).await?))
+    }
+    Extra::CreateFolder {
+      title,
+      description,
+      private,
+    } => {
+      check(&title, &[])?;
+      let done = write::create_folder(ctx, title.trim(), &description, private);
+      Ok(Data::Action(done.await?))
+    }
+    Extra::DeleteFolder { folder, yes } => {
+      if !yes {
+        return Err(Error::input(format!(
+          "refusing to delete folder {folder} without --yes"
+        )));
+      }
+      let folder = ctx.collection_ref(&folder)?;
+      Ok(Data::Action(write::delete_folder(ctx, &folder).await?))
     }
     Extra::Creations { kind, page } => {
       let posts = page.collect_dated(async |r| insights::creations(ctx, &kind, &r).await);
@@ -201,6 +386,33 @@ fn check(title: &str, images: &[PathBuf]) -> Result<()> {
       missing.display()
     ))),
     None => Ok(()),
+  }
+}
+
+/// A user given as `#N`, token or link; the logged-in account when absent.
+async fn owner(ctx: &Ctx, user: Option<String>) -> Result<String> {
+  let token = match user {
+    Some(u) => Some(refs::user(&ctx.user_ref(&u)?)?),
+    None => None,
+  };
+  people::owner(ctx, token.as_deref()).await
+}
+
+/// A column id, bare or from `https://zhuanlan.zhihu.com/<id>` or
+/// `https://www.zhihu.com/column/<id>`.
+fn column_id(arg: &str) -> Result<String> {
+  let arg = arg.trim().trim_end_matches('/');
+  let id = ["zhuanlan.zhihu.com/", "/column/"]
+    .iter()
+    .find_map(|m| arg.split_once(m).map(|(_, rest)| rest))
+    .unwrap_or(arg)
+    .split(['/', '?', '#'])
+    .next()
+    .unwrap_or_default();
+  if !id.is_empty() && !id.contains(':') && id != "p" {
+    Ok(id.to_owned())
+  } else {
+    Err(Error::input(format!("not a Zhihu column: `{arg}`")))
   }
 }
 
