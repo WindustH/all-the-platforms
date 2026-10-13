@@ -19,5 +19,7 @@ fn main() -> ExitCode {
   .platform::<social_discord::Discord>()
   .platform::<social_tieba::Tieba>()
   .platform::<social_tiktok::TikTok>()
+  .platform::<social_facebook::Facebook>()
+  .platform::<social_instagram::Instagram>()
   .run()
 }

@@ -3938,6 +3938,8 @@ dependencies = [
  "social-core",
  "social-discord",
  "social-douyin",
+ "social-facebook",
+ "social-instagram",
  "social-mp",
  "social-reddit",
  "social-telegram",
@@ -4017,6 +4019,46 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "social-facebook"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "regex",
+ "serde_json",
+ "social-core",
+ "social-meta",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-instagram"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde_json",
+ "social-core",
+ "social-meta",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-meta"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "serde_json",
+ "social-core",
+ "tracing",
 ]
 
 [[package]]
