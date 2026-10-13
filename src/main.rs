@@ -26,5 +26,9 @@ fn main() -> ExitCode {
   .platform::<social_slack::Slack>()
   .platform::<social_mattermost::Mattermost>()
   .platform::<social_rocketchat::RocketChat>()
+  .platform::<social_onebot::OneBot>()
+  .platform::<social_kook::Kook>()
+  .platform::<social_satori::Satori>()
+  .platform::<social_qq::Qq>()
   .run()
 }

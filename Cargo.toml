@@ -40,6 +40,10 @@ social-wecom = { path = "crates/social-wecom" }
 social-slack = { path = "crates/social-slack" }
 social-mattermost = { path = "crates/social-mattermost" }
 social-rocketchat = { path = "crates/social-rocketchat" }
+social-onebot = { path = "crates/social-onebot" }
+social-kook = { path = "crates/social-kook" }
+social-satori = { path = "crates/social-satori" }
+social-qq = { path = "crates/social-qq" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -84,6 +88,10 @@ social-wecom.workspace = true
 social-slack.workspace = true
 social-mattermost.workspace = true
 social-rocketchat.workspace = true
+social-onebot.workspace = true
+social-kook.workspace = true
+social-satori.workspace = true
+social-qq.workspace = true
 
 [profile.release]
 lto = "thin"
