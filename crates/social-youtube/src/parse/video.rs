@@ -257,6 +257,40 @@ fn chapters(next: &Value) -> Option<(Value, bool)> {
   (!list.is_empty()).then(|| (Value::from(list), auto))
 }
 
+/// The audience-retention heatmap of a watch page (`macroMarkersListEntity`
+/// of type `MARKER_TYPE_HEATMAP`, as YouTube.js reads it): equal segments
+/// with an intensity between 0 and 1, and the "Most replayed" ranges.
+fn heatmap(next: &Value) -> Option<(Value, Value)> {
+  let list = find(next, "macroMarkersListEntity")
+    .into_iter()
+    .map(|e| e.at("markersList"))
+    .find(|l| l.str("markerType").as_deref() == Some("MARKER_TYPE_HEATMAP"))?;
+  let markers = list.list("markers");
+  let segment = markers.first()?.f64("durationMillis")? / 1000.0;
+  let intensity: Vec<Value> = markers
+    .iter()
+    .map(|m| {
+      let i = m.f64("intensityScoreNormalized").unwrap_or(0.0);
+      json!((i * 1000.0).round() / 1000.0)
+    })
+    .collect();
+  let replayed: Vec<Value> = list
+    .list("markersDecoration.timedMarkerDecorations")
+    .iter()
+    .filter_map(|d| {
+      Some(json!({
+        "start": d.f64("visibleTimeRangeStartMillis")? / 1000.0,
+        "end": d.f64("visibleTimeRangeEndMillis")? / 1000.0,
+        "peak": d.f64("decorationTimeMillis").map(|ms| ms / 1000.0),
+      }))
+    })
+    .collect();
+  Some((
+    json!({ "segment": segment, "intensity": intensity }),
+    Value::from(replayed),
+  ))
+}
+
 /// A watch page: `player` (details, microformat) plus `next` (owner, likes,
 /// chapters). Comments are counted separately.
 pub fn full(player: &Value, next: &Value) -> Option<Post> {
@@ -329,6 +363,12 @@ pub fn full(player: &Value, next: &Value) -> Option<Post> {
     .collect();
   if !hashtags.is_empty() {
     put(x, "hashtags", hashtags);
+  }
+  if let Some((map, replayed)) = heatmap(next) {
+    put(x, "heatmap", map);
+    if replayed.as_array().is_some_and(|r| !r.is_empty()) {
+      put(x, "most_replayed", replayed);
+    }
   }
   if let Some((list, auto)) = chapters(next) {
     put(x, "chapters", list);

@@ -53,6 +53,11 @@ impl Msg {
     self.0.is_empty()
   }
 
+  /// The encoded bytes.
+  pub fn into_bytes(self) -> Vec<u8> {
+    self.0
+  }
+
   /// URL-safe base64 with padding, the form continuation tokens travel in.
   pub fn encode(&self) -> String {
     URL_SAFE.encode(&self.0)

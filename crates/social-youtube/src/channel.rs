@@ -1,6 +1,6 @@
 //! Channels: resolving handles and links to ids, the profile (page header
-//! plus "about" panel) and the tabs (videos, Shorts, live streams,
-//! playlists, community posts).
+//! plus "about" panel), the tabs (videos, Shorts, live streams, playlists,
+//! community posts, releases, podcasts) and the search inside a channel.
 
 use std::time::Duration;
 
@@ -90,6 +90,8 @@ pub enum Tab {
   Streams,
   Playlists,
   Posts,
+  Releases,
+  Podcasts,
 }
 
 impl Tab {
@@ -100,6 +102,8 @@ impl Tab {
       Tab::Streams => "streams",
       Tab::Playlists => "playlists",
       Tab::Posts => "posts",
+      Tab::Releases => "releases",
+      Tab::Podcasts => "podcasts",
     }
   }
 
@@ -111,6 +115,8 @@ impl Tab {
       Tab::Streams => "EgdzdHJlYW1z8gYECgJ6AA==",
       Tab::Playlists => "EglwbGF5bGlzdHPyBgQKAkIA",
       Tab::Posts => "EgVwb3N0c_IGBAoCSgA=",
+      Tab::Releases => "EghyZWxlYXNlc_IGBQoDsgEA",
+      Tab::Podcasts => "Eghwb2RjYXN0c_IGBQoDugEA",
     }
   }
 }
@@ -204,6 +210,49 @@ pub async fn tab(api: &Api, arg: &str, tab: Tab, req: &PageReq) -> Result<Listin
     }
     for c in l.collections.iter_mut().filter(|c| c.owner.is_none()) {
       c.owner = Some(o.clone());
+    }
+  }
+  l.next = l.next.map(|t| format!("{id}:{t}"));
+  Ok(l)
+}
+
+/// Search inside a channel: the page's search tab (`expandableTabRenderer`)
+/// takes the query next to its browse params, as YouTube.js `Channel.search`.
+/// Cursors are `<channel id>:<token>` like the tabs'.
+pub async fn search(api: &Api, arg: &str, query: &str, req: &PageReq) -> Result<Listing> {
+  if let Some((id, token)) = req.cursor.as_deref().and_then(|c| c.split_once(':')) {
+    let next = PageReq {
+      cursor: Some(token.to_owned()),
+      size: req.size,
+    };
+    let mut l = browse::listing(api, "", None, &next).await?;
+    l.next = l.next.map(|t| format!("{id}:{t}"));
+    return Ok(l);
+  }
+  let id = id(api, arg).await?;
+  let v = page(api, &id, None).await?;
+  let params = parse::first(&v, "expandableTabRenderer")
+    .and_then(|t| t.str("endpoint.browseEndpoint.params"))
+    .ok_or_else(|| Error::not_found(format!("channel {id} has no search")))?;
+  let body = json!({ "browseId": id, "params": params, "query": query });
+  let v = api.call("browse", body).await?;
+  let content = parse::find(&v, "expandableTabRenderer")
+    .into_iter()
+    .find(|t| t.bool("selected") == Some(true))
+    .map(|t| t.at("content"))
+    .unwrap_or(&Value::Null);
+  let mut l = parse::listing(&json!({ "contents": content }));
+  if let Some(o) = parse::channel_page(&v) {
+    let owner = User {
+      id: o.id,
+      name: o.name,
+      handle: o.handle,
+      url: o.url,
+      verified: o.verified,
+      ..User::default()
+    };
+    for p in l.posts.iter_mut().filter(|p| p.author.is_none()) {
+      p.author = Some(owner.clone());
     }
   }
   l.next = l.next.map(|t| format!("{id}:{t}"));

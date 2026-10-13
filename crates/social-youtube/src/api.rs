@@ -9,6 +9,8 @@
 //!   proof-of-origin token. It does not take cookies, so it always runs
 //!   anonymously, with a visitor id: without one YouTube answers
 //!   "Sign in to confirm you're not a bot".
+//! - [`Client::Music`] (`WEB_REMIX`) is YouTube Music's web app, on
+//!   music.youtube.com, signed like the web client.
 //!
 //! The visitor id of anonymous calls (`responseContext.visitorData`) is kept
 //! in the cache and sent with them; a cookie session keeps its own.
@@ -24,6 +26,7 @@ use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 use crate::sign;
 
 pub const WWW: &str = "https://www.youtube.com";
+pub const MUSIC: &str = "https://music.youtube.com";
 const HL: &str = "en";
 const GL: &str = "US";
 const VISITOR_KEY: &str = "visitor";
@@ -35,10 +38,13 @@ const BOT_HINT: &str = "YouTube asks this network to prove it is not a bot: log 
 pub enum Client {
   Web,
   AndroidVr,
+  /// YouTube Music's web app (`WEB_REMIX`) on music.youtube.com.
+  Music,
 }
 
 const WEB_VERSION: &str = "2.20260623.01.00";
 const VR_VERSION: &str = "1.65.10";
+const MUSIC_VERSION: &str = "1.20261007.01.00";
 const VR_UA: &str = "com.google.android.apps.youtube.vr.oculus/1.65.10 \
   (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip";
 
@@ -48,6 +54,15 @@ impl Client {
     match self {
       Client::Web => ("1", WEB_VERSION),
       Client::AndroidVr => ("28", VR_VERSION),
+      Client::Music => ("67", MUSIC_VERSION),
+    }
+  }
+
+  /// Host of the client's API, also its `Origin` (and the signed origin).
+  fn host(self) -> &'static str {
+    match self {
+      Client::Music => MUSIC,
+      _ => WWW,
     }
   }
 
@@ -68,6 +83,11 @@ impl Client {
         "osVersion": "12L",
         "platform": "MOBILE",
         "userAgent": VR_UA,
+      }),
+      Client::Music => serde_json::json!({
+        "clientName": "WEB_REMIX",
+        "clientVersion": MUSIC_VERSION,
+        "platform": "DESKTOP",
       }),
     };
     client["hl"] = HL.into();
@@ -143,28 +163,29 @@ impl Api {
     retries: u32,
   ) -> Result<Value> {
     // A cookie session has its own visitor; the cached one is for anonymous calls.
-    let signed = client == Client::Web && self.logged_in();
+    let signed = client != Client::AndroidVr && self.logged_in();
     let visitor = self.visitor.borrow().clone().filter(|_| !signed);
     body["context"] = client.context(visitor.as_deref());
     let (id, version) = client.id();
+    let host = client.host();
     let http = &self.ctx.http;
     let mut req = http
-      .post(format!("{WWW}/youtubei/v1/{endpoint}?prettyPrint=false"))
+      .post(format!("{host}/youtubei/v1/{endpoint}?prettyPrint=false"))
       .json(&body)
       .header("x-youtube-client-name", id)
       .header("x-youtube-client-version", version)
-      .header("origin", WWW)
-      .header("referer", format!("{WWW}/"))
+      .header("origin", host)
+      .header("referer", format!("{host}/"))
       .retries(retries);
     if let Some(v) = &visitor {
       req = req.header("x-goog-visitor-id", v);
     }
     match client {
-      Client::Web => {
-        if let Some(auth) = sign::authorization(http, WWW) {
+      Client::Web | Client::Music => {
+        if let Some(auth) = sign::authorization(http, host) {
           req = req
             .header("authorization", auth)
-            .header("x-origin", WWW)
+            .header("x-origin", host)
             .header("x-goog-authuser", "0");
         }
       }

@@ -7,7 +7,9 @@
 //! 2025 the site offers two orders only, relevance and popularity; the old
 //! upload-date and rating orders are ignored by the server.
 
-use social_core::{Collection, Error, Page, PageReq, Post, Query, Result, User, Value, json};
+use social_core::{
+  Collection, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt, json,
+};
 
 use crate::api::Api;
 use crate::parse::{self, Listing};
@@ -31,6 +33,11 @@ pub const FILTERS: &[&str] = &[
   "hdr",
   "subtitles",
   "creative-commons",
+  "3d",
+  "360",
+  "vr180",
+  "location",
+  "purchased",
 ];
 
 /// Shelves of Shorts and suggestions mixed into the results.
@@ -63,9 +70,14 @@ fn params(sort: Option<&str>, filter: Option<&str>, kind: Option<u64>) -> Result
       "hd" => (4, 1),
       "subtitles" => (5, 1),
       "creative-commons" => (6, 1),
+      "3d" => (7, 1),
       "live" => (8, 1),
+      "purchased" => (9, 1),
       "4k" => (14, 1),
+      "360" => (15, 1),
+      "location" => (23, 1),
       "hdr" => (25, 1),
+      "vr180" => (26, 1),
       other => return Err(Error::input(format!("unknown filter `{other}`"))),
     };
     fields.push((field, value));
@@ -126,4 +138,41 @@ pub async fn playlists(api: &Api, q: &Query, req: &PageReq) -> Result<Page<Colle
   };
   let l = run(api, &q, Some(PLAYLIST), req).await?;
   Ok(Page::new(l.collections, l.next))
+}
+
+/// What the search box suggests for a prefix (`suggestqueries-clients6`, the
+/// endpoint YouTube.js `getSearchSuggestions` calls; it answers JSONP).
+pub async fn suggest(api: &Api, prefix: &str) -> Result<Vec<String>> {
+  let text = api
+    .ctx
+    .http
+    .get("https://suggestqueries-clients6.youtube.com/complete/search")
+    .queries([
+      ("client", "youtube"),
+      ("ds", "yt"),
+      ("hl", "en"),
+      ("gl", "US"),
+      ("q", prefix),
+    ])
+    .no_cookies()
+    .send()
+    .await?
+    .check()?
+    .text();
+  let json = text
+    .find('(')
+    .and_then(|start| Some(&text[start + 1..text.rfind(')')?]))
+    .ok_or_else(|| Error::upstream("unexpected suggestion response"))?;
+  let v: Value = serde_json::from_str(json)?;
+  Ok(
+    v.at("1")
+      .as_array()
+      .map(|list| {
+        list
+          .iter()
+          .filter_map(|s| s.at("0").as_str().map(str::to_owned))
+          .collect()
+      })
+      .unwrap_or_default(),
+  )
 }

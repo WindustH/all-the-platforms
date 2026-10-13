@@ -3,7 +3,7 @@
 use jiff::{Timestamp, tz::TimeZone};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-/// Parse counters such as `1234`, `1,234`, `1.2万`, `3亿`, `4.5k`, `2w`, `10+`.
+/// Parse counters such as `1234`, `1,234`, `1.2万`, `3亿`, `4.5k`, `2w`, `2.7B`, `10+`.
 pub fn parse_count(s: &str) -> Option<u64> {
   let s = s.trim().trim_end_matches('+').replace(',', "");
   if s.is_empty() {
@@ -14,6 +14,7 @@ pub fn parse_count(s: &str) -> Option<u64> {
     '亿' => (&s[..s.len() - '亿'.len_utf8()], 100_000_000.0),
     'k' | 'K' => (&s[..s.len() - 1], 1_000.0),
     'm' | 'M' => (&s[..s.len() - 1], 1_000_000.0),
+    'b' | 'B' => (&s[..s.len() - 1], 1_000_000_000.0),
     _ => (s.as_str(), 1.0),
   };
   num

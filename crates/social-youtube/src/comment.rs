@@ -19,7 +19,7 @@ use social_core::{
 use crate::api::Api;
 use crate::parse::{self, Entities};
 use crate::proto::Msg;
-use crate::refs;
+use crate::refs::{self, PostRef};
 use crate::video;
 
 pub const SORTS: &[&str] = &["top", "new"];
@@ -103,12 +103,55 @@ pub async fn list(
   sort: Option<&str>,
   req: &PageReq,
 ) -> Result<Page<Comment>> {
-  let id = refs::video(post)?;
+  let id = match refs::post(post)? {
+    PostRef::Video(id) => id,
+    PostRef::Post(id) => return post_comments(api, &id, sort, req).await,
+  };
   let token = match &req.cursor {
     Some(c) => c.clone(),
     None => section_token(&id, u64::from(sort == Some("new")), None),
   };
   page(&next(api, &token).await?, &id)
+}
+
+/// Comments of a community post. A post is a browse page, not a watch page:
+/// its comment section token sits in the `comment-item-section` of the
+/// post page and continues through `browse` (YouTube.js `getPostComments`).
+async fn post_comments(
+  api: &Api,
+  id: &str,
+  sort: Option<&str>,
+  req: &PageReq,
+) -> Result<Page<Comment>> {
+  let browse = |token: String| api.call("browse", json!({ "continuation": token }));
+  let v = match &req.cursor {
+    Some(c) => browse(c.clone()).await?,
+    None => {
+      let page = video::post_page(api, id).await?;
+      let token = parse::find(&page, "itemSectionRenderer")
+        .into_iter()
+        .filter(|s| s.str("sectionIdentifier").as_deref() == Some("comment-item-section"))
+        .find_map(|s| parse::first(s, "continuationItemRenderer").and_then(parse::token))
+        .ok_or_else(|| Error::not_found(format!("post {id} shows no comments")))?;
+      let v = browse(token).await?;
+      // The sort menu's second entry ("Newest first") carries its own token.
+      let newest = parse::first(&v, "sortFilterSubMenuRenderer")
+        .and_then(|m| m.list("subMenuItems").get(1).cloned())
+        .and_then(|i| i.str("serviceEndpoint.continuationCommand.token"));
+      match (sort, newest) {
+        (Some("new"), Some(token)) => browse(token).await?,
+        _ => v,
+      }
+    }
+  };
+  let mut page = page(&v, id)?;
+  for c in &mut page.items {
+    c.extra.insert(
+      "url".into(),
+      format!("{}?lc={}", refs::post_url(id), c.id).into(),
+    );
+  }
+  Ok(page)
 }
 
 /// Exact number of comments (from the header of the first page).
@@ -256,4 +299,36 @@ pub async fn delete(api: &Api, post: &str, comment: &str) -> Result<Action> {
     return Err(Error::upstream("YouTube refused to delete the comment"));
   }
   Ok(Action::done("delete_comment", comment))
+}
+
+/// Like or dislike a comment, or take that back (`undo`), with the commands
+/// the comment's toolbar surface offers the account (YouTube.js
+/// `CommentView.like` / `dislike` / `unlike` / `undislike`).
+pub async fn rate(
+  api: &Api,
+  post: &str,
+  comment: &str,
+  dislike: bool,
+  undo: bool,
+) -> Result<Action> {
+  let id = refs::video(post)?;
+  let comment = refs::comment(comment)?;
+  let s = surface(api, &id, &comment).await?;
+  let (key, name) = match (dislike, undo) {
+    (false, false) => ("likeCommand", "like_comment"),
+    (false, true) => ("unlikeCommand", "unlike_comment"),
+    (true, false) => ("dislikeCommand", "dislike_comment"),
+    (true, true) => ("undislikeCommand", "undislike_comment"),
+  };
+  let cmd = command(s.at(key), "performCommentActionEndpoint")
+    .ok_or_else(|| Error::upstream(format!("YouTube offers no {name} for this comment")))?;
+  let action = cmd
+    .str("performCommentActionEndpoint.action")
+    .ok_or_else(|| Error::upstream("YouTube sent an empty comment action"))?;
+  let path = api_path(cmd, "comment/perform_comment_action");
+  let v = api.write(&path, json!({ "actions": [action] })).await?;
+  if v.str("actionResults.0.status").as_deref() == Some("STATUS_FAILED") {
+    return Err(Error::upstream(format!("YouTube refused to {name}")));
+  }
+  Ok(Action::done(name, &comment).with_url(refs::comment_url(&id, &comment)))
 }
