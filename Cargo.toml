@@ -44,6 +44,10 @@ social-onebot = { path = "crates/social-onebot" }
 social-kook = { path = "crates/social-kook" }
 social-satori = { path = "crates/social-satori" }
 social-qq = { path = "crates/social-qq" }
+social-misskey = { path = "crates/social-misskey" }
+social-matrix = { path = "crates/social-matrix" }
+social-vocechat = { path = "crates/social-vocechat" }
+social-line = { path = "crates/social-line" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -92,6 +96,10 @@ social-onebot.workspace = true
 social-kook.workspace = true
 social-satori.workspace = true
 social-qq.workspace = true
+social-misskey.workspace = true
+social-matrix.workspace = true
+social-vocechat.workspace = true
+social-line.workspace = true
 
 [profile.release]
 lto = "thin"

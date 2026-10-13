@@ -30,5 +30,9 @@ fn main() -> ExitCode {
   .platform::<social_kook::Kook>()
   .platform::<social_satori::Satori>()
   .platform::<social_qq::Qq>()
+  .platform::<social_misskey::Misskey>()
+  .platform::<social_matrix::Matrix>()
+  .platform::<social_vocechat::VoceChat>()
+  .platform::<social_line::Line>()
   .run()
 }
