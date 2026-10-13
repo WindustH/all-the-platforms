@@ -3113,6 +3113,7 @@ dependencies = [
  "social-bilibili",
  "social-core",
  "social-reddit",
+ "social-tiktok",
  "social-twitter",
  "social-xhs",
  "social-youtube",
@@ -3161,6 +3162,22 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "social-core",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-tiktok"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde_json",
+ "sha2",
  "social-core",
  "tracing",
  "url",

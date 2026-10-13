@@ -133,6 +133,10 @@ pub struct Media {
   /// of the `Range` header; downloads then need `size` / `audio_size`.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub range_param: Option<String>,
+  /// Extra request headers the host wants for the download (a cookie the
+  /// stream URL is bound to ...); never printed.
+  #[serde(skip)]
+  pub headers: Vec<(String, String)>,
 }
 
 impl Media {
@@ -148,6 +152,7 @@ impl Media {
       size: None,
       audio_size: None,
       range_param: None,
+      headers: Vec::new(),
     }
   }
 
