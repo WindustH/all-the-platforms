@@ -135,10 +135,13 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
     )));
   }
   let user = p.whoami().await.map_err(|e| {
-    if e.code == ErrorCode::NotAuthenticated {
-      e.with_hint("the platform did not accept these cookies")
-    } else {
-      e
+    if e.code != ErrorCode::NotAuthenticated {
+      return e;
+    }
+    match source.as_str() {
+      "token" => e.with_hint("the platform did not accept this token"),
+      "qrcode" => e,
+      _ => e.with_hint("the platform did not accept these cookies"),
     }
   })?;
   let saved_at = Timestamp::now();
