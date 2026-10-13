@@ -4,7 +4,7 @@ use atp_core::cli::PageArgs;
 use atp_core::{Data, Page, Result};
 
 use crate::api::Api;
-use crate::{chats, messages};
+use crate::{chats, messages, pins};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -41,33 +41,35 @@ pub enum Command {
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;
   Ok(match command {
-    Command::Chat { chat } => Data::Collections(Page::last(vec![
-      chats::info(api, &ctx.collection_ref(&chat)?).await?,
-    ])),
+    Command::Chat { chat } => {
+      let chat = chats::chat(api, &ctx.collection_ref(&chat)?).await?;
+      Data::Collections(Page::last(vec![chat]))
+    }
     Command::SearchChats { query, page } => Data::Collections(
       page
         .collect(async |r| chats::search(api, &query, &r).await)
         .await?,
     ),
     Command::Pin { message, undo } => {
-      Data::Action(messages::pin(api, &ctx.post_ref(&message)?, undo).await?)
+      Data::Action(pins::pin(api, &ctx.post_ref(&message)?, undo).await?)
     }
     Command::Pins { chat, page } => {
       let chat = ctx.collection_ref(&chat)?;
       Data::Posts(
         page
-          .collect(async |r| messages::pins(api, &chat, &r).await)
+          .collect(async |r| pins::pins(api, &chat, &r).await)
           .await?,
       )
     }
-    Command::Forward { message, to } => Data::Action(
-      messages::forward(api, &ctx.post_ref(&message)?, &ctx.collection_ref(&to)?).await?,
-    ),
+    Command::Forward { message, to } => {
+      let (message, to) = (ctx.post_ref(&message)?, ctx.collection_ref(&to)?);
+      Data::Action(messages::forward(api, &message, &to).await?)
+    }
     Command::ReadBy { message, page } => {
       let message = ctx.post_ref(&message)?;
       Data::Users(
         page
-          .collect(async |r| messages::read_users(api, &message, &r).await)
+          .collect(async |r| messages::readers(api, &message, &r).await)
           .await?,
       )
     }

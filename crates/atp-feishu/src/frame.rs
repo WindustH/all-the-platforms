@@ -22,6 +22,24 @@ pub struct Frame {
 }
 
 impl Frame {
+  /// A control frame asking the server for a pong.
+  pub fn ping(service: i32) -> Self {
+    Frame {
+      service,
+      method: 0,
+      headers: vec![("type".into(), "ping".into())],
+      ..Frame::default()
+    }
+  }
+
+  /// The acknowledgement of this data frame.
+  pub fn ack(&self) -> Self {
+    let mut ack = self.clone();
+    ack.headers.push(("biz_rt".into(), "0".into()));
+    ack.payload = br#"{"code":200}"#.to_vec();
+    ack
+  }
+
   pub fn header(&self, key: &str) -> Option<&str> {
     self
       .headers

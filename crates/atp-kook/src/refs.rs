@@ -1,6 +1,7 @@
 //! Servers are `guild:<id>`, channels their bare id, direct chats
 //! `dm:<user id>`; messages are `CHAT/<message id>` (message ids are UUIDs).
 
+use atp_core::chat::split_message_id;
 use atp_core::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,7 +47,7 @@ pub struct MessageRef {
 
 pub fn message(arg: &str) -> Result<MessageRef> {
   let arg = arg.trim();
-  if let Some((c, id)) = arg.rsplit_once('/') {
+  if let Some((c, id)) = split_message_id(arg) {
     return Ok(MessageRef {
       chat: Some(chat(c)?),
       id: id.to_owned(),

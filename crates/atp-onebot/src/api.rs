@@ -10,6 +10,7 @@
 
 use std::time::Duration;
 
+use atp_core::credentials;
 use atp_core::socket::Socket;
 use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt, json};
 
@@ -31,7 +32,8 @@ pub struct Endpoint {
 impl Endpoint {
   /// `URL[|ACCESS_TOKEN][|WS_URL]`.
   pub fn parse(raw: &str) -> Result<Self> {
-    let mut parts = raw.split('|').map(str::trim);
+    let fields = credentials::fields(raw);
+    let mut parts = fields.iter().map(String::as_str);
     let url = parts
       .next()
       .unwrap_or_default()
@@ -74,12 +76,11 @@ pub struct Api {
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-    let env = var("ONEBOT_URL").and_then(|url| {
-      let mut e = Endpoint::parse(&url).ok()?;
-      e.token = var("ONEBOT_TOKEN").or(e.token);
-      e.ws = var("ONEBOT_WS_URL").or(e.ws);
-      Some(e)
+    let env = credentials::env("ONEBOT_URL").and_then(|url| {
+      let mut endpoint = Endpoint::parse(&url).ok()?;
+      endpoint.token = credentials::env("ONEBOT_TOKEN").or(endpoint.token);
+      endpoint.ws = credentials::env("ONEBOT_WS_URL").or(endpoint.ws);
+      Some(endpoint)
     });
     Self { ctx, env }
   }

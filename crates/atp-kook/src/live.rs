@@ -6,6 +6,8 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
+use atp_core::chat::message_id;
+use atp_core::live::Backoff;
 use atp_core::output::{Stream, note};
 use atp_core::text::from_millis;
 use atp_core::{Error, Post, Result, User, Value, ValueExt, json};
@@ -28,9 +30,13 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
     wanted.insert(refs::chat(c)?.id());
   }
   let mut failures = 0;
+  let mut backoff = Backoff::default();
   loop {
     match session(api, &me, &wanted, out).await {
-      Ok(()) => failures = 0,
+      Ok(()) => {
+        failures = 0;
+        backoff.reset();
+      }
       Err(e) => {
         failures += 1;
         if failures >= 3 {
@@ -40,7 +46,7 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
       }
     }
     note("the KOOK gateway closed; reconnecting");
-    tokio::time::sleep(Duration::from_secs_f64(rand::random_range(1.0..5.0))).await;
+    backoff.wait().await;
   }
 }
 
@@ -88,42 +94,61 @@ async fn session(api: &Api, me: &str, wanted: &HashSet<String>, out: &Stream) ->
 
 /// A gateway event as a post, or `None` for events not about messages.
 fn event(d: &Value, me: &str) -> Option<Post> {
-  let extra = d.at("extra");
   let direct = d.str("channel_type").as_deref() == Some("PERSON");
-  let author = d.str("author_id").unwrap_or_default();
-  let chat = if direct {
-    // In direct chats the target is the bot; the chat is the other person.
-    let other = if author == me {
-      d.str("target_id").unwrap_or_default()
-    } else {
-      author.clone()
-    };
-    Chat::Direct(other)
+  let chat = chat_of(d, me, direct);
+  if d.u64("type") == Some(255) {
+    system_event(d, chat, direct)
   } else {
-    Chat::Channel(d.str("target_id").unwrap_or_default())
-  };
-  if d.u64("type") != Some(255) {
-    let mut v = json!({
-      "id": d.str("msg_id"),
-      "type": d.u64("type"),
-      "content": extra.at("kmarkdown.raw_content").as_str().map(str::to_owned).or_else(|| d.str("content")),
-      "create_at": d.i64("msg_timestamp"),
-      "author": extra.at("author"),
-      "mention": extra.at("mention"),
-      "quote": extra.at("quote"),
-    });
-    if extra.at("attachments").is_object() {
-      v["attachments"] = extra.at("attachments").clone();
-    }
-    let name = extra.str("channel_name").map(|n| format!("#{n}"));
-    let mut p = parse::message(&v, &chat, name.as_deref());
-    if let Some(g) = extra.str("guild_id") {
-      p.extra.insert("guild".into(), json!(g));
-    }
-    p.raw = Some(d.clone());
-    return Some(p);
+    Some(message_event(d, &chat))
   }
-  // System events: what happened to which message.
+}
+
+/// The chat of an event. In direct chats the target is the bot; the chat
+/// is the other person.
+fn chat_of(d: &Value, me: &str, direct: bool) -> Chat {
+  if !direct {
+    return Chat::Channel(d.str("target_id").unwrap_or_default());
+  }
+  let author = d.str("author_id").unwrap_or_default();
+  if author == me {
+    Chat::Direct(d.str("target_id").unwrap_or_default())
+  } else {
+    Chat::Direct(author)
+  }
+}
+
+/// A new message, in the shape of the message list for [`parse::message`].
+fn message_event(d: &Value, chat: &Chat) -> Post {
+  let extra = d.at("extra");
+  let content = extra
+    .at("kmarkdown.raw_content")
+    .as_str()
+    .map(str::to_owned)
+    .or_else(|| d.str("content"));
+  let mut v = json!({
+    "id": d.str("msg_id"),
+    "type": d.u64("type"),
+    "content": content,
+    "create_at": d.i64("msg_timestamp"),
+    "author": extra.at("author"),
+    "mention": extra.at("mention"),
+    "quote": extra.at("quote"),
+  });
+  if extra.at("attachments").is_object() {
+    v["attachments"] = extra.at("attachments").clone();
+  }
+  let name = extra.str("channel_name").map(|n| format!("#{n}"));
+  let mut post = parse::message(&v, chat, name.as_deref());
+  if let Some(g) = extra.str("guild_id") {
+    post.extra.insert("guild".into(), json!(g));
+  }
+  post.raw = Some(d.clone());
+  post
+}
+
+/// System events: what happened to which message.
+fn system_event(d: &Value, chat: Chat, direct: bool) -> Option<Post> {
+  let extra = d.at("extra");
   let body = extra.at("body");
   let kind = match extra.str("type")?.as_str() {
     "updated_message" | "updated_private_message" => "edit",
@@ -134,13 +159,13 @@ fn event(d: &Value, me: &str) -> Option<Post> {
     "exited_guild" => "leave",
     _ => return None,
   };
-  let msg = body.str("msg_id").unwrap_or_default();
+  let message = body.str("msg_id").unwrap_or_default();
   let chat = match body.str("channel_id") {
     Some(c) if !direct => Chat::Channel(c),
     _ => chat,
   };
-  let mut p = Post {
-    id: format!("{}/{msg}", chat.id()),
+  let mut post = Post {
+    id: message_id(&chat.id(), &message),
     kind: kind.into(),
     text: body.str("content"),
     author: body.str("user_id").map(|u| User {
@@ -152,10 +177,10 @@ fn event(d: &Value, me: &str) -> Option<Post> {
     raw: Some(d.clone()),
     ..Post::default()
   };
-  p.extra.insert("chat".into(), json!(chat.id()));
-  p.extra.insert("message_id".into(), json!(msg));
+  post.extra.insert("chat".into(), json!(chat.id()));
+  post.extra.insert("message_id".into(), json!(message));
   if let Some(e) = body.str("emoji.name").or_else(|| body.str("emoji.id")) {
-    p.extra.insert("emoji".into(), json!(e));
+    post.extra.insert("emoji".into(), json!(e));
   }
-  Some(p)
+  Some(post)
 }

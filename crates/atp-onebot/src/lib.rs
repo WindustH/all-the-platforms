@@ -7,21 +7,26 @@
 //! `get_*_msg_history` extensions and `listen` the event websocket ([`live`]).
 
 mod api;
+mod chats;
 mod extra;
+mod groups;
 mod live;
-mod ops;
+mod login;
+mod messages;
 mod parse;
 mod refs;
+mod uploads;
+mod users;
 
 use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo,
-  Post, Result, User, json,
+  Post, Result, User,
 };
 
-use crate::api::{Api, Endpoint};
+use crate::api::Api;
 
 pub struct OneBot {
   api: Api,
@@ -65,7 +70,7 @@ impl Platform for OneBot {
   }
 
   async fn whoami(&self) -> Result<User> {
-    ops::whoami(&self.api).await
+    users::whoami(&self.api).await
   }
 
   fn logged_in(&self) -> bool {
@@ -73,45 +78,39 @@ impl Platform for OneBot {
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    let endpoint = Endpoint::parse(token)?;
-    self
-      .api
-      .call_at(&endpoint, "get_login_info", json!({}))
-      .await?;
-    self.api.save(&endpoint);
-    Ok(())
+    login::login_token(&self.api, token).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    ops::read(&self.api, post).await
+    messages::read(&self.api, post).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    ops::user(&self.api, user).await
+    users::user(&self.api, user).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
-    ops::delete(&self.api, post).await
+    messages::delete(&self.api, post).await
   }
 
   async fn chats(&self, _parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
-    ops::chats(&self.api, page).await
+    chats::list(&self.api, page).await
   }
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
-    ops::messages(&self.api, chat, page).await
+    messages::list(&self.api, chat, page).await
   }
 
   async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
-    ops::send(&self.api, chat, message).await
+    messages::send(&self.api, chat, message).await
   }
 
   async fn members(&self, chat: &str, page: &PageReq) -> Result<Page<User>> {
-    ops::members(&self.api, chat, page).await
+    chats::members(&self.api, chat, page).await
   }
 
   async fn react(&self, post: &str, emoji: &str, undo: bool) -> Result<Action> {
-    ops::react(&self.api, post, emoji, undo).await
+    messages::react(&self.api, post, emoji, undo).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {

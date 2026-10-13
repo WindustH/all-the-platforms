@@ -3,7 +3,7 @@
 use atp_core::{Data, Page, Result};
 
 use crate::api::Api;
-use crate::groups;
+use crate::chats;
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -13,8 +13,9 @@ pub enum Command {
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
-    Command::Group { chat } => Data::Collections(Page::last(vec![
-      groups::info(api, &api.ctx.collection_ref(&chat)?).await?,
-    ])),
+    Command::Group { chat } => {
+      let group = chats::group(api, &api.ctx.collection_ref(&chat)?).await?;
+      Data::Collections(Page::last(vec![group]))
+    }
   })
 }

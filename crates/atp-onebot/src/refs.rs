@@ -2,6 +2,7 @@
 //! / `u:`); messages are `CHAT/<message_id>`, or a bare message id where
 //! the implementation can look it up alone (`get_msg`).
 
+use atp_core::chat::split_message_id;
 use atp_core::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,7 +47,7 @@ pub struct MessageRef {
 
 pub fn message(arg: &str) -> Result<MessageRef> {
   let arg = arg.trim();
-  if let Some((chat_part, id)) = arg.rsplit_once('/') {
+  if let Some((chat_part, id)) = split_message_id(arg) {
     return Ok(MessageRef {
       chat: Some(chat(chat_part)?),
       id: id.to_owned(),

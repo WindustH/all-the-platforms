@@ -27,11 +27,13 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
     Command::Departments { parent } => {
       Data::Collections(chats::departments(api, parent.as_deref()).await?)
     }
-    Command::Chat { chat } => Data::Collections(Page::last(vec![
-      chats::chat(api, &api.ctx.collection_ref(&chat)?).await?,
-    ])),
-    Command::CreateChat { name, users, owner } => Data::Collections(Page::last(vec![
-      chats::create_chat(api, &name, owner.as_deref(), &users).await?,
-    ])),
+    Command::Chat { chat } => {
+      let chat = chats::chat(api, &api.ctx.collection_ref(&chat)?).await?;
+      Data::Collections(Page::last(vec![chat]))
+    }
+    Command::CreateChat { name, users, owner } => {
+      let chat = chats::create_chat(api, &name, owner.as_deref(), &users).await?;
+      Data::Collections(Page::last(vec![chat]))
+    }
   })
 }

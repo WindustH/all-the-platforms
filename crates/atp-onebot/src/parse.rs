@@ -1,6 +1,7 @@
 //! OneBot payloads → the shared model. Messages arrive as segment arrays
 //! (`[{type, data}]`) or as CQ-code strings; both are read.
 
+use atp_core::chat::message_id;
 use atp_core::text::from_secs;
 use atp_core::{Collection, Media, MediaKind, Post, User, Value, ValueExt, json};
 
@@ -58,82 +59,94 @@ pub struct Content {
 }
 
 pub fn content(message: &Value) -> Content {
-  let mut c = Content {
+  let mut content = Content {
     text: String::new(),
     media: Vec::new(),
     reply_to: None,
     mentions: Vec::new(),
   };
   for seg in segments(message) {
-    let d = seg.at("data");
-    let url = d
-      .first_str(&["url", "file"])
-      .filter(|u| u.starts_with("http"));
-    match seg.str("type").as_deref().unwrap_or_default() {
-      "text" => c.text.push_str(&d.str("text").unwrap_or_default()),
-      "at" => {
-        let qq = d.str("qq").unwrap_or_default();
-        let name = d.str("name").filter(|n| !n.is_empty());
-        c.text.push_str(&match (&name, qq.as_str()) {
-          (_, "all") => "@全体成员".to_owned(),
-          (Some(n), _) => format!("@{n}"),
-          (None, q) => format!("@{q}"),
-        });
-        c.mentions.push(qq);
-      }
-      "face" => c
-        .text
-        .push_str(&format!("[face:{}]", d.str("id").unwrap_or_default())),
-      "mface" | "marketface" => c
-        .text
-        .push_str(&d.str("summary").unwrap_or_else(|| "[sticker]".into())),
-      "reply" => c.reply_to = d.str("id"),
-      "image" => {
-        if let Some(u) = url {
-          let gif = d.str("summary").is_some_and(|s| s.contains("动画"));
-          c.media.push(Media::new(
-            if gif {
-              MediaKind::Gif
-            } else {
-              MediaKind::Image
-            },
-            u,
-          ));
-        } else {
-          c.text.push_str("[image]");
-        }
-      }
-      "record" => match url {
-        Some(u) => c.media.push(Media::new(MediaKind::Audio, u)),
-        None => c.text.push_str("[voice]"),
-      },
-      "video" => match url {
-        Some(u) => c.media.push(Media::video(u)),
-        None => c.text.push_str("[video]"),
-      },
-      "file" => {
-        let name = d.first_str(&["name", "file"]).unwrap_or_default();
-        match url {
-          Some(u) => {
-            let mut m = Media::new(MediaKind::File, u);
-            m.alt = Some(name);
-            m.size = d.u64("file_size");
-            c.media.push(m);
-          }
-          None => c.text.push_str(&format!("[file: {name}]")),
-        }
-      }
-      "json" | "xml" | "ark" => c.text.push_str("[card]"),
-      "forward" => c.text.push_str("[forwarded messages]"),
-      "markdown" => c.text.push_str(&d.str("content").unwrap_or_default()),
-      "poke" => c.text.push_str("[poke]"),
-      "dice" | "rps" => c
-        .text
-        .push_str(&format!("[{}]", seg.str("type").unwrap_or_default())),
-      other => c.text.push_str(&format!("[{other}]")),
-    }
+    segment(&mut content, &seg);
   }
-  c
+  content
+}
+
+/// Add one segment's text, media, mention or reply to `c`.
+fn segment(c: &mut Content, seg: &Value) {
+  let d = seg.at("data");
+  let kind = seg.str("type").unwrap_or_default();
+  match kind.as_str() {
+    "text" => c.text.push_str(&d.str("text").unwrap_or_default()),
+    "at" => mention(c, d),
+    "face" => c
+      .text
+      .push_str(&format!("[face:{}]", d.str("id").unwrap_or_default())),
+    "mface" | "marketface" => c
+      .text
+      .push_str(&d.str("summary").unwrap_or_else(|| "[sticker]".into())),
+    "reply" => c.reply_to = d.str("id"),
+    "image" | "record" | "video" | "file" => media(c, &kind, d),
+    "json" | "xml" | "ark" => c.text.push_str("[card]"),
+    "forward" => c.text.push_str("[forwarded messages]"),
+    "markdown" => c.text.push_str(&d.str("content").unwrap_or_default()),
+    "poke" => c.text.push_str("[poke]"),
+    "dice" | "rps" => c.text.push_str(&format!("[{kind}]")),
+    other => c.text.push_str(&format!("[{other}]")),
+  }
+}
+
+fn mention(c: &mut Content, d: &Value) {
+  let qq = d.str("qq").unwrap_or_default();
+  let name = d.str("name").filter(|n| !n.is_empty());
+  c.text.push_str(&match (&name, qq.as_str()) {
+    (_, "all") => "@全体成员".to_owned(),
+    (Some(n), _) => format!("@{n}"),
+    (None, q) => format!("@{q}"),
+  });
+  c.mentions.push(qq);
+}
+
+/// An image, voice, video or file segment: media when it carries a URL,
+/// a placeholder in the text otherwise.
+fn media(c: &mut Content, kind: &str, d: &Value) {
+  let url = d
+    .first_str(&["url", "file"])
+    .filter(|u| u.starts_with("http"));
+  let Some(url) = url else {
+    let placeholder = match kind {
+      "image" => "[image]".to_owned(),
+      "record" => "[voice]".to_owned(),
+      "video" => "[video]".to_owned(),
+      _ => format!(
+        "[file: {}]",
+        d.first_str(&["name", "file"]).unwrap_or_default()
+      ),
+    };
+    c.text.push_str(&placeholder);
+    return;
+  };
+  let media = match kind {
+    "image" => {
+      let gif = d.str("summary").is_some_and(|s| s.contains("动画"));
+      Media::new(
+        if gif {
+          MediaKind::Gif
+        } else {
+          MediaKind::Image
+        },
+        url,
+      )
+    }
+    "record" => Media::new(MediaKind::Audio, url),
+    "video" => Media::video(url),
+    _ => {
+      let mut m = Media::new(MediaKind::File, url);
+      m.alt = Some(d.first_str(&["name", "file"]).unwrap_or_default());
+      m.size = d.u64("file_size");
+      m
+    }
+  };
+  c.media.push(media);
 }
 
 fn sender(v: &Value) -> Option<User> {
@@ -185,7 +198,7 @@ pub fn message(v: &Value, chat: Option<&Chat>) -> Post {
   let chat_id = chat.as_ref().map(Chat::id);
   let mut p = Post {
     id: match &chat_id {
-      Some(ch) => format!("{ch}/{id}"),
+      Some(ch) => message_id(ch, &id),
       None => id.clone(),
     },
     kind: "message".into(),
@@ -205,7 +218,7 @@ pub fn message(v: &Value, chat: Option<&Chat>) -> Post {
     e.insert("message_seq".into(), json!(seq));
   }
   if let (Some(r), Some(ch)) = (c.reply_to, &chat_id) {
-    e.insert("reply_to".into(), json!(format!("{ch}/{r}")));
+    e.insert("reply_to".into(), json!(message_id(ch, &r)));
   }
   if !c.mentions.is_empty() {
     e.insert("mentions".into(), json!(c.mentions));

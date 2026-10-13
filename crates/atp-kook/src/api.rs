@@ -6,7 +6,8 @@
 
 use std::time::Duration;
 
-use atp_core::http::{Method, Part};
+use atp_core::credentials;
+use atp_core::http::{Method, Part, Resp};
 use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 
 pub const API: &str = "https://www.kookapp.cn/api/v3";
@@ -26,9 +27,7 @@ enum Body {
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let env = std::env::var("KOOK_TOKEN")
-      .ok()
-      .filter(|v| !v.trim().is_empty());
+    let env = credentials::env("KOOK_TOKEN");
     Self { ctx, env }
   }
 
@@ -124,41 +123,49 @@ impl Api {
         Body::Multipart(parts) => req.multipart(parts.clone()),
       };
       let resp = req.send().await?;
-      let status = resp.status.as_u16();
-      if status == 429 && tries < MAX_TRIES {
-        let wait = resp
-          .header("x-rate-limit-reset")
-          .and_then(|s| s.parse::<f64>().ok())
-          .unwrap_or(1.0)
-          .clamp(0.5, 30.0);
-        tokio::time::sleep(Duration::from_secs_f64(wait)).await;
+      if resp.status.as_u16() == 429 && tries < MAX_TRIES {
+        tokio::time::sleep(retry_after(&resp)).await;
         continue;
       }
-      let v: Value = serde_json::from_slice(&resp.body).unwrap_or_default();
-      let code = v.i64("code");
-      if status == 401 || code == Some(401) {
-        return Err(
-          Error::auth("KOOK did not accept the token")
-            .with_hint("check the bot token at https://developer.kookapp.cn/app"),
-        );
-      }
-      if status == 429 {
-        return Err(Error::new(
-          ErrorCode::RateLimited,
-          "KOOK rate limit reached",
-        ));
-      }
-      return match code {
-        Some(0) => Ok(v.at("data").clone()),
-        _ => {
-          let message = v.str("message").unwrap_or_else(|| format!("HTTP {status}"));
-          Err(match status {
-            403 => Error::new(ErrorCode::PermissionDenied, format!("KOOK: {message}")),
-            404 => Error::not_found(format!("KOOK: {message}")),
-            _ => Error::upstream(format!("KOOK: {message}")),
-          })
-        }
-      };
+      return outcome(&resp);
     }
   }
+}
+
+/// How long a 429 asks to wait (`X-Rate-Limit-Reset`, in seconds).
+fn retry_after(resp: &Resp) -> Duration {
+  let secs = resp
+    .header("x-rate-limit-reset")
+    .and_then(|s| s.parse::<f64>().ok())
+    .unwrap_or(1.0)
+    .clamp(0.5, 30.0);
+  Duration::from_secs_f64(secs)
+}
+
+/// `data` of a `{code: 0, data}` reply; anything else as an error.
+fn outcome(resp: &Resp) -> Result<Value> {
+  let status = resp.status.as_u16();
+  let v: Value = serde_json::from_slice(&resp.body).unwrap_or_default();
+  let code = v.i64("code");
+  if status == 401 || code == Some(401) {
+    return Err(
+      Error::auth("KOOK did not accept the token")
+        .with_hint("check the bot token at https://developer.kookapp.cn/app"),
+    );
+  }
+  if status == 429 {
+    return Err(Error::new(
+      ErrorCode::RateLimited,
+      "KOOK rate limit reached",
+    ));
+  }
+  if code == Some(0) {
+    return Ok(v.at("data").clone());
+  }
+  let message = v.str("message").unwrap_or_else(|| format!("HTTP {status}"));
+  Err(match status {
+    403 => Error::new(ErrorCode::PermissionDenied, format!("KOOK: {message}")),
+    404 => Error::not_found(format!("KOOK: {message}")),
+    _ => Error::upstream(format!("KOOK: {message}")),
+  })
 }

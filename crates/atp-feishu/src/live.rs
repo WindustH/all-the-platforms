@@ -2,7 +2,7 @@
 //! SDKs use, so no public callback URL is needed.
 //!
 //! `POST /callback/ws/endpoint` with the app credentials hands out a
-//! websocket URL; frames are protobuf ([`crate::pb`]). Control frames are
+//! websocket URL; frames are protobuf ([`crate::frame`]). Control frames are
 //! pings and pongs (a pong may carry new client settings); data frames carry
 //! events as JSON, possibly split in parts, and each is acknowledged with
 //! `{"code":200}`. The app must have 长连接 chosen as its event subscription
@@ -11,28 +11,35 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+use atp_core::live::Backoff;
 use atp_core::output::{Stream, note};
 use atp_core::socket::Frame as WsFrame;
-use atp_core::text::from_millis;
-use atp_core::{Error, Post, Result, User, Value, ValueExt, json};
-use tokio::time::{Instant, interval_at};
+use atp_core::{Error, ErrorCode, Result, Value, ValueExt, json};
+use tokio::time::{Instant, Interval, interval_at};
 
-use crate::api::{Api, check};
-use crate::pb::Frame;
-use crate::{chats, parse, refs};
+use crate::api::{Api, Creds, check};
+use crate::frame::Frame;
+use crate::{chats, parse, refs, users};
 
 /// Give up after this many failed connections in a row.
 const MAX_FAILURES: u32 = 5;
+
+/// Event parts waiting for the rest, by message id.
+type Parts = HashMap<String, Vec<Option<Vec<u8>>>>;
 
 pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
   let creds = api.require()?;
   let wanted: HashSet<String> = chats.iter().map(|c| refs::chat(c)).collect::<Result<_>>()?;
   let mut failures = 0;
+  let mut backoff = Backoff::default();
   loop {
     match session(api, &creds, &wanted, out).await {
-      Ok(true) => failures = 0,
+      Ok(true) => {
+        failures = 0;
+        backoff.reset();
+      }
       Ok(false) => failures += 1,
-      Err(e) if failures == 0 && e.code != atp_core::ErrorCode::NetworkError => return Err(e),
+      Err(e) if failures == 0 && e.code != ErrorCode::NetworkError => return Err(e),
       Err(e) => {
         failures += 1;
         note(&format!("connection lost: {}", e.message));
@@ -43,18 +50,18 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
         "the Feishu long connection keeps failing; check the app's event subscription mode",
       ));
     }
-    let wait = 2u64.pow(failures.min(5));
-    tokio::time::sleep(Duration::from_secs(wait)).await;
+    backoff.wait().await;
   }
 }
 
-/// One connection; `Ok(true)` when it got as far as receiving frames.
-async fn session(
-  api: &Api,
-  creds: &crate::api::Creds,
-  wanted: &HashSet<String>,
-  out: &Stream,
-) -> Result<bool> {
+/// Where to connect: the websocket URL, its service id and ping interval.
+struct Endpoint {
+  url: String,
+  service: i32,
+  ping_secs: u64,
+}
+
+async fn endpoint(api: &Api, creds: &Creds) -> Result<Endpoint> {
   let v: Value = api
     .ctx
     .http
@@ -68,32 +75,38 @@ async fn session(
   let url = v
     .str("data.URL")
     .ok_or_else(|| Error::upstream("the endpoint call returned no URL"))?;
-  let service: i32 = query_param(&url, "service_id")
+  let service = query_param(&url, "service_id")
     .and_then(|s| s.parse().ok())
     .unwrap_or(0);
-  let mut ping_secs = v
+  let ping_secs = v
     .u64("data.ClientConfig.PingInterval")
     .unwrap_or(120)
     .max(10);
+  Ok(Endpoint {
+    url,
+    service,
+    ping_secs,
+  })
+}
+
+/// One connection; `Ok(true)` when it got as far as receiving frames.
+async fn session(api: &Api, creds: &Creds, wanted: &HashSet<String>, out: &Stream) -> Result<bool> {
+  let Endpoint {
+    url,
+    service,
+    mut ping_secs,
+  } = endpoint(api, creds).await?;
   let mut socket = api.ctx.http.websocket(&url, &[], false).await?;
   note("connected; waiting for events (Ctrl-C to stop)");
   let mut ping = interval_at(
     Instant::now() + Duration::from_secs(1),
     Duration::from_secs(ping_secs),
   );
-  let mut parts: HashMap<String, Vec<Option<Vec<u8>>>> = HashMap::new();
+  let mut parts = Parts::new();
   let mut received = false;
   loop {
     tokio::select! {
-      _ = ping.tick() => {
-        let frame = Frame {
-          service,
-          method: 0,
-          headers: vec![("type".into(), "ping".into())],
-          ..Frame::default()
-        };
-        socket.send_binary(frame.encode()).await?;
-      }
+      _ = ping.tick() => socket.send_binary(Frame::ping(service).encode()).await?,
       next = socket.next() => {
         let bytes = match next? {
           None => return Ok(received),
@@ -103,15 +116,7 @@ async fn session(
         received = true;
         let frame = Frame::decode(&bytes)?;
         if frame.method == 0 {
-          // A pong may carry new client settings.
-          if frame.header("type") == Some("pong") && !frame.payload.is_empty()
-            && let Ok(conf) = serde_json::from_slice::<Value>(&frame.payload)
-            && let Some(secs) = conf.u64("PingInterval")
-            && secs >= 10 && secs != ping_secs
-          {
-            ping_secs = secs;
-            ping = interval_at(Instant::now() + Duration::from_secs(secs), Duration::from_secs(secs));
-          }
+          update_ping(&frame, &mut ping_secs, &mut ping);
           continue;
         }
         if let Some(payload) = assemble(&frame, &mut parts) {
@@ -120,18 +125,35 @@ async fn session(
           {
             emit(api, &event, wanted, out).await;
           }
-          let mut ack = frame.clone();
-          ack.headers.push(("biz_rt".into(), "0".into()));
-          ack.payload = br#"{"code":200}"#.to_vec();
-          socket.send_binary(ack.encode()).await?;
+          socket.send_binary(frame.ack().encode()).await?;
         }
       }
     }
   }
 }
 
+/// A pong may carry new client settings: ping at the new interval.
+fn update_ping(frame: &Frame, ping_secs: &mut u64, ping: &mut Interval) {
+  if frame.header("type") != Some("pong") || frame.payload.is_empty() {
+    return;
+  }
+  let Ok(settings) = serde_json::from_slice::<Value>(&frame.payload) else {
+    return;
+  };
+  if let Some(secs) = settings.u64("PingInterval")
+    && secs >= 10
+    && secs != *ping_secs
+  {
+    *ping_secs = secs;
+    *ping = interval_at(
+      Instant::now() + Duration::from_secs(secs),
+      Duration::from_secs(secs),
+    );
+  }
+}
+
 /// Join an event split over several frames (`sum` > 1, `seq` = index).
-fn assemble(frame: &Frame, parts: &mut HashMap<String, Vec<Option<Vec<u8>>>>) -> Option<Vec<u8>> {
+fn assemble(frame: &Frame, parts: &mut Parts) -> Option<Vec<u8>> {
   let sum: usize = frame
     .header("sum")
     .and_then(|s| s.parse().ok())
@@ -156,55 +178,10 @@ fn assemble(frame: &Frame, parts: &mut HashMap<String, Vec<Option<Vec<u8>>>>) ->
   None
 }
 
-/// One event as a post on the stream.
+/// One event as a post on the stream, when its chat is wanted.
 async fn emit(api: &Api, event: &Value, wanted: &HashSet<String>, out: &Stream) {
-  let kind = event.str("header.event_type").unwrap_or_default();
+  let mut post = parse::event(event, &api.base());
   let e = event.at("event");
-  let mut post = match kind.as_str() {
-    "im.message.receive_v1" => parse::message(&parse::event_message(e), &api.base()),
-    "im.message.recalled_v1" => Post {
-      id: e.str("message_id").unwrap_or_default(),
-      kind: "delete".into(),
-      created_at: e.i64("recall_time").and_then(from_millis),
-      ..Post::default()
-    },
-    "im.message.reaction.created_v1" | "im.message.reaction.deleted_v1" => Post {
-      id: e.str("message_id").unwrap_or_default(),
-      kind: if kind.ends_with("created_v1") {
-        "reaction".into()
-      } else {
-        "unreaction".into()
-      },
-      text: e.str("reaction_type.emoji_type"),
-      author: e.str("user_id.open_id").map(|id| User {
-        id,
-        ..User::default()
-      }),
-      created_at: e.i64("action_time").and_then(from_millis),
-      ..Post::default()
-    },
-    "im.message.message_read_v1" => Post {
-      id: e
-        .list("message_id_list")
-        .first()
-        .and_then(|m| m.as_str())
-        .unwrap_or_default()
-        .to_owned(),
-      kind: "read".into(),
-      author: e.str("reader.reader_id.open_id").map(|id| User {
-        id,
-        ..User::default()
-      }),
-      created_at: e.i64("reader.read_time").and_then(from_millis),
-      ..Post::default()
-    },
-    other => Post {
-      id: event.str("header.event_id").unwrap_or_default(),
-      kind: other.to_owned(),
-      created_at: event.i64("header.create_time").and_then(from_millis),
-      ..Post::default()
-    },
-  };
   let chat = e.str("message.chat_id").or_else(|| e.str("chat_id"));
   if !wanted.is_empty() && !chat.as_ref().is_some_and(|c| wanted.contains(c)) {
     return;
@@ -219,7 +196,7 @@ async fn emit(api: &Api, event: &Value, wanted: &HashSet<String>, out: &Stream) 
     post.raw = Some(event.clone());
   }
   let mut one = [post];
-  crate::users::names(api, &mut one).await;
+  users::names(api, &mut one).await;
   out.post(&one[0]);
 }
 

@@ -467,11 +467,9 @@ dependencies = [
  "clap",
  "hmac 0.12.1",
  "jiff",
- "serde",
  "serde_json",
  "sha2 0.10.9",
  "tokio",
- "tracing",
  "url",
 ]
 
@@ -532,9 +530,7 @@ version = "0.1.0"
 dependencies = [
  "atp-core",
  "clap",
- "jiff",
  "rand 0.9.5",
- "serde",
  "serde_json",
  "tokio",
  "tracing",
@@ -561,9 +557,6 @@ version = "0.1.0"
 dependencies = [
  "atp-core",
  "clap",
- "jiff",
- "rand 0.9.5",
- "serde",
  "serde_json",
  "tokio",
  "tracing",
@@ -675,12 +668,9 @@ dependencies = [
  "atp-core",
  "base64 0.22.1",
  "clap",
- "jiff",
  "rand 0.9.5",
- "serde",
  "serde_json",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -853,11 +843,9 @@ dependencies = [
  "jiff",
  "md-5",
  "rand 0.9.5",
- "serde",
  "serde_json",
  "tokio",
  "tracing",
- "url",
 ]
 
 [[package]]

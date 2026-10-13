@@ -9,11 +9,15 @@
 mod api;
 mod chats;
 mod extra;
+mod frame;
 mod live;
+mod login;
 mod messages;
 mod parse;
-mod pb;
+mod pins;
+mod reactions;
 mod refs;
+mod uploads;
 mod users;
 
 use std::time::Duration;
@@ -24,7 +28,7 @@ use atp_core::{
   PlatformInfo, Post, Result, User,
 };
 
-use crate::api::{Api, Creds};
+use crate::api::Api;
 
 pub struct Feishu {
   api: Api,
@@ -73,12 +77,11 @@ impl Platform for Feishu {
   }
 
   fn logged_in(&self) -> bool {
-    self.api.creds().is_some()
+    self.api.logged_in()
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    self.api.save(&Creds::parse(token)?);
-    Ok(())
+    login::login_token(&self.api, token)
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
@@ -114,7 +117,7 @@ impl Platform for Feishu {
   }
 
   async fn react(&self, post: &str, emoji: &str, undo: bool) -> Result<Action> {
-    messages::react(&self.api, post, emoji, undo).await
+    reactions::react(&self.api, post, emoji, undo).await
   }
 
   async fn edit(&self, post: &str, text: &str) -> Result<Action> {

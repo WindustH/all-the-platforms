@@ -9,6 +9,7 @@
 //!
 //! A sent message is `TARGET/MSGID`, which `delete` recalls.
 
+use atp_core::chat::split_message_id;
 use atp_core::{Error, Result};
 
 #[derive(Debug, Clone)]
@@ -82,7 +83,7 @@ fn webhook_key(arg: &str) -> Option<String> {
 /// `(target, msgid)` of a sent message.
 pub fn sent(arg: &str) -> Result<(Target, String)> {
   let arg = arg.trim();
-  let Some((chat, msgid)) = arg.rsplit_once('/') else {
+  let Some((chat, msgid)) = split_message_id(arg) else {
     return Err(Error::input(format!(
       "not a sent WeCom message: {arg}; expected TARGET/MSGID as `send` prints it"
     )));

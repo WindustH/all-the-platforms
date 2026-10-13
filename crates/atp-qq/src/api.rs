@@ -7,20 +7,15 @@
 //! until shortly before it expires and sent as `Authorization: QQBot …`.
 //! Errors are `{code, message, err_code, trace_id}`.
 
-use std::cell::RefCell;
-use std::time::Duration;
-
+use atp_core::credentials;
 use atp_core::http::{Method, Part};
+use atp_core::token::AccessToken;
 use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt, json};
-use serde::{Deserialize, Serialize};
 
 const TOKEN_URL: &str = "https://bots.qq.com/app/getAppAccessToken";
 const API: &str = "https://api.sgroup.qq.com";
 const SANDBOX: &str = "https://sandbox.api.sgroup.qq.com";
 const KEYS: [&str; 3] = ["appid", "secret", "sandbox"];
-const CACHE_TTL: Duration = Duration::from_secs(3 * 3600);
-/// Renew this long before the token expires.
-const MARGIN_SECS: i64 = 120;
 
 #[derive(Debug, Clone)]
 pub struct Credentials {
@@ -32,7 +27,8 @@ pub struct Credentials {
 impl Credentials {
   /// `APPID:SECRET[:sandbox]`.
   pub fn parse(raw: &str) -> Result<Self> {
-    let mut parts = raw.trim().splitn(3, ':');
+    let fields = credentials::fields(raw);
+    let mut parts = fields.iter().map(String::as_str);
     let (Some(appid), Some(secret)) = (parts.next(), parts.next()) else {
       return Err(Error::input(
         "expected APPID:SECRET (from q.qq.com → 开发 → 开发设置), optionally :sandbox",
@@ -49,12 +45,6 @@ impl Credentials {
   }
 }
 
-#[derive(Serialize, Deserialize)]
-struct Cached {
-  token: String,
-  expires: i64,
-}
-
 #[derive(Clone, Copy)]
 pub enum Body<'a> {
   None,
@@ -64,24 +54,26 @@ pub enum Body<'a> {
 pub struct Api {
   pub ctx: Ctx,
   env: Option<Credentials>,
-  token: RefCell<Option<String>>,
+  token: AccessToken,
 }
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-    let env = match (var("QQ_BOT_APPID"), var("QQ_BOT_SECRET")) {
+    let env = match (
+      credentials::env("QQ_BOT_APPID"),
+      credentials::env("QQ_BOT_SECRET"),
+    ) {
       (Some(appid), Some(secret)) => Some(Credentials {
         appid,
         secret,
-        sandbox: var("QQ_BOT_SANDBOX").is_some_and(|v| v != "0"),
+        sandbox: credentials::env("QQ_BOT_SANDBOX").is_some_and(|v| v != "0"),
       }),
       _ => None,
     };
     Self {
       ctx,
       env,
-      token: RefCell::new(None),
+      token: AccessToken::default(),
     }
   }
 
@@ -123,32 +115,11 @@ impl Api {
 
   /// A valid access token: memory, cache, or a new one.
   pub async fn access_token(&self, c: &Credentials) -> Result<String> {
-    if let Some(t) = self.token.borrow().clone() {
-      return Ok(t);
-    }
-    let key = format!("token-{}", c.appid);
-    let now = jiff::Timestamp::now().as_second();
-    let cached = self
-      .ctx
-      .store
-      .cache_get::<Cached>(&key, CACHE_TTL)
-      .filter(|t| t.expires - MARGIN_SECS > now && !t.token.is_empty());
-    let token = match cached {
-      Some(t) => t.token,
-      None => {
-        let (token, ttl) = self.fetch_token(c).await?;
-        self.ctx.store.cache_put(
-          &key,
-          &Cached {
-            token: token.clone(),
-            expires: now + ttl,
-          },
-        );
-        token
-      }
-    };
-    *self.token.borrow_mut() = Some(token.clone());
-    Ok(token)
+    let key = token_key(c);
+    self
+      .token
+      .get(&self.ctx, &key, async || self.fetch_token(c).await)
+      .await
   }
 
   async fn fetch_token(&self, c: &Credentials) -> Result<(String, i64)> {
@@ -176,14 +147,7 @@ impl Api {
 
   /// Forget the token (it was refused).
   fn forget(&self, c: &Credentials) {
-    *self.token.borrow_mut() = None;
-    self.ctx.store.cache_put(
-      &format!("token-{}", c.appid),
-      &Cached {
-        token: String::new(),
-        expires: 0,
-      },
-    );
+    self.token.forget(&self.ctx, &token_key(c));
   }
 
   pub async fn get(&self, path: &str, query: &[(&str, String)]) -> Result<Value> {
@@ -260,6 +224,10 @@ impl Api {
       return Err(error(status, &v));
     }
   }
+}
+
+fn token_key(c: &Credentials) -> String {
+  format!("token-{}", c.appid)
 }
 
 fn error(status: u16, v: &Value) -> Error {

@@ -275,3 +275,60 @@ pub fn user(v: &Value) -> User {
     ..User::default()
   }
 }
+
+/// A long-connection event as a post: messages, recalls, reactions and
+/// read receipts by their own shape, anything else by its type.
+pub fn event(event: &Value, base: &str) -> Post {
+  let kind = event.str("header.event_type").unwrap_or_default();
+  let e = event.at("event");
+  match kind.as_str() {
+    "im.message.receive_v1" => message(&event_message(e), base),
+    "im.message.recalled_v1" => Post {
+      id: e.str("message_id").unwrap_or_default(),
+      kind: "delete".into(),
+      created_at: e.i64("recall_time").and_then(from_millis),
+      ..Post::default()
+    },
+    "im.message.reaction.created_v1" | "im.message.reaction.deleted_v1" => Post {
+      id: e.str("message_id").unwrap_or_default(),
+      kind: if kind.ends_with("created_v1") {
+        "reaction"
+      } else {
+        "unreaction"
+      }
+      .into(),
+      text: e.str("reaction_type.emoji_type"),
+      author: e.str("user_id.open_id").map(|id| User {
+        id,
+        ..User::default()
+      }),
+      created_at: e.i64("action_time").and_then(from_millis),
+      ..Post::default()
+    },
+    "im.message.message_read_v1" => read_receipt(e),
+    other => Post {
+      id: event.str("header.event_id").unwrap_or_default(),
+      kind: other.to_owned(),
+      created_at: event.i64("header.create_time").and_then(from_millis),
+      ..Post::default()
+    },
+  }
+}
+
+fn read_receipt(e: &Value) -> Post {
+  Post {
+    id: e
+      .list("message_id_list")
+      .first()
+      .and_then(|m| m.as_str())
+      .unwrap_or_default()
+      .to_owned(),
+    kind: "read".into(),
+    author: e.str("reader.reader_id.open_id").map(|id| User {
+      id,
+      ..User::default()
+    }),
+    created_at: e.i64("reader.read_time").and_then(from_millis),
+    ..Post::default()
+  }
+}

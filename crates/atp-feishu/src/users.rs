@@ -42,7 +42,7 @@ pub async fn user(api: &Api, arg: &str) -> Result<User> {
 /// Fill in author names from the contact API, best effort: an app without
 /// the contact scope keeps the bare open ids.
 pub async fn names(api: &Api, posts: &mut [Post]) {
-  let wanted: Vec<String> = {
+  let unknown: Vec<String> = {
     let known = api.names.borrow();
     let mut ids: Vec<String> = posts
       .iter()
@@ -54,26 +54,8 @@ pub async fn names(api: &Api, posts: &mut [Post]) {
     ids.dedup();
     ids
   };
-  if !wanted.is_empty() && !api.contacts_denied.get() {
-    for chunk in wanted.chunks(50) {
-      let mut query = vec![("user_id_type", "open_id".to_owned())];
-      query.extend(chunk.iter().map(|id| ("user_ids", id.clone())));
-      match api.get("/contact/v3/users/batch", &query).await {
-        Ok(v) => {
-          let mut known = api.names.borrow_mut();
-          for u in v.list("data.items") {
-            if let (Some(id), Some(name)) = (u.str("open_id"), u.str("name")) {
-              known.insert(id, name);
-            }
-          }
-        }
-        Err(e) => {
-          tracing::debug!("feishu contact lookup failed: {e}");
-          api.contacts_denied.set(true);
-          break;
-        }
-      }
-    }
+  if !unknown.is_empty() && !api.contacts_denied.get() {
+    look_up(api, &unknown).await;
   }
   let known = api.names.borrow();
   for p in posts {
@@ -90,6 +72,30 @@ pub async fn names(api: &Api, posts: &mut [Post]) {
       .and_then(|c| known.get(c))
     {
       p.extra.insert("chat_name".into(), name.clone().into());
+    }
+  }
+}
+
+/// Learn the names of these open ids, 50 per call, until the contact API
+/// refuses.
+async fn look_up(api: &Api, open_ids: &[String]) {
+  for chunk in open_ids.chunks(50) {
+    let mut query = vec![("user_id_type", "open_id".to_owned())];
+    query.extend(chunk.iter().map(|id| ("user_ids", id.clone())));
+    match api.get("/contact/v3/users/batch", &query).await {
+      Ok(v) => {
+        let mut known = api.names.borrow_mut();
+        for u in v.list("data.items") {
+          if let (Some(id), Some(name)) = (u.str("open_id"), u.str("name")) {
+            known.insert(id, name);
+          }
+        }
+      }
+      Err(e) => {
+        tracing::debug!("feishu contact lookup failed: {e}");
+        api.contacts_denied.set(true);
+        return;
+      }
     }
   }
 }

@@ -8,10 +8,7 @@ license.workspace = true
 [dependencies]
 base64.workspace = true
 clap.workspace = true
-jiff.workspace = true
 rand.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 atp-core.workspace = true
 tokio.workspace = true
-tracing.workspace = true

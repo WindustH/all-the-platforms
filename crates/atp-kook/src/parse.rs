@@ -1,5 +1,6 @@
 //! KOOK payloads → the shared model.
 
+use atp_core::chat::message_id;
 use atp_core::text::from_millis;
 use atp_core::{Collection, Media, MediaKind, Metrics, Post, User, Value, ValueExt, json};
 
@@ -149,34 +150,13 @@ fn attachment(a: &Value) -> Option<Media> {
 pub fn message(v: &Value, chat: &Chat, chat_name: Option<&str>) -> Post {
   let id = v.str("id").unwrap_or_default();
   let t = v.u64("type").unwrap_or(1);
-  let mut media = Vec::new();
-  if let Some(a) = v.at("attachments").as_object().map(|_| v.at("attachments"))
-    && let Some(m) = attachment(a)
-  {
-    media.push(m);
-  }
-  if t == 2
-    && media.is_empty()
-    && let Some(url) = v.str("content")
-  {
-    media.push(Media::image(url));
-  }
   let text = match t {
     2 | 3 | 4 | 8 => None,
     _ => v.str("content"),
   };
-  let reactions: Vec<Value> = v
-    .list("reactions")
-    .iter()
-    .map(|r| json!({"emoji": r.str("emoji.name").or_else(|| r.str("emoji.id")), "count": r.u64("count"), "me": r.bool("me")}))
-    .collect();
-  let total: u64 = v
-    .list("reactions")
-    .iter()
-    .filter_map(|r| r.u64("count"))
-    .sum();
-  let mut p = Post {
-    id: format!("{}/{id}", chat.id()),
+  let (reactions, total) = reactions(v);
+  let mut post = Post {
+    id: message_id(&chat.id(), &id),
     kind: kind(t).into(),
     text,
     author: v.at("author").is_object().then(|| user(v.at("author"))),
@@ -186,28 +166,62 @@ pub fn message(v: &Value, chat: &Chat, chat_name: Option<&str>) -> Post {
       likes: (!reactions.is_empty()).then_some(total),
       ..Metrics::default()
     },
-    media,
+    media: media(v, t),
     raw: Some(v.clone()),
     ..Post::default()
   };
-  let e = &mut p.extra;
-  e.insert("chat".into(), json!(chat.id()));
+  let extra = &mut post.extra;
+  extra.insert("chat".into(), json!(chat.id()));
   if let Some(name) = chat_name {
-    e.insert("chat_name".into(), json!(name));
+    extra.insert("chat_name".into(), json!(name));
   }
-  e.insert("message_id".into(), json!(id));
+  extra.insert("message_id".into(), json!(id));
   if let Some(q) = v.str("quote.id") {
-    e.insert("reply_to".into(), json!(format!("{}/{q}", chat.id())));
+    extra.insert("reply_to".into(), json!(message_id(&chat.id(), &q)));
   }
   if !reactions.is_empty() {
-    e.insert("reactions".into(), json!(reactions));
+    extra.insert("reactions".into(), json!(reactions));
   }
   if v.bool("mention_all") == Some(true) {
-    e.insert("mention_all".into(), json!(true));
+    extra.insert("mention_all".into(), json!(true));
   }
   let mentions = v.list("mention");
   if !mentions.is_empty() {
-    e.insert("mentions".into(), json!(mentions));
+    extra.insert("mentions".into(), json!(mentions));
   }
-  p
+  post
+}
+
+/// The attachment, or the image an image message's content links to.
+fn media(v: &Value, t: u64) -> Vec<Media> {
+  let mut media = Vec::new();
+  if v.at("attachments").is_object()
+    && let Some(m) = attachment(v.at("attachments"))
+  {
+    media.push(m);
+  }
+  if t == 2
+    && media.is_empty()
+    && let Some(url) = v.str("content")
+  {
+    media.push(Media::image(url));
+  }
+  media
+}
+
+/// Each reaction (emoji, count, mine) and the total count.
+fn reactions(v: &Value) -> (Vec<Value>, u64) {
+  let rows = v.list("reactions");
+  let reactions = rows
+    .iter()
+    .map(|r| {
+      json!({
+        "emoji": r.str("emoji.name").or_else(|| r.str("emoji.id")),
+        "count": r.u64("count"),
+        "me": r.bool("me"),
+      })
+    })
+    .collect();
+  let total = rows.iter().filter_map(|r| r.u64("count")).sum();
+  (reactions, total)
 }

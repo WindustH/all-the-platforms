@@ -8,19 +8,20 @@
 //! DINGTALK_CLIENT_SECRET) and DINGTALK_ROBOT_CODE, which win over the saved
 //! ones. The robot code of an internal app's bot is usually its AppKey.
 
-use std::cell::RefCell;
 use std::time::Duration;
 
+use atp_core::credentials;
 use atp_core::http::{Method, Part};
+use atp_core::token::AccessToken;
 use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt, json};
-use serde::{Deserialize, Serialize};
 
 pub const API: &str = "https://api.dingtalk.com";
 pub const OAPI: &str = "https://oapi.dingtalk.com";
 const KEY: &str = "app_key";
 const SECRET: &str = "app_secret";
 const ROBOT: &str = "robot_code";
-const MARGIN_SECS: i64 = 300;
+/// Older-API codes that mean the access token is missing, invalid or expired.
+const STALE_TOKEN: [i64; 3] = [40001, 40014, 42001];
 pub const LOGIN_HINT: &str = "run `atp dingtalk login --token APPKEY:APPSECRET[:ROBOTCODE]`, or set \
    DINGTALK_APP_KEY and DINGTALK_APP_SECRET; group robot webhooks need no login";
 
@@ -33,38 +34,38 @@ pub struct Creds {
 
 impl Creds {
   pub fn parse(raw: &str) -> Result<Self> {
-    let mut parts = raw.trim().splitn(3, ':');
-    match (parts.next(), parts.next(), parts.next()) {
-      (Some(key), Some(secret), robot) if !key.is_empty() && !secret.is_empty() => Ok(Self {
-        app_key: key.to_owned(),
-        secret: secret.to_owned(),
-        robot_code: robot.filter(|r| !r.is_empty()).unwrap_or(key).to_owned(),
-      }),
+    let fields = credentials::fields(raw);
+    let fields: Vec<&str> = fields.iter().map(String::as_str).collect();
+    match fields.as_slice() {
+      [key, secret, robot @ ..] if !key.is_empty() && !secret.is_empty() && robot.len() <= 1 => {
+        Ok(Self {
+          app_key: (*key).to_owned(),
+          secret: (*secret).to_owned(),
+          robot_code: robot
+            .first()
+            .filter(|r| !r.is_empty())
+            .unwrap_or(key)
+            .to_string(),
+        })
+      }
       _ => Err(Error::input("expected APPKEY:APPSECRET[:ROBOTCODE]").with_hint(LOGIN_HINT)),
     }
   }
 }
 
-#[derive(Serialize, Deserialize)]
-struct Cached {
-  token: String,
-  expires: i64,
-}
-
 pub struct Api {
   pub ctx: Ctx,
   env: Option<Creds>,
-  token: RefCell<Option<String>>,
+  token: AccessToken,
 }
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-    let key = var("DINGTALK_APP_KEY").or_else(|| var("DINGTALK_CLIENT_ID"));
-    let secret = var("DINGTALK_APP_SECRET").or_else(|| var("DINGTALK_CLIENT_SECRET"));
+    let key = credentials::env_any(&["DINGTALK_APP_KEY", "DINGTALK_CLIENT_ID"]);
+    let secret = credentials::env_any(&["DINGTALK_APP_SECRET", "DINGTALK_CLIENT_SECRET"]);
     let env = match (key, secret) {
       (Some(app_key), Some(secret)) => Some(Creds {
-        robot_code: var("DINGTALK_ROBOT_CODE").unwrap_or_else(|| app_key.clone()),
+        robot_code: credentials::env("DINGTALK_ROBOT_CODE").unwrap_or_else(|| app_key.clone()),
         app_key,
         secret,
       }),
@@ -73,7 +74,7 @@ impl Api {
     Self {
       ctx,
       env,
-      token: RefCell::new(None),
+      token: AccessToken::default(),
     }
   }
 
@@ -81,16 +82,22 @@ impl Api {
     if let Some(c) = &self.env {
       return Some(c.clone());
     }
-    let app_key = self.ctx.extra(KEY).filter(|v| !v.is_empty())?;
+    let [app_key, secret] = credentials::saved(&self.ctx, &[KEY, SECRET])?
+      .try_into()
+      .ok()?;
     Some(Creds {
-      secret: self.ctx.extra(SECRET).filter(|v| !v.is_empty())?,
       robot_code: self
         .ctx
         .extra(ROBOT)
         .filter(|v| !v.is_empty())
         .unwrap_or_else(|| app_key.clone()),
       app_key,
+      secret,
     })
+  }
+
+  pub fn logged_in(&self) -> bool {
+    self.creds().is_some()
   }
 
   pub fn require(&self) -> Result<Creds> {
@@ -100,70 +107,47 @@ impl Api {
   }
 
   pub fn save(&self, creds: &Creds) {
-    self.ctx.set_extra(KEY, &creds.app_key);
-    self.ctx.set_extra(SECRET, &creds.secret);
-    self.ctx.set_extra(ROBOT, &creds.robot_code);
-    *self.token.borrow_mut() = None;
+    credentials::save(
+      &self.ctx,
+      &[
+        (KEY, &creds.app_key),
+        (SECRET, &creds.secret),
+        (ROBOT, &creds.robot_code),
+      ],
+    );
   }
 
-  fn cache_key(creds: &Creds) -> String {
-    format!("token-{}", creds.app_key)
-  }
-
+  /// The app's access token: memory, cache, or `oauth2/accessToken`.
   pub async fn token(&self) -> Result<String> {
-    if let Some(t) = self.token.borrow().clone() {
-      return Ok(t);
-    }
     let creds = self.require()?;
-    let now = jiff::Timestamp::now().as_second();
-    let cached = self
+    self
+      .token
+      .get(&self.ctx, &token_key(&creds), async || {
+        self.fetch_token(&creds).await
+      })
+      .await
+  }
+
+  async fn fetch_token(&self, creds: &Creds) -> Result<(String, i64)> {
+    let resp = self
       .ctx
-      .store
-      .cache_get::<Cached>(&Self::cache_key(&creds), Duration::from_secs(7200))
-      .filter(|c| c.expires - MARGIN_SECS > now && !c.token.is_empty());
-    let token = match cached {
-      Some(c) => c.token,
-      None => {
-        let resp = self
-          .ctx
-          .http
-          .post(format!("{API}/v1.0/oauth2/accessToken"))
-          .no_cookies()
-          .json(&json!({ "appKey": creds.app_key, "appSecret": creds.secret }))
-          .send()
-          .await?;
-        let v = check_api(
-          resp.status.as_u16(),
-          resp.value().unwrap_or_default(),
-          "accessToken",
-        )?;
-        let token = v
-          .str("accessToken")
-          .ok_or_else(|| Error::upstream("no accessToken in the reply"))?;
-        self.ctx.store.cache_put(
-          &Self::cache_key(&creds),
-          &Cached {
-            token: token.clone(),
-            expires: now + v.i64("expireIn").unwrap_or(7200),
-          },
-        );
-        token
-      }
-    };
-    *self.token.borrow_mut() = Some(token.clone());
-    Ok(token)
+      .http
+      .post(format!("{API}/v1.0/oauth2/accessToken"))
+      .no_cookies()
+      .json(&json!({ "appKey": creds.app_key, "appSecret": creds.secret }))
+      .send()
+      .await?;
+    let status = resp.status.as_u16();
+    let v = check_api(status, resp.value().unwrap_or_default(), "accessToken")?;
+    let token = v
+      .str("accessToken")
+      .ok_or_else(|| Error::upstream("no accessToken in the reply"))?;
+    Ok((token, v.i64("expireIn").unwrap_or(7200)))
   }
 
   fn forget_token(&self) {
-    *self.token.borrow_mut() = None;
     if let Some(creds) = self.creds() {
-      self.ctx.store.cache_put(
-        &Self::cache_key(&creds),
-        &Cached {
-          token: String::new(),
-          expires: 0,
-        },
-      );
+      self.token.forget(&self.ctx, &token_key(&creds));
     }
   }
 
@@ -189,10 +173,7 @@ impl Api {
       let resp = req.send().await?;
       let status = resp.status.as_u16();
       let v = resp.value().unwrap_or_default();
-      let invalid = v
-        .str("code")
-        .is_some_and(|c| c.contains("AccessTokenInvalid") || c == "InvalidAuthentication");
-      if invalid && attempt == 0 {
+      if v.str("code").is_some_and(|c| stale_token(&c)) && attempt == 0 {
         self.forget_token();
         continue;
       }
@@ -224,12 +205,21 @@ impl Api {
       };
       let v: Value = req.send().await?.value()?;
       match v.i64("errcode") {
-        Some(40001 | 40014 | 42001) if attempt == 0 => self.forget_token(),
+        Some(code) if STALE_TOKEN.contains(&code) && attempt == 0 => self.forget_token(),
         _ => return check_oapi(v, path),
       }
     }
     unreachable!("the second attempt always returns")
   }
+}
+
+fn token_key(creds: &Creds) -> String {
+  format!("token-{}", creds.app_key)
+}
+
+/// A current-API error code that means the access token went bad.
+fn stale_token(code: &str) -> bool {
+  code.contains("AccessTokenInvalid") || code == "InvalidAuthentication"
 }
 
 pub enum OapiBody {
@@ -246,11 +236,7 @@ pub fn check_api(status: u16, v: Value, path: &str) -> Result<Value> {
   let code = code.unwrap_or_else(|| format!("HTTP {status}"));
   let detail = format!("{path}: {code} {}", v.str("message").unwrap_or_default());
   Err(
-    if code.contains("AccessTokenInvalid")
-      || code == "InvalidAuthentication"
-      || code.contains("authFailed")
-      || code == "invalidClientIdOrSecret"
-    {
+    if stale_token(&code) || code.contains("authFailed") || code == "invalidClientIdOrSecret" {
       Error::auth(format!("DingTalk refused the app credentials ({detail})")).with_hint(LOGIN_HINT)
     } else if code.starts_with("Forbidden") {
       Error::new(

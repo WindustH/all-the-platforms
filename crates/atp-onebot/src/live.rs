@@ -3,8 +3,9 @@
 //! their kind. A lost connection is re-opened.
 
 use std::collections::HashSet;
-use std::time::Duration;
 
+use atp_core::chat::message_id;
+use atp_core::live::Backoff;
 use atp_core::output::{Stream, note};
 use atp_core::text::from_secs;
 use atp_core::{Error, Post, Result, Value, ValueExt, json};
@@ -28,18 +29,15 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
     .map(|c| refs::chat(c).map(|c| c.id()))
     .collect::<Result<_>>()?;
   let mut connected_once = false;
+  let mut backoff = Backoff::default();
   loop {
     match api.connect(&url, e.token.as_deref()).await {
-      Ok(mut ws) => {
+      Ok(mut socket) => {
         connected_once = true;
-        while let Some(v) = ws.next_json().await? {
+        backoff.reset();
+        while let Some(v) = socket.next_json().await? {
           if let Some(post) = event(&v)
-            && (wanted.is_empty()
-              || post
-                .extra
-                .get("chat")
-                .and_then(Value::as_str)
-                .is_some_and(|c| wanted.contains(c)))
+            && wanted_chat(&post, &wanted)
           {
             out.post(&post);
           }
@@ -49,8 +47,18 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
       Err(err) if !connected_once => return Err(err),
       Err(err) => tracing::debug!("reconnect failed: {}", err.message),
     }
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    backoff.wait().await;
   }
+}
+
+/// Whether a post belongs to one of the chats asked for (all when none).
+fn wanted_chat(post: &Post, wanted: &HashSet<String>) -> bool {
+  wanted.is_empty()
+    || post
+      .extra
+      .get("chat")
+      .and_then(Value::as_str)
+      .is_some_and(|c| wanted.contains(c))
 }
 
 fn event(v: &Value) -> Option<Post> {
@@ -77,7 +85,7 @@ fn notice(v: &Value) -> Option<Post> {
   };
   let id = v.str("message_id").unwrap_or_default();
   let mut p = Post {
-    id: format!("{}/{id}", chat.id()),
+    id: message_id(&chat.id(), &id),
     kind: kind.into(),
     created_at: v.i64("time").and_then(from_secs),
     author: v.str("user_id").map(|u| atp_core::User {

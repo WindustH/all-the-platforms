@@ -13,17 +13,18 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::time::Duration;
 
+use atp_core::credentials;
 use atp_core::http::{Method, Part, Req};
-use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt, json};
-use serde::{Deserialize, Serialize};
+use atp_core::token::AccessToken;
+use atp_core::{Ctx, Error, ErrorCode, PageReq, Result, Value, ValueExt, json};
 
 pub const FEISHU: &str = "https://open.feishu.cn";
 pub const LARK: &str = "https://open.larksuite.com";
 const APP_ID: &str = "app_id";
 const APP_SECRET: &str = "app_secret";
 const BASE: &str = "base";
-/// Renew this long before the upstream expiry.
-const MARGIN_SECS: i64 = 300;
+/// Codes that mean the tenant token is invalid or expired.
+const STALE_TOKEN: [i64; 4] = [99991661, 99991663, 99991664, 99991665];
 pub const LOGIN_HINT: &str = "run `atp feishu login --token APP_ID:APP_SECRET` (`lark:APP_ID:APP_SECRET` \
    for larksuite.com), or set FEISHU_APP_ID and FEISHU_APP_SECRET";
 
@@ -38,16 +39,17 @@ pub struct Creds {
 impl Creds {
   /// `APP_ID:APP_SECRET`, optionally behind `lark:` / `feishu:`.
   pub fn parse(raw: &str) -> Result<Self> {
-    let raw = raw.trim();
-    let (base, rest) = match raw.split_once(':') {
-      Some(("lark" | "larksuite", rest)) => (LARK, rest),
-      Some(("feishu", rest)) => (FEISHU, rest),
-      _ => (FEISHU, raw),
+    let fields = credentials::fields(raw);
+    let fields: Vec<&str> = fields.iter().map(String::as_str).collect();
+    let (base, rest) = match fields.as_slice() {
+      ["lark" | "larksuite", rest @ ..] => (LARK, rest),
+      ["feishu", rest @ ..] => (FEISHU, rest),
+      rest => (FEISHU, rest),
     };
-    match rest.split_once(':') {
-      Some((id, secret)) if id.starts_with("cli_") && !secret.trim().is_empty() => Ok(Self {
-        app_id: id.trim().to_owned(),
-        secret: secret.trim().to_owned(),
+    match rest {
+      [id, secret] if id.starts_with("cli_") && !secret.is_empty() => Ok(Self {
+        app_id: (*id).to_owned(),
+        secret: (*secret).to_owned(),
         base: base.to_owned(),
       }),
       _ => Err(
@@ -56,13 +58,35 @@ impl Creds {
       ),
     }
   }
-}
 
-#[derive(Serialize, Deserialize)]
-struct Cached {
-  token: String,
-  /// Unix seconds.
-  expires: i64,
+  /// FEISHU_APP_ID / FEISHU_APP_SECRET (with FEISHU_BASE_URL), else
+  /// LARK_APP_ID / LARK_APP_SECRET.
+  fn from_env() -> Option<Self> {
+    let feishu = (
+      credentials::env("FEISHU_APP_ID"),
+      credentials::env("FEISHU_APP_SECRET"),
+    );
+    if let (Some(app_id), Some(secret)) = feishu {
+      let base = credentials::env("FEISHU_BASE_URL").unwrap_or_else(|| FEISHU.to_owned());
+      return Some(Self {
+        app_id,
+        secret,
+        base,
+      });
+    }
+    let lark = (
+      credentials::env("LARK_APP_ID"),
+      credentials::env("LARK_APP_SECRET"),
+    );
+    let (Some(app_id), Some(secret)) = lark else {
+      return None;
+    };
+    Some(Self {
+      app_id,
+      secret,
+      base: LARK.to_owned(),
+    })
+  }
 }
 
 /// What a request carries.
@@ -75,7 +99,7 @@ pub enum Body {
 pub struct Api {
   pub ctx: Ctx,
   env: Option<Creds>,
-  token: RefCell<Option<String>>,
+  token: AccessToken,
   /// Display names of users and chats seen this run (open id / chat id → name).
   pub names: RefCell<HashMap<String, String>>,
   /// The contact API refused once: do not ask again this run.
@@ -84,26 +108,10 @@ pub struct Api {
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-    let env = match (var("FEISHU_APP_ID"), var("FEISHU_APP_SECRET")) {
-      (Some(app_id), Some(secret)) => Some(Creds {
-        app_id,
-        secret,
-        base: var("FEISHU_BASE_URL").unwrap_or_else(|| FEISHU.to_owned()),
-      }),
-      _ => match (var("LARK_APP_ID"), var("LARK_APP_SECRET")) {
-        (Some(app_id), Some(secret)) => Some(Creds {
-          app_id,
-          secret,
-          base: LARK.to_owned(),
-        }),
-        _ => None,
-      },
-    };
     Self {
       ctx,
-      env,
-      token: RefCell::new(None),
+      env: Creds::from_env(),
+      token: AccessToken::default(),
       names: RefCell::new(HashMap::new()),
       contacts_denied: Cell::new(false),
     }
@@ -113,11 +121,18 @@ impl Api {
     if let Some(c) = &self.env {
       return Some(c.clone());
     }
+    let [app_id, secret] = credentials::saved(&self.ctx, &[APP_ID, APP_SECRET])?
+      .try_into()
+      .ok()?;
     Some(Creds {
-      app_id: self.ctx.extra(APP_ID).filter(|v| !v.is_empty())?,
-      secret: self.ctx.extra(APP_SECRET).filter(|v| !v.is_empty())?,
+      app_id,
+      secret,
       base: self.ctx.extra(BASE).unwrap_or_else(|| FEISHU.to_owned()),
     })
+  }
+
+  pub fn logged_in(&self) -> bool {
+    self.creds().is_some()
   }
 
   pub fn require(&self) -> Result<Creds> {
@@ -127,56 +142,30 @@ impl Api {
   }
 
   pub fn save(&self, creds: &Creds) {
-    self.ctx.set_extra(APP_ID, &creds.app_id);
-    self.ctx.set_extra(APP_SECRET, &creds.secret);
-    self.ctx.set_extra(BASE, &creds.base);
-    *self.token.borrow_mut() = None;
-  }
-
-  fn cache_key(creds: &Creds) -> String {
-    format!("tenant-token-{}", creds.app_id)
+    credentials::save(
+      &self.ctx,
+      &[
+        (APP_ID, &creds.app_id),
+        (APP_SECRET, &creds.secret),
+        (BASE, &creds.base),
+      ],
+    );
   }
 
   /// A tenant access token: from memory, the cache, or a new one.
   pub async fn token(&self) -> Result<String> {
-    if let Some(t) = self.token.borrow().clone() {
-      return Ok(t);
-    }
     let creds = self.require()?;
-    let now = jiff::Timestamp::now().as_second();
-    let cached = self
-      .ctx
-      .store
-      .cache_get::<Cached>(&Self::cache_key(&creds), Duration::from_secs(7200))
-      .filter(|c| c.expires - MARGIN_SECS > now && !c.token.is_empty());
-    let token = match cached {
-      Some(c) => c.token,
-      None => {
-        let (token, expires) = fetch_token(&self.ctx, &creds).await?;
-        self.ctx.store.cache_put(
-          &Self::cache_key(&creds),
-          &Cached {
-            token: token.clone(),
-            expires: now + expires,
-          },
-        );
-        token
-      }
-    };
-    *self.token.borrow_mut() = Some(token.clone());
-    Ok(token)
+    self
+      .token
+      .get(&self.ctx, &token_key(&creds), async || {
+        fetch_token(&self.ctx, &creds).await
+      })
+      .await
   }
 
   fn forget_token(&self) {
-    *self.token.borrow_mut() = None;
     if let Some(creds) = self.creds() {
-      self.ctx.store.cache_put(
-        &Self::cache_key(&creds),
-        &Cached {
-          token: String::new(),
-          expires: 0,
-        },
-      );
+      self.token.forget(&self.ctx, &token_key(&creds));
     }
   }
 
@@ -243,12 +232,16 @@ impl Api {
         .value()
         .map_err(|e| Error::upstream(format!("{path}: HTTP {} ({})", resp.status, e.message)))?;
       match v.i64("code") {
-        Some(99991661 | 99991663 | 99991664 | 99991665) if attempt == 0 => self.forget_token(),
+        Some(code) if STALE_TOKEN.contains(&code) && attempt == 0 => self.forget_token(),
         _ => return check(v, path),
       }
     }
     unreachable!("the second attempt always returns")
   }
+}
+
+fn token_key(creds: &Creds) -> String {
+  format!("tenant-token-{}", creds.app_id)
 }
 
 async fn fetch_token(ctx: &Ctx, creds: &Creds) -> Result<(String, i64)> {
@@ -267,6 +260,26 @@ async fn fetch_token(ctx: &Ctx, creds: &Creds) -> Result<(String, i64)> {
     .str("tenant_access_token")
     .ok_or_else(|| Error::upstream("no tenant_access_token in the reply"))?;
   Ok((token, v.i64("expire").unwrap_or(7200)))
+}
+
+/// `query` with one page's `page_size` (at most `max`) and `page_token`.
+pub fn page_query<'a>(
+  mut query: Vec<(&'a str, String)>,
+  req: &PageReq,
+  max: usize,
+) -> Vec<(&'a str, String)> {
+  query.push(("page_size", req.size_within(max).to_string()));
+  if let Some(cursor) = &req.cursor {
+    query.push(("page_token", cursor.clone()));
+  }
+  query
+}
+
+/// The cursor of the next page, when there is one.
+pub fn next_page(v: &Value) -> Option<String> {
+  (v.bool("data.has_more") == Some(true))
+    .then(|| v.str("data.page_token"))
+    .flatten()
 }
 
 /// `code` 0 passes; the rest become errors saying what to do.

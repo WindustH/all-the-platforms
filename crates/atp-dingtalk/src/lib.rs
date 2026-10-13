@@ -6,21 +6,26 @@
 //! Robots have no access to chat history or chat lists.
 
 mod api;
+mod chats;
 mod extra;
-mod groups;
 mod live;
+mod login;
 mod messages;
+mod parse;
 mod refs;
+mod uploads;
+mod users;
+mod webhooks;
 
 use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo, Post, Result,
-  User, Value,
+  User,
 };
 
-use crate::api::{Api, Creds};
+use crate::api::Api;
 
 pub struct DingTalk {
   api: Api,
@@ -60,28 +65,15 @@ impl Platform for DingTalk {
   }
 
   async fn whoami(&self) -> Result<User> {
-    let creds = self.api.require()?;
-    self.api.token().await?;
-    Ok(User {
-      id: creds.robot_code.clone(),
-      name: format!("DingTalk app {}", creds.app_key),
-      extra: [
-        ("app_key".to_owned(), Value::from(creds.app_key)),
-        ("robot_code".to_owned(), Value::from(creds.robot_code)),
-      ]
-      .into_iter()
-      .collect(),
-      ..User::default()
-    })
+    users::whoami(&self.api).await
   }
 
   fn logged_in(&self) -> bool {
-    self.api.creds().is_some()
+    self.api.logged_in()
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    self.api.save(&Creds::parse(token)?);
-    Ok(())
+    login::login_token(&self.api, token)
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
@@ -89,7 +81,7 @@ impl Platform for DingTalk {
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    messages::user(&self.api, user).await
+    users::user(&self.api, user).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
@@ -101,7 +93,7 @@ impl Platform for DingTalk {
   }
 
   async fn members(&self, chat: &str, page: &PageReq) -> Result<Page<User>> {
-    groups::members(&self.api, chat, page).await
+    chats::members(&self.api, chat, page).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {

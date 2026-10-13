@@ -1,9 +1,9 @@
 //! OneBot-only commands: group administration and any other action.
 
-use atp_core::{Action, Data, Error, Result, Value, json};
+use atp_core::{Data, Error, Result, Value};
 
 use crate::api::Api;
-use crate::refs::{self, Chat, num};
+use crate::groups;
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -44,66 +44,36 @@ Examples:
   atp onebot call get_group_info '{\"group_id\": 123456}'
   atp onebot call send_like '{\"user_id\": 10001, \"times\": 1}'";
 
-fn group(arg: &str) -> Result<String> {
-  match refs::chat(arg)? {
-    Chat::Group(g) => Ok(g),
-    Chat::Private(_) => Err(Error::input("give a group (group:<number>)")),
-  }
-}
-
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;
   Ok(match command {
     Command::Kick {
-      group: g,
+      group,
       user,
       reject,
     } => {
-      let g = group(&ctx.collection_ref(&g)?)?;
-      let u = refs::user(&ctx.user_ref(&user)?)?;
-      api
-        .call(
-          "set_group_kick",
-          json!({"group_id": num(&g), "user_id": num(&u), "reject_add_request": reject}),
-        )
-        .await?;
-      Data::Action(Action::done("kick", format!("{u} from group:{g}")))
+      let (group, user) = (ctx.collection_ref(&group)?, ctx.user_ref(&user)?);
+      Data::Action(groups::kick(api, &group, &user, reject).await?)
     }
     Command::Mute {
-      group: g,
+      group,
       user,
       minutes,
     } => {
-      let g = group(&ctx.collection_ref(&g)?)?;
-      let u = refs::user(&ctx.user_ref(&user)?)?;
-      api
-        .call(
-          "set_group_ban",
-          json!({"group_id": num(&g), "user_id": num(&u), "duration": minutes * 60}),
-        )
-        .await?;
-      let what = if minutes == 0 { "unmute" } else { "mute" };
-      Data::Action(Action::done(what, format!("{u} in group:{g}")))
+      let (group, user) = (ctx.collection_ref(&group)?, ctx.user_ref(&user)?);
+      Data::Action(groups::mute(api, &group, &user, minutes).await?)
     }
-    Command::Card {
-      group: g,
-      user,
-      card,
-    } => {
-      let g = group(&ctx.collection_ref(&g)?)?;
-      let u = refs::user(&ctx.user_ref(&user)?)?;
-      api
-        .call(
-          "set_group_card",
-          json!({"group_id": num(&g), "user_id": num(&u), "card": card}),
-        )
-        .await?;
-      Data::Action(Action::done("card", format!("{u} in group:{g}")))
+    Command::Card { group, user, card } => {
+      let (group, user) = (ctx.collection_ref(&group)?, ctx.user_ref(&user)?);
+      Data::Action(groups::card(api, &group, &user, &card).await?)
     }
-    Command::Call { action, params } => {
-      let params: Value = serde_json::from_str(&params)
-        .map_err(|e| Error::input(format!("parameters are not JSON: {e}")))?;
-      Data::Value(api.call(&action, params).await?)
-    }
+    Command::Call { action, params } => Data::Value(call(api, &action, &params).await?),
   })
+}
+
+/// Any action with parameters given as JSON.
+async fn call(api: &Api, action: &str, params: &str) -> Result<Value> {
+  let params: Value = serde_json::from_str(params)
+    .map_err(|e| Error::input(format!("parameters are not JSON: {e}")))?;
+  api.call(action, params).await
 }

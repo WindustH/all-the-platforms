@@ -9,7 +9,8 @@
 //!
 //! A message the app's robot sent is `CHAT/processQueryKey`.
 
-use atp_core::{Error, Result};
+use atp_core::chat::split_message_id;
+use atp_core::{Error, Result, credentials};
 use url::Url;
 
 #[derive(Debug, Clone)]
@@ -38,11 +39,7 @@ pub fn target(arg: &str) -> Result<Target> {
       .query_pairs()
       .find(|(k, _)| k == "secret")
       .map(|(_, v)| v.into_owned())
-      .or_else(|| {
-        std::env::var("DINGTALK_WEBHOOK_SECRET")
-          .ok()
-          .filter(|s| !s.is_empty())
-      });
+      .or_else(|| credentials::env("DINGTALK_WEBHOOK_SECRET"));
     let kept: Vec<(String, String)> = url
       .query_pairs()
       .filter(|(k, _)| k != "secret")
@@ -79,7 +76,7 @@ pub fn target(arg: &str) -> Result<Target> {
 /// `(target, processQueryKey)` of a sent message (`CHAT/KEY`).
 pub fn sent(arg: &str) -> Result<(Target, String)> {
   let arg = arg.trim();
-  let Some((chat, key)) = arg.rsplit_once('/') else {
+  let Some((chat, key)) = split_message_id(arg) else {
     return Err(Error::input(format!(
       "not a sent DingTalk message: {arg}; expected CHAT/processQueryKey as `send` prints it"
     )));
