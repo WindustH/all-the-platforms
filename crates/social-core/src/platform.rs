@@ -6,7 +6,7 @@
 //! sense on one platform live in the platform's own `Extra` subcommand enum.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::ctx::Ctx;
@@ -535,6 +535,13 @@ pub trait Platform: Sized {
   }
 
   // ── media ────────────────────────────────────────────────────────────
+
+  /// Save one media file that is not reachable over HTTP (its `url` in the
+  /// platform's own scheme) as `dir/name.<ext>` and return the path; `None`
+  /// lets the shared downloader fetch `url`.
+  async fn save_media(&self, media: &Media, dir: &Path, name: &str) -> Option<Result<PathBuf>> {
+    None
+  }
 
   /// The post and the media files to download. Defaults to the media of `read`.
   async fn media(&self, post: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {

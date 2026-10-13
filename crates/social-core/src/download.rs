@@ -23,12 +23,15 @@ pub struct DownloadOpts {
   pub split: Option<u32>,
 }
 
+/// `save` is the platform's [`Platform::save_media`](crate::Platform::save_media):
+/// files it saves itself skip the HTTP fetch.
 pub async fn download(
   ctx: &Ctx,
   referer: &str,
   post: &Post,
   media: &[Media],
   opts: &DownloadOpts,
+  save: impl AsyncFn(&Media, &Path, &str) -> Option<Result<PathBuf>>,
 ) -> Result<Vec<Downloaded>> {
   let wanted: Vec<&Media> = media
     .iter()
@@ -46,7 +49,9 @@ pub async fn download(
     } else {
       stem.clone()
     };
-    let path = if opts.audio_only {
+    let path = if let Some(saved) = save(m, &opts.dir, &name).await {
+      saved?
+    } else if opts.audio_only {
       audio(ctx, referer, m, &opts.dir, &name).await?
     } else {
       full(ctx, referer, m, &opts.dir, &name).await?
@@ -112,6 +117,7 @@ fn extension(url: &str, kind: MediaKind) -> &'static str {
       MediaKind::Image => "jpg",
       MediaKind::Video | MediaKind::Gif => "mp4",
       MediaKind::Audio => "m4a",
+      MediaKind::File => "bin",
     },
   }
 }

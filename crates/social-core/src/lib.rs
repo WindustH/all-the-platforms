@@ -21,7 +21,7 @@ pub mod model;
 pub mod output;
 pub mod paging;
 pub mod platform;
-mod qr;
+pub mod qr;
 pub mod store;
 pub mod text;
 
