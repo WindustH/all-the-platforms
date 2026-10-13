@@ -41,6 +41,7 @@ pub async fn read(api: &Api, arg: &str) -> Result<Post> {
 pub async fn search(api: &Api, q: &Query, req: &PageReq) -> Result<Page<Post>> {
   let product = match q.sort.as_deref() {
     Some("latest") => "Latest",
+    Some("media") => "Media",
     _ => "Top",
   };
   let mut raw = q.keyword.trim().to_owned();

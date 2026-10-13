@@ -13,8 +13,17 @@ use crate::api::Api;
 const UPLOAD: &str = "https://upload.twitter.com/i/media/upload.json";
 const MAX_BYTES: u64 = 5 * 1024 * 1024;
 
-/// Upload one image; returns its media id.
+/// Upload one image for a tweet; returns its media id.
 pub async fn image(api: &Api, path: &Path) -> Result<String> {
+  upload(api, path, false).await
+}
+
+/// Upload one image for a direct message (`dm_image` / `dm_gif`).
+pub async fn dm_image(api: &Api, path: &Path) -> Result<String> {
+  upload(api, path, true).await
+}
+
+async fn upload(api: &Api, path: &Path, dm: bool) -> Result<String> {
   let Image {
     data,
     mime: media_type,
@@ -38,16 +47,20 @@ pub async fn image(api: &Api, path: &Path) -> Result<String> {
     )));
   }
   let size = size.to_string();
-  let init = api
-    .post_form(
-      UPLOAD,
-      &[
-        ("command", "INIT"),
-        ("total_bytes", &size),
-        ("media_type", media_type),
-      ],
-    )
-    .await?;
+  let category = if media_type == "image/gif" {
+    "dm_gif"
+  } else {
+    "dm_image"
+  };
+  let mut init_form = vec![
+    ("command", "INIT"),
+    ("total_bytes", size.as_str()),
+    ("media_type", media_type),
+  ];
+  if dm {
+    init_form.push(("media_category", category));
+  }
+  let init = api.post_form(UPLOAD, &init_form).await?;
   let id = init
     .str("media_id_string")
     .ok_or_else(|| Error::upstream("media upload INIT returned no media id"))?;

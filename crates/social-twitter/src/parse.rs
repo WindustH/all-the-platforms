@@ -2,7 +2,7 @@
 //! long notes, articles, best media variants).
 
 use social_core::text::parse_time;
-use social_core::{Media, MediaKind, Metrics, Post, User, UserStats, Value, ValueExt};
+use social_core::{Media, MediaKind, Metrics, Post, User, UserStats, Value, ValueExt, json};
 
 use crate::refs::{tweet_url, user_url};
 
@@ -180,6 +180,23 @@ fn post_at(result: &Value, depth: usize) -> Option<Post> {
   if !urls.is_empty() {
     put("urls", Some(urls.into()));
   }
+  put("poll", poll(t.at("card.legacy")));
+  put("community_note", community_note(t));
+  if let Some(community) = t.str("community_results.result.rest_id") {
+    put("community", Some(community.into()));
+  }
+  // Later versions keep the history under `edit_control_initial`.
+  let ids = [
+    "edit_control.edit_tweet_ids",
+    "edit_control.edit_control_initial.edit_tweet_ids",
+  ]
+  .iter()
+  .map(|p| t.list(p))
+  .find(|l| !l.is_empty())
+  .unwrap_or_default();
+  if ids.len() > 1 {
+    put("edits", Some(Value::from(ids.len() - 1)));
+  }
   for (key, flag) in [
     ("liked", "favorited"),
     ("retweeted", "retweeted"),
@@ -190,6 +207,52 @@ fn post_at(result: &Value, depth: usize) -> Option<Post> {
     }
   }
   Some(post)
+}
+
+/// A poll card (`pollNchoice…`): choices with their votes, end time, whether final.
+fn poll(card: &Value) -> Option<Value> {
+  let name = card.str("name")?;
+  if !name.starts_with("poll") {
+    return None;
+  }
+  let binding = |key: &str| -> Option<&Value> {
+    card
+      .list("binding_values")
+      .iter()
+      .find(|b| b.str("key").as_deref() == Some(key))
+      .map(|b| b.at("value"))
+  };
+  let text = |key: &str| binding(key).and_then(|v| v.str("string_value"));
+  let mut choices = Vec::new();
+  for n in 1..=4 {
+    let Some(label) = text(&format!("choice{n}_label")) else {
+      break;
+    };
+    let votes = text(&format!("choice{n}_count")).and_then(|c| c.parse::<u64>().ok());
+    choices.push(json!({ "label": label, "votes": votes }));
+  }
+  if choices.is_empty() {
+    return None;
+  }
+  let finished = binding("counts_are_final").and_then(|v| v.bool("boolean_value"));
+  Some(json!({
+    "choices": choices,
+    "ends_at": text("end_datetime_utc"),
+    "final": finished,
+  }))
+}
+
+/// The community note shown under a tweet, if any.
+fn community_note(t: &Value) -> Option<Value> {
+  let pivot = t.at("birdwatch_pivot");
+  let text = pivot
+    .str("subtitle.text")
+    .or_else(|| pivot.str("note.summary.text"))?;
+  Some(json!({
+    "text": text,
+    "id": pivot.str("note.rest_id"),
+    "url": pivot.str("destinationUrl").or_else(|| pivot.str("destination_url")),
+  }))
 }
 
 fn metrics(t: &Value) -> Metrics {
