@@ -22,10 +22,14 @@ pub async fn prepare(ctx: &Ctx) -> Result<()> {
 
 /// Upvote an answer, like an article or a pin; `undo` goes back to neutral.
 pub async fn like(ctx: &Ctx, target: &Target, undo: bool) -> Result<Action> {
-  if matches!(target, Target::Question(_)) {
-    return Err(Error::input(
-      "questions cannot be liked; use `follow-question` instead",
-    ));
+  match target {
+    Target::Question(_) => {
+      return Err(Error::input(
+        "questions cannot be liked; use `follow-question` instead",
+      ));
+    }
+    Target::Zvideo(_) => return Err(Error::unsupported("like (videos)")),
+    _ => {}
   }
   prepare(ctx).await?;
   let req = match target {
@@ -134,7 +138,100 @@ pub async fn delete(ctx: &Ctx, target: &Target) -> Result<Action> {
     Target::Answer(id) => format!("{V4}/answers/{id}"),
     Target::Article(id) => format!("{ZHUANLAN}/articles/{id}"),
     Target::Pin(id) => format!("{V4}/pins/{id}"),
+    Target::Zvideo(_) => return Err(Error::unsupported("delete (videos)")),
   };
   api::call(ctx, api::delete(ctx, &url)).await?;
   Ok(Action::done("delete", target.url()).with_id(target.id()))
+}
+
+/// Vote on an answer: `up`, `down` (反对) or `neutral`. Articles take `up` /
+/// `neutral` only, like pins ([`like`]).
+pub async fn vote(ctx: &Ctx, target: &Target, direction: &str) -> Result<Action> {
+  match (target, direction) {
+    (Target::Answer(_), "up" | "down" | "neutral") => {}
+    (Target::Answer(_), other) => {
+      return Err(Error::input(format!(
+        "vote `{other}`: use up, down or neutral"
+      )));
+    }
+    (_, "up") => return like(ctx, target, false).await,
+    (_, "neutral") => return like(ctx, target, true).await,
+    _ => {
+      return Err(Error::input(
+        "only answers take down votes; articles and pins take up or neutral",
+      ));
+    }
+  }
+  prepare(ctx).await?;
+  let req = api::post(ctx, &format!("{V4}/answers/{}/voters", target.id()))
+    .json(&json!({ "type": direction }));
+  api::call(ctx, req).await?;
+  Ok(Action::done(format!("vote {direction}"), target.url()))
+}
+
+/// Like a comment (赞), or take the like back.
+pub async fn like_comment(ctx: &Ctx, comment: &str, undo: bool) -> Result<Action> {
+  prepare(ctx).await?;
+  let url = format!("{V4}/comments/{comment}/like");
+  let req = if undo {
+    api::delete(ctx, &url)
+  } else {
+    api::post(ctx, &url)
+  };
+  api::call(ctx, req).await?;
+  let action = if undo {
+    "unlike_comment"
+  } else {
+    "like_comment"
+  };
+  Ok(Action::done(action, comment))
+}
+
+/// Block a user (屏蔽 / 拉黑), or unblock.
+pub async fn block(ctx: &Ctx, token: &str, undo: bool) -> Result<Action> {
+  prepare(ctx).await?;
+  let url = format!("{V4}/members/{token}/actions/block");
+  let req = if undo {
+    api::delete(ctx, &url)
+  } else {
+    api::post(ctx, &url)
+  };
+  api::call(ctx, req).await?;
+  Ok(Action::done(if undo { "unblock" } else { "block" }, token))
+}
+
+/// Create a favorites folder; it is public unless `private`.
+pub async fn create_folder(
+  ctx: &Ctx,
+  title: &str,
+  description: &str,
+  private: bool,
+) -> Result<Action> {
+  prepare(ctx).await?;
+  let body = json!({ "title": title, "description": description, "is_public": !private });
+  let v = api::call(
+    ctx,
+    api::post(ctx, &format!("{V4}/collections")).json(&body),
+  )
+  .await?;
+  let mut done = Action::done("create_folder", title);
+  if let Some(id) = v.first_str(&["collection.id", "id"]) {
+    done = done
+      .with_url(format!("https://www.zhihu.com/collection/{id}"))
+      .with_id(id);
+  }
+  Ok(done)
+}
+
+/// Delete one of your favorites folders (not the default one).
+pub async fn delete_folder(ctx: &Ctx, folder: &str) -> Result<Action> {
+  prepare(ctx).await?;
+  let v = api::call(ctx, api::delete(ctx, &format!("{V4}/collections/{folder}"))).await?;
+  if v.bool("success") == Some(false) {
+    let why = v.str("message").unwrap_or_else(|| "refused".into());
+    return Err(Error::upstream(format!(
+      "folder {folder} not deleted: {why}"
+    )));
+  }
+  Ok(Action::done("delete_folder", folder).with_id(folder))
 }

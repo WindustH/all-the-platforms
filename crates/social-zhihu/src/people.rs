@@ -23,7 +23,12 @@ pub async fn user(ctx: &Ctx, token: &str) -> Result<User> {
 }
 
 /// One page of an offset-paged v4 listing.
-async fn list(ctx: &Ctx, path: &str, include: Option<&str>, page: &PageReq) -> Result<Value> {
+pub(crate) async fn list(
+  ctx: &Ctx,
+  path: &str,
+  include: Option<&str>,
+  page: &PageReq,
+) -> Result<Value> {
   let mut req = api::get(ctx, &format!("{V4}/{path}")).queries([
     ("offset", page.number_or(0)),
     ("limit", page.size_within(20) as u64),
@@ -34,7 +39,7 @@ async fn list(ctx: &Ctx, path: &str, include: Option<&str>, page: &PageReq) -> R
   api::call(ctx, req).await
 }
 
-fn posts(v: &Value, map: fn(&Value) -> Post) -> Page<Post> {
+pub(crate) fn posts(v: &Value, map: fn(&Value) -> Post) -> Page<Post> {
   Page::new(
     v.list("data").iter().map(map).collect(),
     api::next_param(v, "offset"),
@@ -95,7 +100,7 @@ pub async fn likers(ctx: &Ctx, target: &Target, page: &PageReq) -> Result<Page<U
   ))
 }
 
-async fn owner(ctx: &Ctx, user: Option<&str>) -> Result<String> {
+pub(crate) async fn owner(ctx: &Ctx, user: Option<&str>) -> Result<String> {
   match user {
     Some(u) => Ok(u.to_owned()),
     None => account::my_token(ctx).await,

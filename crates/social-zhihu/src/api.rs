@@ -44,6 +44,20 @@ pub fn get<'a>(ctx: &'a Ctx, url: &str) -> Req<'a> {
   request(ctx, Method::GET, url)
 }
 
+/// A GET to the mobile API host (`path` or a full URL) as the Android app
+/// sends it; it takes the web session cookies.
+pub fn mobile<'a>(ctx: &'a Ctx, path: &str) -> Req<'a> {
+  let url = if path.starts_with("http") {
+    path.to_owned()
+  } else {
+    format!("{MOBILE}{path}")
+  };
+  get(ctx, &url)
+    .header("x-api-version", "3.0.93")
+    .header("x-app-version", "11.4.0")
+    .header("x-app-za", "OS=Android&Release=13&VersionName=11.4.0&VersionCode=21000&Product=com.zhihu.android&DeviceType=AndroidPhone")
+}
+
 pub fn post<'a>(ctx: &'a Ctx, url: &str) -> Req<'a> {
   request(ctx, Method::POST, url)
 }

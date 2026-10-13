@@ -1,10 +1,10 @@
-//! Content objects: answers, questions, articles and pins.
+//! Content objects: answers, questions, articles, pins and videos (zvideo).
 
 use std::sync::LazyLock;
 
+use regex::Regex;
 use social_core::text::{html_to_text, parse_count};
 use social_core::{Media, Metrics, Post, Value, ValueExt};
-use regex::Regex;
 
 use super::{author, text, time};
 use crate::api::WWW;
@@ -17,6 +17,7 @@ pub fn post(v: &Value) -> Option<Post> {
     "article" => Some(article(v)),
     "question" => Some(question(v)),
     "pin" => Some(pin(v)),
+    "zvideo" => Some(zvideo(v)),
     _ => None,
   }
 }
@@ -123,6 +124,7 @@ pub fn pin(v: &Value) -> Post {
           p.media.push(m);
         }
       }
+      Some("video") => p.media.extend(video(item.at("video_info"))),
       Some("link") => {
         if let Some(url) = item.str("url") {
           html.push_str(&format!("<p>{url}</p>"));
@@ -152,6 +154,127 @@ pub fn pin(v: &Value) -> Post {
     p.quoted = Some(Box::new(pin(v.at("origin_pin"))));
   }
   p
+}
+
+/// A video (视频, `zvideo`). Listings carry no stream URL, only the cover.
+pub fn zvideo(v: &Value) -> Post {
+  let mut p = base(v, "zvideo");
+  p.title = v.str("title").filter(|t| !t.trim().is_empty());
+  p.url = Some(format!("{WWW}/zvideo/{}", p.id));
+  p.text = v
+    .first_str(&["description", "excerpt"])
+    .and_then(|d| text(&d));
+  p.created_at = p.created_at.or_else(|| time(v, &["published_at"]));
+  p.updated_at = p.updated_at.or_else(|| time(v, &["updated_at"]));
+  p.media = video(v.at("video")).into_iter().collect();
+  if p.media.is_empty()
+    && let Some(cover) = v.first_str(&["video.thumbnail", "image_url"])
+  {
+    p.media.push(Media::image(cover));
+  }
+  p.metrics = Metrics {
+    views: v.first_count(&["play_count", "video.play_count"]),
+    likes: v.count("voteup_count"),
+    comments: v.count("comment_count"),
+    favorites: v.count("favlists_count"),
+    shares: v.count("share_count"),
+    ..Metrics::default()
+  };
+  other(&mut p.metrics, v, &[("danmaku", "bullet_count")]);
+  statistics(&mut p.metrics, v);
+  if let Some(d) = v.f64("video.duration") {
+    p.extra.insert("duration".into(), d.into());
+  }
+  p
+}
+
+/// The best stream of a `video_info` / `video` object with a `playlist`
+/// (`fhd`, `hd`, `sd`, `ld`), when it has one.
+fn video(v: &Value) -> Option<Media> {
+  let best = ["fhd", "hd", "sd", "ld"]
+    .iter()
+    .map(|q| v.at(&format!("playlist.{q}")))
+    .find(|s| s.first_str(&["play_url", "url"]).is_some())?;
+  let mut m = Media::video(best.first_str(&["play_url", "url"])?);
+  m.width = best.u64("width").map(|w| w as u32);
+  m.height = best.u64("height").map(|h| h as u32);
+  m.duration = best.f64("duration").or_else(|| v.f64("duration"));
+  m.size = best.u64("size").filter(|s| *s > 0);
+  Some(m)
+}
+
+/// An entry of the follow feed or of a user's activities: the content, with
+/// who did what (`赞同了回答`) and when in `extra`.
+pub fn activity(v: &Value) -> Option<Post> {
+  let mut p = post(v.at("target"))?;
+  let actor = v
+    .first_str(&["actors.0.name", "actor.name"])
+    .filter(|n| !n.is_empty());
+  if let Some(verb) = v.str("verb") {
+    p.extra.insert("action".into(), verb.into());
+  }
+  if let Some(text) = v.str("action_text") {
+    p.extra.insert("action_text".into(), text.into());
+  }
+  if let Some(actor) = actor {
+    p.extra.insert("actor".into(), actor.into());
+  }
+  if let Some(at) = time(v, &["created_time"]) {
+    p.extra.insert("acted_at".into(), at.to_string().into());
+  }
+  Some(p)
+}
+
+/// A read-history card (`unify-consumption/read_history`): what was read and when.
+pub fn history_item(v: &Value) -> Option<Post> {
+  let d = v.at("data");
+  let extra = d.at("extra");
+  let id = extra.str("content_token")?;
+  let kind = extra.str("content_type").unwrap_or_else(|| "answer".into());
+  let question = extra.str("question_token");
+  let url = match kind.as_str() {
+    "answer" => answer_url(&id, question.as_deref()),
+    "article" => article_url(&id),
+    "question" => question_url(&id),
+    "pin" => format!("{WWW}/pin/{id}"),
+    "zvideo" => format!("{WWW}/zvideo/{id}"),
+    _ => d
+      .str("header.action.url")
+      .unwrap_or_else(|| format!("{WWW}/{kind}/{id}")),
+  };
+  let mut p = Post {
+    id,
+    kind,
+    title: d.str("header.title"),
+    text: d.str("content.summary"),
+    url: Some(url),
+    author: d.str("content.author_name").map(|name| social_core::User {
+      name,
+      ..Default::default()
+    }),
+    media: d
+      .str("content.cover_image")
+      .map(Media::image)
+      .into_iter()
+      .collect(),
+    raw: Some(v.clone()),
+    ..Post::default()
+  };
+  if let Some(at) = time(extra, &["read_time"]) {
+    p.extra.insert("read_at".into(), at.to_string().into());
+  }
+  if let Some(q) = question {
+    p.extra.insert("question_id".into(), q.into());
+  }
+  let stats: Vec<String> = d
+    .list("matrix")
+    .iter()
+    .filter_map(|m| m.str("data.text"))
+    .collect();
+  if !stats.is_empty() {
+    p.extra.insert("summary".into(), stats.join(" · ").into());
+  }
+  Some(p)
 }
 
 /// An entry of the hot list: the question with its heat (`1874 万热度`).
