@@ -15,5 +15,6 @@ fn main() -> ExitCode {
   .platform::<social_mp::Mp>()
   .platform::<social_telegram::Telegram>()
   .platform::<social_weibo::Weibo>()
+  .platform::<social_douyin::Douyin>()
   .run()
 }

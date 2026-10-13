@@ -657,6 +657,7 @@ dependencies = [
  "block-buffer 0.12.1",
  "crypto-common 0.2.2",
  "inout 0.2.2",
+ "inout",
 ]
 
 [[package]]
@@ -2988,6 +2989,7 @@ checksum = "112d82ceb8c5bf524d9af484d4e4970c9fd5a0cc15ba14ad93dccd28873b0629"
 dependencies = [
  "digest 0.11.3",
  "hmac 0.13.0",
+ "hmac",
 ]
 
 [[package]]
@@ -3701,6 +3703,8 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.1",
  "digest 0.11.3",
+ "cpufeatures",
+ "digest 0.10.7",
 ]
 
 [[package]]
@@ -3723,6 +3727,8 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.1",
  "digest 0.11.3",
+ "cpufeatures",
+ "digest 0.10.7",
 ]
 
 [[package]]
@@ -3781,6 +3787,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "sm3"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da6a89ba31723d185fd7413b98c576a575f356d9b84729d8ecb6ead60000a5b6"
+dependencies = [
+ "digest 0.11.3",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3808,6 +3823,7 @@ dependencies = [
  "social-bilibili",
  "social-core",
  "social-mp",
+ "social-douyin",
  "social-reddit",
  "social-telegram",
  "social-twitter",
@@ -3856,10 +3872,17 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "jiff",
+name = "social-douyin"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "md-5",
  "rand 0.9.5",
  "regex",
  "serde",
  "serde_json",
+ "sm3",
  "social-core",
  "tokio",
  "tracing",
