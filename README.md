@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/social-cli-logo-dark.svg">
-    <img src="docs/assets/social-cli-logo-light.svg" alt="social-cli" width="360">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/all-the-platforms-logo-dark.svg">
+    <img src="docs/assets/all-the-platforms-logo-light.svg" alt="all-the-platforms" width="480">
   </picture>
 </p>
 
@@ -17,29 +17,29 @@
 
 ---
 
-`social` reads, searches, publishes, chats and downloads on Zhihu,
+`atp` reads, searches, publishes, chats and downloads on Zhihu,
 Xiaohongshu, Weibo, Bilibili, Douyin, WeChat, Telegram, Discord, YouTube,
 TikTok, Reddit, Twitter / X and many more, with the same commands
 everywhere. It works in a terminal for people, and in scripts and AI agents
 through a stable JSON / YAML output.
 
 ```console
-$ social bili search "rust 教程" -n 3
+$ atp bili search "rust 教程" -n 3
  #  Content                                                      Author        Likes  Cmts  Views   Time
  1  Rust编程语言入门教程（Rust语言/Rust权威指南配套）【已完结】  软件工艺师    26.1k  2.6k    1.7M  2020-10-21
  2  【Rust腐蚀 新手教程】2026保姆级教程 实时更新！！！           Utaoki丶苦药   1.9k   401  155.3k  2025-01-13
  3  Rust语言 Slint教程，非tauri                                  猩猩程序员        0     0    7.5k
 
-$ social bili read '#1'
-$ social tg listen -f jsonl          # every new Telegram message, as it arrives
+$ atp bili read '#1'
+$ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 ```
 
-## Why social-cli
+## Why all-the-platforms
 
 - **Learn it once.** `search`, `hot`, `feed`, `read`, `comments`, `user`,
   `like`, `comment`, `follow`, `post`, `download` ... mean the same thing on
   every platform, and chat apps share `chats`, `messages`, `send`, `react`
-  and `listen`. `social platforms` shows what each one supports.
+  and `listen`. `atp platforms` shows what each one supports.
 - **Made for agents and scripts.** Every result comes in one envelope with
   stable fields and error codes; piped output switches to YAML by itself.
   Posts, messages, users and comments share one shape across platforms.
@@ -109,75 +109,75 @@ cargo install --path .
 Try it without an account:
 
 ```sh
-social bili search "rust 教程" -n 5
-social bili comments '#1'
-social x user-posts NASA -n 10
-social xhs read https://www.xiaohongshu.com/explore/68cfff45000000001003c253
-social reddit sub rust --sort top --time week -n 5
-social youtube search "rust tutorial" --filter video -n 5
-social yt transcript https://youtu.be/5C_HPTJg5ek
-social mp read https://mp.weixin.qq.com/s/nwv1BVYGbpuYJO0bPp-APQ
-social tg messages @telegram -n 20
-social misskey feed --type global -n 10
+atp bili search "rust 教程" -n 5
+atp bili comments '#1'
+atp x user-posts NASA -n 10
+atp xhs read https://www.xiaohongshu.com/explore/68cfff45000000001003c253
+atp reddit sub rust --sort top --time week -n 5
+atp youtube search "rust tutorial" --filter video -n 5
+atp yt transcript https://youtu.be/5C_HPTJg5ek
+atp mp read https://mp.weixin.qq.com/s/nwv1BVYGbpuYJO0bPp-APQ
+atp tg messages @telegram -n 20
+atp misskey feed --type global -n 10
 ```
 
 Log in for everything else:
 
 ```sh
-social bili login                 # scan the QR code with the Bilibili app
-social tg login                   # scan in Telegram → Devices → Link Desktop Device
-social twitter login --cookie 'auth_token=...; ct0=...'
-social reddit login --browser     # reuse the session of your browser
-social slack login --token xoxb-...
-social zhihu status
+atp bili login                 # scan the QR code with the Bilibili app
+atp tg login                   # scan in Telegram → Devices → Link Desktop Device
+atp twitter login --cookie 'auth_token=...; ct0=...'
+atp reddit login --browser     # reuse the session of your browser
+atp slack login --token xoxb-...
+atp zhihu status
 ```
 
 A few more:
 
 ```sh
-social zhihu hot -n 10
-social xhs search 咖啡 --sort popular
-social x read https://x.com/NASA/status/2104695667180380260 --json
-social bili subtitle BV1xx411c7mD
-social bili download BV1xx411c7mD --audio-only --split 25
-social twitter post "Hello" -i photo.jpg
-social reddit comments '#1' --sort top
-social reddit post "Hello from the terminal" --title "Hi" --topic r/test
-social reddit follow r/rust
-social youtube user @Fireship
-social yt comments '#1' --sort new --all --replies -f csv > comments.csv
-social youtube download https://www.youtube.com/shorts/fwBIZRq-vzY
-social tg chats                                   # your dialogs; then:
-social tg messages '#3' -n 500 --since 7d -f jsonl > group.jsonl
-social discord send '#2' 'Hello' -a chart.png
-social feishu listen -f jsonl                     # events, as they arrive
+atp zhihu hot -n 10
+atp xhs search 咖啡 --sort popular
+atp x read https://x.com/NASA/status/2104695667180380260 --json
+atp bili subtitle BV1xx411c7mD
+atp bili download BV1xx411c7mD --audio-only --split 25
+atp twitter post "Hello" -i photo.jpg
+atp reddit comments '#1' --sort top
+atp reddit post "Hello from the terminal" --title "Hi" --topic r/test
+atp reddit follow r/rust
+atp youtube user @Fireship
+atp yt comments '#1' --sort new --all --replies -f csv > comments.csv
+atp youtube download https://www.youtube.com/shorts/fwBIZRq-vzY
+atp tg chats                                   # your dialogs; then:
+atp tg messages '#3' -n 500 --since 7d -f jsonl > group.jsonl
+atp discord send '#2' 'Hello' -a chart.png
+atp feishu listen -f jsonl                     # events, as they arrive
 ```
 
 Each platform also answers to shorter names (`bilibili`, `x`, `xiaohongshu`,
 `zh`, `rd`, `yt` ...). Link the binary as `bili`, `xhs`, `twitter`, `zhihu`,
-`reddit` or `youtube` to skip the platform word entirely: `ln -s $(which social) ~/.local/bin/bili`.
+`reddit` or `youtube` to skip the platform word entirely: `ln -s $(which atp) ~/.local/bin/bili`.
 
 ## Documentation
 
 Everything is documented inside the binary:
 
 ```sh
-social guide                 # topics: start, login, refs, output, analysis, download ...
-social guide analysis        # creator insights, exports, snapshots
-social guide bili            # one platform: commands, references, login, limits
-social bili search --help    # a command's options, with examples
+atp guide                 # topics: start, login, refs, output, analysis, download ...
+atp guide analysis        # creator insights, exports, snapshots
+atp guide bili            # one platform: commands, references, login, limits
+atp bili search --help    # a command's options, with examples
 ```
 
 ## Good to know
 
-- `SOCIAL_<PLATFORM>_COOKIE` (for example `SOCIAL_BILI_COOKIE`) supplies a cookie
+- `ATP_<PLATFORM>_COOKIE` (for example `ATP_BILI_COOKIE`) supplies a cookie
   header without saving it. `--proxy` or `HTTPS_PROXY` routes requests through a proxy.
-- `--interval 5` (or `SOCIAL_INTERVAL=5`) spaces requests at least five seconds
+- `--interval 5` (or `ATP_INTERVAL=5`) spaces requests at least five seconds
   apart, for large collection jobs.
-- Sessions live in `~/.config/social-cli/<platform>/session.json` (readable by
-  you only); `social <platform> logout` removes them.
+- Sessions live in `~/.config/all-the-platforms/<platform>/session.json` (readable by
+  you only); `atp <platform> logout` removes them.
 - Bot tokens, API keys and app credentials go in with `login --token`
-  (`-` reads them from stdin); `social guide <platform>` says which form a
+  (`-` reads them from stdin); `atp guide <platform>` says which form a
   platform takes and what it unlocks.
 - `login --browser` reads the session from a local browser (Chrome, Edge,
   Firefox, Brave ...). To build without it, use `--no-default-features`.
@@ -185,10 +185,10 @@ social bili search --help    # a command's options, with examples
   `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME` and
   `REDDIT_PASSWORD` for a personal "script" app from
   <https://www.reddit.com/prefs/apps> to use Reddit's official API.
-- YouTube's creator analytics (`social youtube insights`) come from the
+- YouTube's creator analytics (`atp youtube insights`) come from the
   official YouTube Analytics API: set `YOUTUBE_CLIENT_ID` and
   `YOUTUBE_CLIENT_SECRET` of a "Desktop app" OAuth client, run
-  `social youtube oauth` once and set the `YOUTUBE_REFRESH_TOKEN` it prints.
+  `atp youtube oauth` once and set the `YOUTUBE_REFRESH_TOKEN` it prints.
 - Keep bulk jobs slow: the platforms watch for automated use and may restrict
   accounts that look like bots. Automating a personal Discord or WhatsApp
   account is against their terms; bots and official APIs are the safe route.

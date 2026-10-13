@@ -1,0 +1,19 @@
+[package]
+name = "atp-dingtalk"
+description = "DingTalk support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+clap.workspace = true
+hmac = "0.12"
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+atp-core.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true

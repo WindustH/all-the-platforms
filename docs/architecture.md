@@ -1,24 +1,24 @@
 # Architecture
 
-social-cli is one binary (`social`) that drives several social platforms through
+all-the-platforms is one binary (`atp`) that drives social, video and chat platforms through
 the same command set. The code is split so that each part stays small and
 knows as little as possible about the others.
 
 ```
 src/main.rs                 registry: lists the platforms, nothing else
-crates/social-core          platform-agnostic kernel
-crates/social-<platform>    one crate per platform (social-zhihu, social-telegram ...)
-crates/social-meta          Graph API pieces shared by social-facebook and social-instagram
+crates/atp-core          platform-agnostic kernel
+crates/atp-<platform>    one crate per platform (atp-zhihu, atp-telegram ...)
+crates/atp-meta          Graph API pieces shared by atp-facebook and atp-instagram
 ```
 
 Naming, layout and size rules are in [conventions.md](conventions.md).
 
 Dependencies only point downwards: the binary depends on every crate,
-platform crates depend on `social-core` only, and `social-core` knows no
+platform crates depend on `atp-core` only, and `atp-core` knows no
 platform. Adding a platform means adding a crate and one `.platform::<P>()`
 line in `src/main.rs`.
 
-## social-core
+## atp-core
 
 | Module | Role |
 | --- | --- |
@@ -26,14 +26,14 @@ line in `src/main.rs`.
 | `ctx` | `Ctx`: what a platform works with (HTTP client with the session cookies, files, session extras, login hints, `#N` resolution) |
 | `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `Page<T>`, `Action`, `AuthStatus`, `Insights`, `Transcript`, and `Data` (everything a command can print), one file per type |
 | `cli` | the shared commands, one module per area (`account`, `read`, `library`, `write`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options |
-| `app` | top-level program, `social platforms`, multi-call (`bili` symlink) |
+| `app` | top-level program, `atp platforms`, multi-call (`bili` symlink) |
 | `account` | `login` (QR / token / browser / cookie string), `logout`, `status` |
 | `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, proxy; `request` (building, sending, retries, streaming), `response` |
 | `store` | session file (0600), TTL cache, `#N` short-index lists |
 | `paging` | `collect`: follow cursors until `--limit` items; `collect_window`: `--since` / `--until` |
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg) |
 | `file` | format detection by magic bytes, MIME types, files and images to upload |
-| `guide` | `social guide`: topics from `crates/social-core/guide/*.md`, platform topics generated from the command set plus each crate's `GUIDE.md` |
+| `guide` | `atp guide`: topics from `crates/atp-core/guide/*.md`, platform topics generated from the command set plus each crate's `GUIDE.md` |
 | `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
 | `text` | counts (`1.2万`), durations, truncation, HTML to text, timestamps |
@@ -47,7 +47,7 @@ line in `src/main.rs`.
 
 ### The Platform contract
 
-A platform crate exports one type implementing `social_core::Platform`:
+A platform crate exports one type implementing `atp_core::Platform`:
 
 - `const INFO: PlatformInfo` declares id, aliases, home page, cookie domains,
   required cookies, supported capabilities (`caps`), accepted option values
@@ -86,7 +86,7 @@ are kept in the session extras, or from environment variables.
 ### Flow of one command
 
 1. `app` parses arguments, picks the platform, starts a current-thread tokio runtime.
-2. `cli::execute` loads the session (`SOCIAL_<ID>_COOKIE` wins over the saved
+2. `cli::execute` loads the session (`ATP_<ID>_COOKIE` wins over the saved
    file), builds `Http` with those cookies and calls `P::new(ctx)`.
 3. The shared command maps to a trait method (listings go through `paging::collect`).
 4. Cookies changed by responses are written back to the session file (logged-in sessions only).

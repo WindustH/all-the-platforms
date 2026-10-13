@@ -1,0 +1,20 @@
+[package]
+name = "atp-douyin"
+description = "Douyin support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+jiff.workspace = true
+md-5.workspace = true
+rand.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sm3 = "0.5"
+atp-core.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true

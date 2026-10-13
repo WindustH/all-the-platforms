@@ -1,6 +1,6 @@
 # Code conventions
 
-How code in social-cli is laid out and named. The goal: modules that know as
+How code in all-the-platforms is laid out and named. The goal: modules that know as
 little as possible about each other, small functions, and one shared
 implementation of everything more than one platform needs.
 
@@ -8,21 +8,21 @@ implementation of everything more than one platform needs.
 
 ```
 src/main.rs                 registers platforms
-crates/social-<platform>    one platform; depends on social-core only
-crates/social-meta          Graph API pieces of social-facebook and social-instagram
-crates/social-core          everything shared; knows no platform
+crates/atp-<platform>    one platform; depends on atp-core only
+crates/atp-meta          Graph API pieces of atp-facebook and atp-instagram
+crates/atp-core          everything shared; knows no platform
 ```
 
 Inside a platform crate, calls go one way:
 
 ```
-lib.rs (Platform impl) → feature modules → api.rs (transport) → social-core
+lib.rs (Platform impl) → feature modules → api.rs (transport) → atp-core
                               ↘ parse, refs (pure functions)
 ```
 
 Feature modules do not call each other's private helpers. Shared pieces of
 a crate live in `api`, `parse` or `refs`; shared pieces of several crates
-live in social-core.
+live in atp-core.
 
 ## Crate layout
 
@@ -39,7 +39,7 @@ Every platform crate uses the same module names for the same roles:
 | `live.rs` | `listen` (a `gateway.rs` may hold a socket protocol it uses) |
 | `extra.rs` / `extra/` | platform-only commands: `pub enum Command`, `pub async fn run(api: &Api, command: Command) -> Result<Data>` |
 | feature modules | plural nouns for what they handle: `posts`, `comments`, `users`, `chats`, `messages`, `notifications`, `insights`, `uploads`, `library`, `search` ... |
-| `GUIDE.md` | the platform's part of `social guide` |
+| `GUIDE.md` | the platform's part of `atp guide` |
 
 One name per role: `parse` (not `convert`), `users` (not `people` / `user`),
 `messages` (not `im`, `dm`, `pm`, `direct`), `live` (not `stream`,
@@ -72,11 +72,11 @@ platform struct.
 - Files stay under about 400 lines; split them by subject.
 - Nesting stays within three levels; prefer early returns and `let … else`.
 
-## Shared code in social-core
+## Shared code in atp-core
 
 Use these instead of writing another copy:
 
-| Need | social-core |
+| Need | atp-core |
 | --- | --- |
 | environment variables, `login --token` fields, saved credentials | `credentials::{env, env_any, fields, expect, saved, save}` |
 | access tokens that expire | `token::AccessToken` |
@@ -92,7 +92,7 @@ Use these instead of writing another copy:
 | HTTP errors | `http::status_error`, `Req::retries` |
 
 When a crate needs something a second crate already has, move it into
-social-core first.
+atp-core first.
 
 ## Checks
 

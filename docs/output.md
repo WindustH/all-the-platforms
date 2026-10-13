@@ -2,7 +2,7 @@
 
 Every command prints a human view (tables and cards), a structured envelope,
 or flat rows. Choose with `--json`, `--yaml` or `-f/--format
-table|json|yaml|jsonl|csv`, or `SOCIAL_OUTPUT`. When stdout is not a terminal,
+table|json|yaml|jsonl|csv`, or `ATP_OUTPUT`. When stdout is not a terminal,
 YAML is the default, because it is the most compact for language models.
 
 ## Rows for analysis (`jsonl`, `csv`)
@@ -23,9 +23,9 @@ stderr with a non-zero exit code. Every row carries `platform` and
   (`7d`, `12h`, `2026-09-01` or an RFC 3339 time).
 
 ```sh
-social bili user-posts 946974 -n 500 --since 90d -f csv > videos.csv
-social bili comments BV1xx411c7mD --all --replies -f jsonl > comments.jsonl
-social x insights -f csv > account.csv
+atp bili user-posts 946974 -n 500 --since 90d -f csv > videos.csv
+atp bili comments BV1xx411c7mD --all --replies -f jsonl > comments.jsonl
+atp x insights -f csv > account.csv
 ```
 
 ## Envelope
@@ -49,7 +49,7 @@ platform: bili
 error:
   code: not_authenticated
   message: not logged in (missing cookie `SESSDATA`)
-  hint: run `social bili login` (QR code) or `social bili login --cookie '...'`
+  hint: run `atp bili login` (QR code) or `atp bili login --cookie '...'`
 ```
 
 | Exit code | Meaning |
@@ -63,11 +63,11 @@ error:
 
 | Code | What to do |
 | --- | --- |
-| `not_authenticated` | log in (`social <platform> login`) |
+| `not_authenticated` | log in (`atp <platform> login`) |
 | `verification_required` | the platform wants a captcha or check: pass it in a browser, retry later |
 | `ip_blocked` | switch network |
 | `rate_limited` | wait before retrying |
-| `signature_error` | the request signature was rejected; update social-cli |
+| `signature_error` | the request signature was rejected; update all-the-platforms |
 | `invalid_input` | fix the arguments |
 | `not_found` | the post / user does not exist or is not visible |
 | `permission_denied` | the account may not do this |
@@ -143,7 +143,7 @@ Every post and user carries a `url` that other commands accept back. After a
 listing, `#N` (or plain `N` up to three digits) refers to its N-th item:
 
 ```sh
-social xhs search 咖啡
-social xhs read '#2'
-social xhs comments 2 -n 50
+atp xhs search 咖啡
+atp xhs read '#2'
+atp xhs comments 2 -n 50
 ```

@@ -76,6 +76,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "all-the-platforms"
+version = "0.1.0"
+dependencies = [
+ "atp-bilibili",
+ "atp-core",
+ "atp-dingtalk",
+ "atp-discord",
+ "atp-douyin",
+ "atp-facebook",
+ "atp-feishu",
+ "atp-instagram",
+ "atp-kook",
+ "atp-line",
+ "atp-matrix",
+ "atp-mattermost",
+ "atp-misskey",
+ "atp-mp",
+ "atp-onebot",
+ "atp-qq",
+ "atp-reddit",
+ "atp-rocketchat",
+ "atp-satori",
+ "atp-slack",
+ "atp-telegram",
+ "atp-tieba",
+ "atp-tiktok",
+ "atp-twitter",
+ "atp-vocechat",
+ "atp-wechat",
+ "atp-wecom",
+ "atp-weibo",
+ "atp-whatsapp",
+ "atp-xhs",
+ "atp-youtube",
+ "atp-zhihu",
+]
+
+[[package]]
 name = "alloc-no-stdlib"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -370,6 +408,547 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "atp-bilibili"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "flate2",
+ "futures-util",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "atp-core"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "comfy-table",
+ "csv",
+ "dirs",
+ "futures-util",
+ "html2text",
+ "image",
+ "imagesize",
+ "indicatif",
+ "jiff",
+ "libc",
+ "owo-colors",
+ "qrcode",
+ "rand 0.9.5",
+ "rookie",
+ "rqrr",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-width",
+ "url",
+ "wreq",
+ "wreq-util",
+]
+
+[[package]]
+name = "atp-dingtalk"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "hmac 0.12.1",
+ "jiff",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-discord"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "rsa",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-douyin"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "sm3",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-facebook"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "atp-meta",
+ "clap",
+ "jiff",
+ "regex",
+ "serde_json",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-feishu"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "atp-instagram"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "atp-meta",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-kook"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "atp-line"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "atp-matrix"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-mattermost"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-meta"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "atp-misskey"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "rand 0.9.5",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-mp"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-onebot"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-qq"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "atp-reddit"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "regex",
+ "serde",
+ "serde_json",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-rocketchat"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-satori"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "atp-slack"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-telegram"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "grammers-client",
+ "grammers-mtsender",
+ "grammers-session",
+ "grammers-tl-types",
+ "jiff",
+ "libc",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-tieba"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-tiktok"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde_json",
+ "sha2 0.10.9",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-twitter"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-vocechat"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-wechat"
+version = "0.1.0"
+dependencies = [
+ "aes 0.8.4",
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-wecom"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-weibo"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-whatsapp"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "http",
+ "jiff",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-socks",
+ "tokio-websockets",
+ "tracing",
+ "ureq",
+ "url",
+ "whatsapp-rust",
+]
+
+[[package]]
+name = "atp-xhs"
+version = "0.1.0"
+dependencies = [
+ "aes 0.8.4",
+ "atp-core",
+ "base64 0.22.1",
+ "cbc 0.1.2",
+ "clap",
+ "flate2",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-youtube"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha1 0.10.7",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-zhihu"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "hmac 0.12.1",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde_json",
+ "sha1 0.10.7",
+ "tokio",
+ "tracing",
+ "url",
+]
 
 [[package]]
 name = "autocfg"
@@ -4471,585 +5050,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b4ec95892483d6d94284caccfddb9b77111a4dcac33ed25d624248def0fa5f1"
 dependencies = [
  "simdutf8",
-]
-
-[[package]]
-name = "social-bilibili"
-version = "0.1.0"
-dependencies = [
- "clap",
- "flate2",
- "futures-util",
- "jiff",
- "md-5",
- "rand 0.9.5",
- "regex",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "social-cli"
-version = "0.1.0"
-dependencies = [
- "social-bilibili",
- "social-core",
- "social-dingtalk",
- "social-discord",
- "social-douyin",
- "social-facebook",
- "social-feishu",
- "social-instagram",
- "social-kook",
- "social-line",
- "social-matrix",
- "social-mattermost",
- "social-misskey",
- "social-mp",
- "social-onebot",
- "social-qq",
- "social-reddit",
- "social-rocketchat",
- "social-satori",
- "social-slack",
- "social-telegram",
- "social-tieba",
- "social-tiktok",
- "social-twitter",
- "social-vocechat",
- "social-wechat",
- "social-wecom",
- "social-weibo",
- "social-whatsapp",
- "social-xhs",
- "social-youtube",
- "social-zhihu",
-]
-
-[[package]]
-name = "social-core"
-version = "0.1.0"
-dependencies = [
- "clap",
- "comfy-table",
- "csv",
- "dirs",
- "futures-util",
- "html2text",
- "image",
- "imagesize",
- "indicatif",
- "jiff",
- "libc",
- "owo-colors",
- "qrcode",
- "rand 0.9.5",
- "rookie",
- "rqrr",
- "serde",
- "serde-saphyr",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "unicode-width",
- "url",
- "wreq",
- "wreq-util",
-]
-
-[[package]]
-name = "social-dingtalk"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "hmac 0.12.1",
- "jiff",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-discord"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "rand 0.9.5",
- "regex",
- "rsa",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-douyin"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "md-5",
- "rand 0.9.5",
- "regex",
- "serde",
- "serde_json",
- "sm3",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-facebook"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "regex",
- "serde_json",
- "social-core",
- "social-meta",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-feishu"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "social-instagram"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "rand 0.9.5",
- "serde_json",
- "social-core",
- "social-meta",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-kook"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "social-line"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "rand 0.9.5",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "social-matrix"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-mattermost"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-meta"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "serde_json",
- "social-core",
- "tracing",
-]
-
-[[package]]
-name = "social-misskey"
-version = "0.1.0"
-dependencies = [
- "clap",
- "rand 0.9.5",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-mp"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "rand 0.9.5",
- "regex",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-onebot"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-qq"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "social-reddit"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "regex",
- "serde",
- "serde_json",
- "social-core",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-rocketchat"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-satori"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "rand 0.9.5",
- "regex",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "social-slack"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "regex",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-telegram"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "grammers-client",
- "grammers-mtsender",
- "grammers-session",
- "grammers-tl-types",
- "jiff",
- "libc",
- "regex",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-tieba"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "md-5",
- "rand 0.9.5",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-tiktok"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "md-5",
- "rand 0.9.5",
- "serde_json",
- "sha2 0.10.9",
- "social-core",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-twitter"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "rand 0.9.5",
- "regex",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "social-core",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-vocechat"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-wechat"
-version = "0.1.0"
-dependencies = [
- "aes 0.8.4",
- "base64 0.22.1",
- "clap",
- "jiff",
- "md-5",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-wecom"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "md-5",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-weibo"
-version = "0.1.0"
-dependencies = [
- "clap",
- "jiff",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-whatsapp"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "http",
- "jiff",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tokio-socks",
- "tokio-websockets",
- "tracing",
- "ureq",
- "url",
- "whatsapp-rust",
-]
-
-[[package]]
-name = "social-xhs"
-version = "0.1.0"
-dependencies = [
- "aes 0.8.4",
- "base64 0.22.1",
- "cbc 0.1.2",
- "clap",
- "flate2",
- "md-5",
- "rand 0.9.5",
- "regex",
- "serde",
- "serde_json",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-youtube"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "jiff",
- "rand 0.9.5",
- "regex",
- "serde",
- "serde_json",
- "sha1 0.10.7",
- "social-core",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "social-zhihu"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "clap",
- "hmac 0.12.1",
- "jiff",
- "md-5",
- "rand 0.9.5",
- "regex",
- "serde_json",
- "sha1 0.10.7",
- "social-core",
- "tokio",
- "tracing",
- "url",
 ]
 
 [[package]]

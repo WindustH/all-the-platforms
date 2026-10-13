@@ -1,0 +1,20 @@
+[package]
+name = "atp-youtube"
+description = "YouTube support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+clap.workspace = true
+jiff.workspace = true
+rand.workspace = true
+regex.workspace = true
+atp-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha1.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true

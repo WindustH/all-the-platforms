@@ -1,0 +1,22 @@
+[package]
+name = "atp-whatsapp"
+description = "WhatsApp support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+clap.workspace = true
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+atp-core.workspace = true
+tokio = { workspace = true, features = ["io-util", "net", "signal", "sync"] }
+http = "1"
+tokio-socks = "0.5"
+tokio-websockets = { version = "0.13", default-features = false, features = ["client", "rand", "ring", "rustls-bring-your-own-connector"] }
+tracing.workspace = true
+url.workspace = true
+ureq = { version = "3.3", default-features = false, features = ["rustls"] }
+whatsapp-rust = { version = "0.7", default-features = false, features = ["tokio-transport", "tokio-runtime", "ureq-client"] }

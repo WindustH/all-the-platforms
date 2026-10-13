@@ -1,0 +1,21 @@
+[package]
+name = "atp-discord"
+description = "Discord support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+clap.workspace = true
+jiff.workspace = true
+rand.workspace = true
+regex.workspace = true
+rsa = { version = "0.9", features = ["getrandom"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+atp-core.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true

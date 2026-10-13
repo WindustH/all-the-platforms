@@ -1,0 +1,125 @@
+//! QR login over plain HTTP (`xhs_cli/qr_login.py::_http_qrcode_login`):
+//! fresh device cookies, a guest session, a QR code, then status polling
+//! and session completion.
+
+use std::cell::Cell;
+use std::time::Duration;
+
+use atp_core::{Error, ErrorCode, QrStatus, QrTicket, Result, Value, ValueExt, json};
+
+use crate::api::Api;
+use crate::users::ME;
+
+const CREATE: &str = "/api/sns/web/v1/login/qrcode/create";
+const USERINFO: &str = "/api/qrcode/userinfo";
+const STATUS: &str = "/api/sns/web/v1/login/qrcode/status";
+
+pub async fn qr_start(api: &Api) -> Result<QrTicket> {
+  // New a1 / webId and a guest session, then the QR code.
+  api.start_guest().await;
+  let data = api.post(CREATE, &json!({"qr_type": 1})).await?;
+  let (Some(qr_id), Some(code), Some(url)) = (data.str("qr_id"), data.str("code"), data.str("url"))
+  else {
+    return Err(Error::upstream(format!("unexpected QR payload: {data}")));
+  };
+  Ok(QrTicket {
+    url,
+    token: qr_id,
+    extra: [("code".to_owned(), code)].into(),
+    ..QrTicket::default()
+  })
+}
+
+/// One poll. Transient errors count as "waiting" until three in a row.
+pub async fn qr_poll(api: &Api, ticket: &QrTicket, errors: &Cell<u32>) -> Result<QrStatus> {
+  let code = ticket
+    .extra
+    .get("code")
+    .map(String::as_str)
+    .unwrap_or_default();
+  let body = json!({"qrId": ticket.token, "code": code});
+  let status = match api
+    .post_with(USERINFO, &body, &[("service-tag", "webcn")])
+    .await
+  {
+    Ok(v) => {
+      errors.set(0);
+      v
+    }
+    Err(e) => {
+      errors.set(errors.get() + 1);
+      tracing::debug!("QR status check failed: {e}");
+      return if errors.get() >= 3 {
+        Err(e)
+      } else {
+        Ok(QrStatus::Waiting)
+      };
+    }
+  };
+  match status.i64("codeStatus") {
+    Some(1) => Ok(QrStatus::Scanned),
+    Some(2) => {
+      let user = status
+        .str("userId")
+        .ok_or_else(|| Error::upstream("QR login confirmed without a user id"))?;
+      complete(api, &ticket.token, code, &user).await?;
+      Ok(QrStatus::Confirmed)
+    }
+    _ => Ok(QrStatus::Waiting),
+  }
+}
+
+/// Finish the login until the session belongs to the confirmed user.
+async fn complete(api: &Api, qr_id: &str, code: &str, user: &str) -> Result<()> {
+  for attempt in 0..5 {
+    let data = api
+      .get(STATUS, &[("qr_id", qr_id), ("code", code)])
+      .await
+      .map_err(new_device_captcha)?;
+    api.apply_session(&data);
+    if user_id(&data).as_deref() == Some(user) {
+      return Ok(());
+    }
+    match api.get(ME, &[]).await {
+      Ok(me) if user_id(&me).as_deref() == Some(user) => return Ok(()),
+      Ok(_) => {}
+      Err(e) => tracing::debug!("post-confirm self check failed: {e}"),
+    }
+    if attempt < 4 {
+      tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+  }
+  Err(Error::auth(
+    "QR login confirmed, but the session never switched to the confirmed user",
+  ))
+}
+
+/// A captcha after the phone confirmed: Xiaohongshu distrusts the fresh device
+/// the CLI logs in with, and a captcha cannot be solved from here.
+fn new_device_captcha(error: Error) -> Error {
+  if error.code != ErrorCode::VerificationRequired {
+    return error;
+  }
+  Error::new(
+    ErrorCode::VerificationRequired,
+    "the phone confirmed the login, but Xiaohongshu wants a captcha before it trusts this new device",
+  )
+  .with_hint("log in at xiaohongshu.com in a browser, then run `atp xhs login --browser`")
+}
+
+fn user_id(v: &Value) -> Option<String> {
+  v.first_str(&[
+    "login_info.user_id",
+    "basic_info.user_id",
+    "user_id",
+    "userid",
+  ])
+}
+
+/// After importing cookies: add the `webId` companion of `a1` when missing.
+pub fn prepare(api: &Api) {
+  let http = &api.ctx.http;
+  if http.has_cookie("a1") && !http.has_cookie("webId") {
+    http.set_cookie("webId", &crate::sign::random::web_id());
+  }
+}

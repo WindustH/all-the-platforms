@@ -1,0 +1,178 @@
+//! Search: videos (with sort and one filter), channels and playlists.
+//!
+//! Sort and filters travel in the `params` protobuf (the `sp=` URL
+//! parameter): field 1 is the sort, field 2 the filters (upload date 1,
+//! type 2, duration 3, features 4…26), as YouTube.js `SearchFilter` and the
+//! site's own filter links (`searchFilterGroupRenderer`) encode them. Since
+//! 2025 the site offers two orders only, relevance and popularity; the old
+//! upload-date and rating orders are ignored by the server.
+
+use atp_core::{
+  Collection, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt, json,
+};
+
+use crate::api::Api;
+use crate::parse::{self, Listing};
+use crate::proto::Msg;
+
+pub const SORTS: &[&str] = &["relevance", "popularity"];
+pub const FILTERS: &[&str] = &[
+  "video",
+  "shorts",
+  "live",
+  "movie",
+  "today",
+  "week",
+  "month",
+  "year",
+  "under-3min",
+  "3-20min",
+  "over-20min",
+  "hd",
+  "4k",
+  "hdr",
+  "subtitles",
+  "creative-commons",
+  "3d",
+  "360",
+  "vr180",
+  "location",
+  "purchased",
+];
+
+/// Shelves of Shorts and suggestions mixed into the results.
+const SHELVES: &[&str] = &["gridShelfViewModel", "reelShelfRenderer", "shelfRenderer"];
+
+/// Result types (filter field 2).
+const VIDEO: u64 = 1;
+const CHANNEL: u64 = 2;
+const PLAYLIST: u64 = 3;
+
+fn params(sort: Option<&str>, filter: Option<&str>, kind: Option<u64>) -> Result<String> {
+  let sort = match sort.unwrap_or("relevance") {
+    "relevance" => 0,
+    "popularity" => 3,
+    other => return Err(Error::input(format!("unknown sort `{other}`"))),
+  };
+  let mut fields: Vec<(u32, u64)> = kind.map(|k| (2, k)).into_iter().collect();
+  if let Some(name) = filter {
+    let (field, value) = match name {
+      "today" => (1, 2),
+      "week" => (1, 3),
+      "month" => (1, 4),
+      "year" => (1, 5),
+      "video" => (2, VIDEO),
+      "movie" => (2, 4),
+      "shorts" => (2, 9),
+      "over-20min" => (3, 2),
+      "under-3min" => (3, 4),
+      "3-20min" => (3, 5),
+      "hd" => (4, 1),
+      "subtitles" => (5, 1),
+      "creative-commons" => (6, 1),
+      "3d" => (7, 1),
+      "live" => (8, 1),
+      "purchased" => (9, 1),
+      "4k" => (14, 1),
+      "360" => (15, 1),
+      "location" => (23, 1),
+      "hdr" => (25, 1),
+      "vr180" => (26, 1),
+      other => return Err(Error::input(format!("unknown filter `{other}`"))),
+    };
+    fields.push((field, value));
+  }
+  fields.sort();
+  let f = fields
+    .into_iter()
+    .fold(Msg::new(), |m, (field, value)| m.int(field, value));
+  let mut outer = Msg::new();
+  if sort > 0 {
+    outer = outer.int(1, sort);
+  }
+  if !f.is_empty() {
+    outer = outer.msg(2, f);
+  }
+  Ok(outer.encode())
+}
+
+async fn run(api: &Api, query: &Query, kind: Option<u64>, req: &PageReq) -> Result<Listing> {
+  let body = match &req.cursor {
+    Some(token) => json!({ "continuation": token }),
+    None => {
+      let mut b = json!({ "query": query.keyword });
+      let p = params(query.sort.as_deref(), query.filter.as_deref(), kind)?;
+      if !p.is_empty() {
+        b["params"] = Value::from(p);
+      }
+      b
+    }
+  };
+  let v = api.call("search", body).await?;
+  // The Shorts shelf in the middle of the results ignores filters.
+  Ok(match query.filter.as_deref() {
+    Some(f) if f != "shorts" => parse::listing_without(&v, SHELVES),
+    _ => parse::listing(&v),
+  })
+}
+
+pub async fn videos(api: &Api, query: &Query, req: &PageReq) -> Result<Page<Post>> {
+  let l = run(api, query, None, req).await?;
+  Ok(Page::new(l.posts, l.next))
+}
+
+pub async fn channels(api: &Api, query: &Query, req: &PageReq) -> Result<Page<User>> {
+  let query = Query {
+    filter: None,
+    ..query.clone()
+  };
+  let l = run(api, &query, Some(CHANNEL), req).await?;
+  Ok(Page::new(l.users, l.next))
+}
+
+/// Playlists (and courses / podcasts): YouTube has no hashtag or topic search.
+pub async fn playlists(api: &Api, query: &Query, req: &PageReq) -> Result<Page<Collection>> {
+  let query = Query {
+    filter: None,
+    ..query.clone()
+  };
+  let l = run(api, &query, Some(PLAYLIST), req).await?;
+  Ok(Page::new(l.collections, l.next))
+}
+
+/// What the search box suggests for a prefix (`suggestqueries-clients6`, the
+/// endpoint YouTube.js `getSearchSuggestions` calls; it answers JSONP).
+pub async fn suggest(api: &Api, prefix: &str) -> Result<Vec<String>> {
+  let text = api
+    .ctx
+    .http
+    .get("https://suggestqueries-clients6.youtube.com/complete/search")
+    .queries([
+      ("client", "youtube"),
+      ("ds", "yt"),
+      ("hl", "en"),
+      ("gl", "US"),
+      ("q", prefix),
+    ])
+    .no_cookies()
+    .send()
+    .await?
+    .check()?
+    .text();
+  let json = text
+    .find('(')
+    .and_then(|start| Some(&text[start + 1..text.rfind(')')?]))
+    .ok_or_else(|| Error::upstream("unexpected suggestion response"))?;
+  let v: Value = serde_json::from_str(json)?;
+  Ok(
+    v.at("1")
+      .as_array()
+      .map(|list| {
+        list
+          .iter()
+          .filter_map(|s| s.at("0").as_str().map(str::to_owned))
+          .collect()
+      })
+      .unwrap_or_default(),
+  )
+}
