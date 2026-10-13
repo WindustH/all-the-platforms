@@ -2,6 +2,7 @@
 //! (`https://acme.slack.com/archives/C1/p1700000000000100?thread_ts=…`),
 //! `CHANNEL/TS` (the id of listed messages), and conversation ids or links.
 
+use social_core::chat;
 use social_core::{Error, Result};
 use url::Url;
 
@@ -13,6 +14,11 @@ pub struct MessageRef {
 }
 
 impl MessageRef {
+  /// The `CHANNEL/TS` id listed messages carry.
+  pub fn id(&self) -> String {
+    chat::message_id(&self.channel, &self.ts)
+  }
+
   /// The thread a reply to this message goes in: its own, or itself.
   pub fn root(&self) -> &str {
     self.thread_ts.as_deref().unwrap_or(&self.ts)
@@ -38,7 +44,7 @@ pub fn message(arg: &str) -> Result<MessageRef> {
     }
     return Err(Error::input(format!("not a Slack message link: {arg}")));
   }
-  if let Some((channel, ts)) = arg.split_once('/')
+  if let Some((channel, ts)) = chat::split_message_id(arg)
     && is_chat_id(channel)
   {
     return Ok(MessageRef {
@@ -53,8 +59,8 @@ pub fn message(arg: &str) -> Result<MessageRef> {
 }
 
 /// `1700000000.000100`, or the `p1700000000000100` form of links.
-fn ts_of(s: &str) -> Result<String> {
-  let digits = s.trim_start_matches('p');
+fn ts_of(text: &str) -> Result<String> {
+  let digits = text.trim_start_matches('p');
   if digits.contains('.') {
     return Ok(digits.to_owned());
   }
@@ -62,14 +68,16 @@ fn ts_of(s: &str) -> Result<String> {
     let (secs, micros) = digits.split_at(digits.len() - 6);
     return Ok(format!("{secs}.{micros}"));
   }
-  Err(Error::input(format!("not a Slack message timestamp: {s}")))
+  Err(Error::input(format!(
+    "not a Slack message timestamp: {text}"
+  )))
 }
 
 /// `C…` (channels), `G…` (private / group), `D…` (direct) ids.
-pub fn is_chat_id(s: &str) -> bool {
-  matches!(s.chars().next(), Some('C' | 'G' | 'D'))
-    && s.len() >= 9
-    && s
+pub fn is_chat_id(id: &str) -> bool {
+  matches!(id.chars().next(), Some('C' | 'G' | 'D'))
+    && id.len() >= 9
+    && id
       .bytes()
       .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
 }

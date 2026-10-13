@@ -13,6 +13,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Duration;
 
+use social_core::credentials;
 use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 
 use crate::chats::ChatInfo;
@@ -71,14 +72,10 @@ pub struct Api {
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-    let env = var("SLACK_TOKEN")
-      .or_else(|| var("SLACK_USER_TOKEN"))
-      .or_else(|| var("SLACK_BOT_TOKEN"));
     Self {
       ctx,
-      env,
-      env_app: var("SLACK_APP_TOKEN"),
+      env: credentials::env_any(&["SLACK_TOKEN", "SLACK_USER_TOKEN", "SLACK_BOT_TOKEN"]),
+      env_app: credentials::env("SLACK_APP_TOKEN"),
       users: RefCell::new(HashMap::new()),
       chats: RefCell::new(HashMap::new()),
       ident: RefCell::new(None),

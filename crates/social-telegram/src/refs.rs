@@ -10,6 +10,7 @@
 //! channel post, `tg://privatepost?channel=…&post=…`, and `CHAT/42` with any
 //! chat form (the `id` messages carry when there is no link).
 
+use social_core::chat;
 use social_core::{Error, Result};
 use url::Url;
 
@@ -63,7 +64,7 @@ pub fn message(arg: &str) -> Result<Msg> {
   if let Some(link) = Link::parse(arg) {
     return link_message(&link).ok_or_else(|| bad_message(arg));
   }
-  let (chat, id) = arg.rsplit_once('/').ok_or_else(|| bad_message(arg))?;
+  let (chat, id) = chat::split_message_id(arg).ok_or_else(|| bad_message(arg))?;
   let id = id.parse().map_err(|_| bad_message(arg))?;
   Ok(Msg {
     chat: plain_chat(chat).ok_or_else(|| bad_message(arg))?,
@@ -81,10 +82,10 @@ fn plain_chat(arg: &str) -> Option<Chat> {
   is_username(arg).then(|| Chat::Username(arg.to_owned()))
 }
 
-pub fn is_username(s: &str) -> bool {
-  let mut chars = s.chars();
+pub fn is_username(name: &str) -> bool {
+  let mut chars = name.chars();
   chars.next().is_some_and(|c| c.is_ascii_alphabetic())
-    && (3..=32).contains(&s.len())
+    && (3..=32).contains(&name.len())
     && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
@@ -216,8 +217,6 @@ pub fn message_url(username: Option<&str>, dialog_id: i64, id: i32) -> Option<St
 
 /// `CHAT/MESSAGE`, with the username when the chat has one.
 pub fn message_id(username: Option<&str>, dialog_id: i64, id: i32) -> String {
-  match username {
-    Some(u) => format!("{u}/{id}"),
-    None => format!("{dialog_id}/{id}"),
-  }
+  let chat = username.map_or_else(|| dialog_id.to_string(), str::to_owned);
+  chat::message_id(&chat, &id.to_string())
 }

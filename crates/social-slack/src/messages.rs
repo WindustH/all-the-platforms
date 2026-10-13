@@ -3,7 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use social_core::file::sniff;
+use social_core::chat;
+use social_core::file::{Upload, sniff};
 use social_core::text::emoji_shortcode;
 use social_core::{
   Action, Comment, Error, Media, Message, Page, PageReq, Post, Result, Value, ValueExt, json,
@@ -65,8 +66,8 @@ pub async fn list(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
   Ok(Page::new(posts(api, &rows, &channel).await?, next))
 }
 
-/// One message: from the channel history, or from its thread.
-pub async fn fetch(api: &Api, r: &MessageRef) -> Result<Value> {
+/// One message's payload: from the channel history, or from its thread.
+pub async fn payload(api: &Api, r: &MessageRef) -> Result<Value> {
   let find = |v: &Value| {
     v.list("messages")
       .iter()
@@ -119,7 +120,7 @@ async fn replies(
 
 pub async fn read(api: &Api, arg: &str) -> Result<Post> {
   let r = refs::message(arg)?;
-  let v = fetch(api, &r).await?;
+  let v = payload(api, &r).await?;
   Ok(posts(api, &[v], &r.channel).await?.remove(0))
 }
 
@@ -214,7 +215,7 @@ async fn post(
   let v = api.write("chat.postMessage", params).await?;
   let ts = v.str("ts").unwrap_or_default();
   let channel = v.str("channel").unwrap_or_else(|| channel.to_owned());
-  let mut action = Action::done("send", &channel).with_id(format!("{channel}/{ts}"));
+  let mut action = Action::done("send", &channel).with_id(chat::message_id(&channel, &ts));
   if let Some(base) = api.team_url().await {
     action = action.with_url(parse::permalink(&base, &channel, &ts, thread));
   }
@@ -232,9 +233,7 @@ async fn upload(
 ) -> Result<Vec<String>> {
   let mut done = Vec::new();
   for path in files {
-    let data = tokio::fs::read(path)
-      .await
-      .map_err(|e| Error::input(format!("cannot read {}: {e}", path.display())))?;
+    let data = Upload::read(path).await?.data;
     let name = file_name(path, &data);
     let v = api
       .write(
@@ -291,7 +290,7 @@ pub async fn edit(api: &Api, arg: &str, text: &str) -> Result<Action> {
       ],
     )
     .await?;
-  Ok(Action::done("edit", format!("{}/{}", r.channel, r.ts)))
+  Ok(Action::done("edit", r.id()))
 }
 
 pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
@@ -302,7 +301,7 @@ pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
       vec![("channel", r.channel.clone()), ("ts", r.ts.clone())],
     )
     .await?;
-  Ok(Action::done("delete", format!("{}/{}", r.channel, r.ts)))
+  Ok(Action::done("delete", r.id()))
 }
 
 /// Delete a reply of a thread: a message reference, or the bare `TS` of a
@@ -311,7 +310,7 @@ pub async fn delete_comment(api: &Api, post: &str, comment: &str) -> Result<Acti
   let comment = if comment.contains('/') || comment.starts_with("http") {
     comment.to_owned()
   } else {
-    format!("{}/{comment}", refs::message(post)?.channel)
+    chat::message_id(&refs::message(post)?.channel, comment)
   };
   delete(api, &comment).await
 }
@@ -335,7 +334,7 @@ pub async fn react(api: &Api, arg: &str, emoji: &str, undo: bool) -> Result<Acti
     )
     .await?;
   let action = if undo { "unreact" } else { "react" };
-  Ok(Action::done(action, format!("{}/{}", r.channel, r.ts)).with_message(format!(":{name}:")))
+  Ok(Action::done(action, r.id()).with_message(format!(":{name}:")))
 }
 
 pub async fn pins(api: &Api, arg: &str) -> Result<Page<Post>> {
@@ -361,8 +360,5 @@ pub async fn pin(api: &Api, arg: &str, undo: bool) -> Result<Action> {
       vec![("channel", r.channel.clone()), ("timestamp", r.ts.clone())],
     )
     .await?;
-  Ok(Action::done(
-    if undo { "unpin" } else { "pin" },
-    format!("{}/{}", r.channel, r.ts),
-  ))
+  Ok(Action::done(if undo { "unpin" } else { "pin" }, r.id()))
 }

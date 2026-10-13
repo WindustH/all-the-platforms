@@ -1,4 +1,6 @@
-//! The user account over MTProto, through grammers.
+//! The user account over MTProto, through grammers: the connection and its
+//! session ([`session`]), and what the account does with it, by subject
+//! ([`chats`], [`messages`], [`sending`], [`search`], [`users`]).
 //!
 //! The connection opens on first use: grammers' sender pool runs as a task
 //! of the current-thread runtime and the [`Client`] talks to it. The session
@@ -13,6 +15,13 @@
 //! (<https://my.telegram.org>); without them it is Telegram Desktop's public
 //! pair, as tg-cli does.
 
+mod chats;
+mod messages;
+mod search;
+mod sending;
+pub mod session;
+mod users;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -22,11 +31,12 @@ use grammers_client::session::types::{PeerId, PeerInfo, PeerRef};
 use grammers_client::{Client, InvocationError, SenderPool};
 use grammers_mtsender::ConnectionParams;
 use grammers_session::updates::UpdatesLike;
-use social_core::{Ctx, Error, ErrorCode, Result};
+use social_core::credentials;
+use social_core::{Ctx, Error, ErrorCode, PageReq, Result};
 use tokio::sync::mpsc::UnboundedReceiver;
 
+use self::session::{Keys, MtSession};
 use crate::refs::Chat;
-use crate::session::{Keys, MtSession};
 
 /// Session extras: the keys, and the id of the logged-in user.
 pub const KEYS: &str = "mtproto";
@@ -44,8 +54,10 @@ pub struct App {
 }
 
 pub fn app() -> Result<App> {
-  let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
-  match (var("TELEGRAM_API_ID"), var("TELEGRAM_API_HASH")) {
+  match (
+    credentials::env("TELEGRAM_API_ID"),
+    credentials::env("TELEGRAM_API_HASH"),
+  ) {
     (Some(id), Some(hash)) => Ok(App {
       id: id
         .trim()
@@ -287,4 +299,19 @@ async fn invite_peer(conn: &Conn, hash: &str) -> Result<PeerRef> {
       i.title
     ))),
   }
+}
+
+pub use self::chats::*;
+pub use self::messages::*;
+pub use self::search::*;
+pub use self::sending::*;
+pub use self::users::*;
+
+/// Offset cursors (`skip N`) for listings grammers pages by itself.
+fn offset(page: &PageReq) -> usize {
+  page.number_or(0) as usize
+}
+
+fn next_offset(start: usize, got: usize, wanted: usize, more: bool) -> Option<String> {
+  (more && got >= wanted).then(|| (start + got).to_string())
 }

@@ -7,12 +7,13 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use social_core::http::Method;
+use social_core::live::Backoff;
 use social_core::output::Stream;
-use social_core::{Error, Post, Result, Value, ValueExt, json};
+use social_core::{Error, ErrorCode, Post, Result, Value, ValueExt, json};
 
 use crate::api::Api;
+use crate::chats;
 use crate::parse::{self, Members};
-use crate::rooms;
 use crate::users;
 
 const POLL_MS: u64 = 30_000;
@@ -36,10 +37,10 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
   let me = users::my_id(api).await?;
   let mut ids = Vec::new();
   for c in chats {
-    ids.push(rooms::id(api, c).await?);
+    ids.push(chats::id(api, c).await?);
   }
   // Room names, once.
-  let mut names: HashMap<String, String> = rooms::list(api)
+  let mut names: HashMap<String, String> = chats::list(api)
     .await?
     .items
     .into_iter()
@@ -55,40 +56,22 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
     .store
     .cache_get(&key, Duration::from_secs(7 * 24 * 3600));
   let mut failures = 0;
+  let mut backoff = Backoff::default();
   loop {
-    let mut query = vec![("filter", filter.clone())];
-    match &since {
-      Some(s) => {
-        query.push(("since", s.clone()));
-        query.push(("timeout", POLL_MS.to_string()));
-      }
-      // First run: only the position, not the backlog.
-      None => query.push(("timeout", "0".into())),
-    }
-    let token = api.require()?;
-    let result = api
-      .call_with(
-        Some(&token),
-        Method::GET,
-        "/sync",
-        &query,
-        None,
-        Some(Duration::from_millis(POLL_MS + 30_000)),
-      )
-      .await;
-    let v = match result {
+    let v = match sync(api, &filter, since.as_deref()).await {
       Ok(v) => {
         failures = 0;
+        backoff.reset();
         v
       }
-      Err(e) if e.code == social_core::ErrorCode::NotAuthenticated => return Err(e),
+      Err(e) if e.code == ErrorCode::NotAuthenticated => return Err(e),
       Err(e) => {
         failures += 1;
         if failures >= MAX_FAILURES {
           return Err(e);
         }
         tracing::debug!("sync failed ({e}); retrying");
-        tokio::time::sleep(Duration::from_secs(u64::from(failures) * 3)).await;
+        backoff.wait().await;
         continue;
       }
     };
@@ -101,6 +84,29 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
     api.ctx.store.cache_put(&key, &next);
     since = Some(next);
   }
+}
+
+/// One `/sync`: long-polled from `since`, or (first run) only the position.
+async fn sync(api: &Api, filter: &str, since: Option<&str>) -> Result<Value> {
+  let mut query = vec![("filter", filter.to_owned())];
+  match since {
+    Some(s) => {
+      query.push(("since", s.to_owned()));
+      query.push(("timeout", POLL_MS.to_string()));
+    }
+    None => query.push(("timeout", "0".into())),
+  }
+  let token = api.require()?;
+  api
+    .call_with(
+      Some(&token),
+      Method::GET,
+      "/sync",
+      &query,
+      None,
+      Some(Duration::from_millis(POLL_MS + 30_000)),
+    )
+    .await
 }
 
 fn emit(v: &Value, ids: &[String], names: &mut HashMap<String, String>, out: &Stream) {

@@ -11,6 +11,7 @@
 use std::cell::RefCell;
 use std::time::Duration;
 
+use social_core::credentials;
 use social_core::http::{Method, Req};
 use social_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt, json};
 
@@ -29,8 +30,8 @@ pub struct Api {
 }
 
 /// A path segment, percent-encoded (`!room:server`, `$event`, `#alias:server`).
-pub fn seg(s: &str) -> String {
-  url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
+pub fn seg(segment: &str) -> String {
+  url::form_urlencoded::byte_serialize(segment.as_bytes()).collect()
 }
 
 /// A random transaction id for sends.
@@ -40,11 +41,10 @@ pub fn txn() -> String {
 
 impl Api {
   pub fn new(ctx: Ctx) -> Self {
-    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
     Self {
       ctx,
-      env_base: var("MATRIX_HOMESERVER").map(|b| normalize(&b)),
-      env_token: var("MATRIX_ACCESS_TOKEN"),
+      env_base: credentials::env("MATRIX_HOMESERVER").map(|b| normalize(&b)),
+      env_token: credentials::env("MATRIX_ACCESS_TOKEN"),
       base: RefCell::new(None),
     }
   }
@@ -282,12 +282,12 @@ fn error(status: u16, code: &str, message: Option<String>, from_env: bool) -> Er
 }
 
 /// `matrix.org` / `https://matrix.org/` → `https://matrix.org`.
-pub fn normalize(s: &str) -> String {
-  let s = s.trim().trim_end_matches('/');
-  if s.starts_with("https://") || s.starts_with("http://") {
-    s.to_owned()
+pub fn normalize(server: &str) -> String {
+  let server = server.trim().trim_end_matches('/');
+  if server.starts_with("https://") || server.starts_with("http://") {
+    server.to_owned()
   } else {
-    format!("https://{s}")
+    format!("https://{server}")
   }
 }
 

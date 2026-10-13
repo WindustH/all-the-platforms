@@ -4,7 +4,7 @@ use social_core::cli::PageArgs;
 use social_core::{Data, Query, Result};
 
 use crate::api::Api;
-use crate::rooms;
+use crate::chats;
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -38,15 +38,15 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       });
       Data::Collections(
         page
-          .collect(async |r| rooms::directory(api, q.as_ref(), server.as_deref(), &r).await)
+          .collect(async |r| chats::directory(api, q.as_ref(), server.as_deref(), &r).await)
           .await?,
       )
     }
     Command::Join { room } => {
-      Data::Action(rooms::join(api, &ctx.collection_ref(&room)?, false).await?)
+      Data::Action(chats::join(api, &ctx.collection_ref(&room)?, false).await?)
     }
     Command::Leave { room } => {
-      Data::Action(rooms::join(api, &ctx.collection_ref(&room)?, true).await?)
+      Data::Action(chats::join(api, &ctx.collection_ref(&room)?, true).await?)
     }
   })
 }

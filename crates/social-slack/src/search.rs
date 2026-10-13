@@ -35,26 +35,7 @@ async fn matches(
   let found = v.at("messages");
   let rows: Vec<Value> = found.list("matches").to_vec();
   users::resolve(api, parse::user_ids(&rows)).await;
-  for m in &rows {
-    if let (Some(id), Some(name)) = (m.str("channel.id"), m.str("channel.name")) {
-      let kind = if m.bool("channel.is_im") == Some(true) {
-        "dm"
-      } else if m.bool("channel.is_private") == Some(true) {
-        "private"
-      } else {
-        "channel"
-      };
-      let name = if kind == "dm" {
-        name
-      } else {
-        format!("#{name}")
-      };
-      api.chats.borrow_mut().entry(id).or_insert(ChatInfo {
-        name,
-        kind: kind.into(),
-      });
-    }
-  }
+  remember_chats(api, &rows);
   let posts = messages::render(api, |view| {
     rows
       .iter()
@@ -72,6 +53,31 @@ async fn matches(
   let pages = found.u64("paging.pages").unwrap_or(1);
   let next = (no < pages).then(|| (no + 1).to_string());
   Ok((posts, next))
+}
+
+/// Search results name their conversations: remember them for `chat_name`.
+fn remember_chats(api: &Api, rows: &[Value]) {
+  for m in rows {
+    let (Some(id), Some(name)) = (m.str("channel.id"), m.str("channel.name")) else {
+      continue;
+    };
+    let kind = if m.bool("channel.is_im") == Some(true) {
+      "dm"
+    } else if m.bool("channel.is_private") == Some(true) {
+      "private"
+    } else {
+      "channel"
+    };
+    let name = if kind == "dm" {
+      name
+    } else {
+      format!("#{name}")
+    };
+    api.chats.borrow_mut().entry(id).or_insert(ChatInfo {
+      name,
+      kind: kind.into(),
+    });
+  }
 }
 
 pub async fn messages(api: &Api, q: &Query, page: &PageReq) -> Result<Page<Post>> {

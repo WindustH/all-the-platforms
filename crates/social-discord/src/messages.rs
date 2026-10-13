@@ -1,9 +1,10 @@
 //! Messages: history, one message, sending (with files and replies),
-//! editing, deleting, reactions, pins, and a message's thread as comments.
+//! editing, deleting, reactions, and a message's thread as comments.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use social_core::file::sniff;
+use social_core::chat;
+use social_core::file::Upload;
 use social_core::http::Part;
 use social_core::{
   Action, Comment, Error, ErrorCode, Media, Message, Page, PageReq, Post, Result, Value, ValueExt,
@@ -20,7 +21,7 @@ const MAX_CHARS: usize = 2000;
 
 /// The channel a chat argument names, with where it lives; a server id gets
 /// a pointer to its channels.
-async fn channel(api: &Api, arg: &str) -> Result<(String, ChannelInfo)> {
+pub(crate) async fn channel(api: &Api, arg: &str) -> Result<(String, ChannelInfo)> {
   let id = chats::channel_id(api, arg).await?;
   let info = api.channel(&id).await.map_err(|e| {
     if e.code == ErrorCode::NotFound {
@@ -59,7 +60,7 @@ async fn history(api: &Api, id: &str, info: &ChannelInfo, page: &PageReq) -> Res
 }
 
 /// One message (via `around=`, which bots and user accounts both may use).
-pub async fn fetch(api: &Api, r: &MessageRef) -> Result<(Value, ChannelInfo)> {
+pub async fn payload(api: &Api, r: &MessageRef) -> Result<(Value, ChannelInfo)> {
   let info = api.channel(&r.channel).await?;
   let v = api
     .get(
@@ -81,7 +82,7 @@ pub async fn fetch(api: &Api, r: &MessageRef) -> Result<(Value, ChannelInfo)> {
 
 pub async fn read(api: &Api, arg: &str) -> Result<Post> {
   let r = refs::message(arg)?;
-  let (v, info) = fetch(api, &r).await?;
+  let (v, info) = payload(api, &r).await?;
   Ok(parse::message(&v, Some(&info.guild), Some(&info.name)))
 }
 
@@ -180,9 +181,14 @@ async fn post_message(
     let mut parts = Vec::new();
     let mut attachments = Vec::new();
     for (i, file) in files.iter().enumerate() {
-      let (name, data, mime) = read_file(file).await?;
-      attachments.push(json!({"id": i, "filename": name}));
-      parts.push(Part::file(&format!("files[{i}]"), data, &name, &mime));
+      let file = Upload::read(file).await?;
+      attachments.push(json!({"id": i, "filename": file.name}));
+      parts.push(Part::file(
+        &format!("files[{i}]"),
+        file.data,
+        &file.name,
+        file.mime,
+      ));
     }
     body["attachments"] = json!(attachments);
     let mut payload = Part::text("payload_json", body.to_string());
@@ -194,29 +200,9 @@ async fn post_message(
   let action = if reply.is_some() { "reply" } else { "send" };
   Ok(
     Action::done(action, &info.name)
-      .with_id(format!("{channel}/{mid}"))
+      .with_id(chat::message_id(channel, &mid))
       .with_url(parse::permalink(&info.guild, channel, Some(&mid))),
   )
-}
-
-async fn read_file(path: &Path) -> Result<(String, Vec<u8>, String)> {
-  let data = tokio::fs::read(path)
-    .await
-    .map_err(|e| Error::input(format!("cannot read {}: {e}", path.display())))?;
-  let name = path
-    .file_name()
-    .and_then(|n| n.to_str())
-    .unwrap_or("file")
-    .to_owned();
-  let mime = match sniff(&data) {
-    Some("jpg") => "image/jpeg",
-    Some("png") => "image/png",
-    Some("gif") => "image/gif",
-    Some("webp") => "image/webp",
-    Some("mp4") => "video/mp4",
-    _ => "application/octet-stream",
-  };
-  Ok((name, data, mime.to_owned()))
 }
 
 pub async fn edit(api: &Api, arg: &str, text: &str) -> Result<Action> {
@@ -233,13 +219,11 @@ pub async fn edit(api: &Api, arg: &str, text: &str) -> Result<Action> {
     )
     .await?;
   let info = api.channel(&r.channel).await?;
-  Ok(
-    Action::done("edit", format!("{}/{}", r.channel, r.message)).with_url(parse::permalink(
-      &info.guild,
-      &r.channel,
-      v.str("id").as_deref(),
-    )),
-  )
+  Ok(Action::done("edit", r.id()).with_url(parse::permalink(
+    &info.guild,
+    &r.channel,
+    v.str("id").as_deref(),
+  )))
 }
 
 pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
@@ -247,19 +231,16 @@ pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
   api
     .delete(&format!("/channels/{}/messages/{}", r.channel, r.message))
     .await?;
-  Ok(Action::done(
-    "delete",
-    format!("{}/{}", r.channel, r.message),
-  ))
+  Ok(Action::done("delete", r.id()))
 }
 
 /// Delete a comment: a full reference, or a message id in the post's channel.
 pub async fn delete_comment(api: &Api, post: &str, comment: &str) -> Result<Action> {
   let r = in_channel(post, comment)?;
-  delete(api, &format!("{}/{}", r.channel, r.message)).await
+  delete(api, &r.id()).await
 }
 
-// ── reactions and pins ──────────────────────────────────────────────────
+// ── reactions ──────────────────────────────────────────────────
 
 /// `👍`, `name:id`, `<:name:id>` or `<a:name:id>` → the path segment Discord takes.
 fn emoji_path(emoji: &str) -> Result<String> {
@@ -293,85 +274,7 @@ pub async fn react(api: &Api, arg: &str, emoji: &str, undo: bool) -> Result<Acti
   } else {
     api.put(&path).await?;
   }
-  Ok(
-    Action::done(
-      if undo { "unreact" } else { "react" },
-      format!("{}/{}", r.channel, r.message),
-    )
-    .with_message(emoji.trim()),
-  )
-}
-
-/// Pinned messages of a channel, newest pin first.
-pub async fn pins(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
-  let (id, info) = channel(api, arg).await?;
-  let mut query = vec![("limit", page.size_within(50).to_string())];
-  if let Some(before) = &page.cursor {
-    query.push(("before", before.clone()));
-  }
-  let v = match api
-    .get(&format!("/channels/{id}/messages/pins"), &query)
-    .await
-  {
-    Ok(v) => v,
-    // Older API: every pin at once.
-    Err(e) if e.code == ErrorCode::NotFound => {
-      let all = api.get(&format!("/channels/{id}/pins"), &[]).await?;
-      let items = all
-        .as_array()
-        .map(|rows| {
-          rows
-            .iter()
-            .map(|m| parse::message(m, Some(&info.guild), Some(&info.name)))
-            .collect()
-        })
-        .unwrap_or_default();
-      return Ok(Page::last(items));
-    }
-    Err(e) => return Err(e),
-  };
-  let rows = v.list("items");
-  let next = v
-    .bool("has_more")
-    .unwrap_or(false)
-    .then(|| rows.last().and_then(|p| p.str("pinned_at")))
-    .flatten();
-  let items = rows
-    .iter()
-    .map(|p| {
-      let mut post = parse::message(p.at("message"), Some(&info.guild), Some(&info.name));
-      if let Some(at) = p.str("pinned_at") {
-        post.extra.insert("pinned_at".into(), json!(at));
-      }
-      post
-    })
-    .collect();
-  Ok(Page::new(items, next))
-}
-
-pub async fn pin(api: &Api, arg: &str, undo: bool) -> Result<Action> {
-  let r = refs::message(arg)?;
-  let new = format!("/channels/{}/messages/pins/{}", r.channel, r.message);
-  let old = format!("/channels/{}/pins/{}", r.channel, r.message);
-  let call = async |path: &str| {
-    if undo {
-      api.delete(path).await
-    } else {
-      api.put(path).await
-    }
-  };
-  match call(&new).await {
-    Err(e) if e.code == ErrorCode::NotFound => {
-      call(&old).await?;
-    }
-    other => {
-      other?;
-    }
-  }
-  Ok(Action::done(
-    if undo { "unpin" } else { "pin" },
-    format!("{}/{}", r.channel, r.message),
-  ))
+  Ok(Action::done(if undo { "unreact" } else { "react" }, r.id()).with_message(emoji.trim()))
 }
 
 // ── threads as comments ─────────────────────────────────────────────────
@@ -380,7 +283,7 @@ pub async fn pin(api: &Api, arg: &str, undo: bool) -> Result<Action> {
 /// newest message first.
 pub async fn thread(api: &Api, post: &str, page: &PageReq) -> Result<Page<Comment>> {
   let r = refs::message(post)?;
-  let (v, info) = fetch(api, &r).await?;
+  let (v, info) = payload(api, &r).await?;
   // A forum post's thread has the id of its first message.
   let thread = v.str("thread.id").or_else(|| {
     matches!(info.kind, 10..=12)

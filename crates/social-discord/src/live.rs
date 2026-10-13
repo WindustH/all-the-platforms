@@ -11,6 +11,8 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
+use social_core::chat;
+use social_core::live::Backoff;
 use social_core::output::{Stream, note};
 use social_core::socket::Socket;
 use social_core::{Error, Post, Result, User, Value, ValueExt, json};
@@ -56,21 +58,13 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
   let token = api.require()?;
   // A bad token fails here instead of in a reconnect loop.
   api.get("/users/@me", &[]).await?;
-  let mut ids = HashSet::new();
-  for arg in chats {
-    match refs::chat(arg)? {
-      Chat::User(user) => {
-        ids.insert(chats::open_dm(api, &user).await?);
-      }
-      Chat::Id(id) | Chat::Channel(id) | Chat::Server(id) => {
-        ids.insert(id);
-      }
-    }
-  }
-  let filter = Filter { ids };
+  let filter = Filter {
+    ids: channel_ids(api, chats).await?,
+  };
   let mut content = true;
   let mut subscribe = token.kind == Kind::User && !filter.ids.is_empty();
   let mut failures = 0;
+  let mut backoff = Backoff::default();
   loop {
     let ended = session(api, &token, &filter, out, content, subscribe).await?;
     if ended.refused_subscriptions {
@@ -78,6 +72,7 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
     }
     if ended.ready {
       failures = 0;
+      backoff.reset();
     } else if token.kind == Kind::Bot && content {
       note(
         "The bot may not use the Message Content intent; listening without it (text only for mentions and DMs).",
@@ -92,21 +87,30 @@ pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
         ));
       }
     }
-    let wait: f64 = rand::random_range(1.0..5.0);
-    tracing::debug!("gateway closed; reconnecting in {wait:.1}s");
-    tokio::time::sleep(Duration::from_secs_f64(wait)).await;
+    tracing::debug!("gateway closed; reconnecting");
+    backoff.wait().await;
   }
 }
 
-async fn session(
-  api: &Api,
-  token: &Token,
-  filter: &Filter,
-  out: &Stream,
-  content: bool,
-  subscribe: bool,
-) -> Result<Ended> {
-  // Bots connect like a library; user accounts like the web app.
+/// The channels (or servers) to listen to; a user means the DM with them.
+async fn channel_ids(api: &Api, chats: &[String]) -> Result<HashSet<String>> {
+  let mut ids = HashSet::new();
+  for arg in chats {
+    match refs::chat(arg)? {
+      Chat::User(user) => {
+        ids.insert(chats::open_dm(api, &user).await?);
+      }
+      Chat::Id(id) | Chat::Channel(id) | Chat::Server(id) => {
+        ids.insert(id);
+      }
+    }
+  }
+  Ok(ids)
+}
+
+/// Open the gateway as a bot library or the web app would; its heartbeat
+/// interval comes with the `hello`.
+async fn connect(api: &Api, token: &Token) -> Result<(Socket, Duration)> {
   let (url, headers): (&str, Vec<(&str, &str)>) = match token.kind {
     Kind::Bot => (
       BOT_GATEWAY,
@@ -123,6 +127,19 @@ async fn session(
     .await?
     .ok_or_else(|| Error::upstream("the Discord gateway closed before saying hello"))?;
   let interval = Duration::from_millis(hello.u64("d.heartbeat_interval").unwrap_or(41_250));
+  Ok((ws, interval))
+}
+
+/// One gateway connection, until Discord closes it or asks to reconnect.
+async fn session(
+  api: &Api,
+  token: &Token,
+  filter: &Filter,
+  out: &Stream,
+  content: bool,
+  subscribe: bool,
+) -> Result<Ended> {
+  let (mut ws, interval) = connect(api, token).await?;
   ws.send_json(&identify(api, token, content).await).await?;
   let mut seq: Option<u64> = None;
   let mut ended = Ended {
@@ -258,81 +275,87 @@ fn dispatch(api: &Api, event: &str, d: &Value, filter: &Filter, out: &Stream) {
   if !event.starts_with("MESSAGE_") || !filter.wants(channel.as_deref(), guild.as_deref()) {
     return;
   }
-  let place = channel.as_deref().map(|c| {
-    let info = api.cached(c);
-    (
-      guild
-        .clone()
+  let place = Place::of(api, channel.as_deref(), guild);
+  for mut post in message_events(event, d, &place) {
+    post.extra.insert("event".into(), json!(event));
+    // Every event would repeat its payload; the stream shows the parsed form.
+    post.raw = None;
+    out.post(&post);
+  }
+}
+
+/// Where an event happened: the guild (`@me` for direct chats) and the
+/// channel's name when known.
+#[derive(Default)]
+struct Place {
+  guild: String,
+  chat_name: Option<String>,
+}
+
+impl Place {
+  fn of(api: &Api, channel: Option<&str>, guild: Option<String>) -> Self {
+    let Some(channel) = channel else {
+      return Self::default();
+    };
+    let info = api.cached(channel);
+    Self {
+      guild: guild
         .or_else(|| info.as_ref().map(|i| i.guild.clone()))
         .unwrap_or_else(|| "@me".into()),
-      info.map(|i| i.name),
-    )
-  });
-  let (place_guild, chat_name) = place.unwrap_or_default();
-  let mut post = match event {
-    "MESSAGE_CREATE" => parse::message(d, Some(&place_guild), chat_name.as_deref()),
+      chat_name: info.map(|i| i.name),
+    }
+  }
+}
+
+/// The posts a `MESSAGE_*` event becomes.
+fn message_events(event: &str, d: &Value, place: &Place) -> Vec<Post> {
+  let (guild, chat_name) = (place.guild.as_str(), place.chat_name.as_deref());
+  match event {
+    "MESSAGE_CREATE" => vec![parse::message(d, Some(guild), chat_name)],
     // Embed unfurls arrive as updates without an author; skip those.
     "MESSAGE_UPDATE" if d.at("author").is_object() => {
-      let mut p = parse::message(d, Some(&place_guild), chat_name.as_deref());
+      let mut p = parse::message(d, Some(guild), chat_name);
       p.kind = "edit".into();
-      p
+      vec![p]
     }
-    "MESSAGE_DELETE" => event_post(
-      d,
-      "delete",
-      &d.str("id").unwrap_or_default(),
-      &place_guild,
-      chat_name.as_deref(),
-    ),
-    "MESSAGE_DELETE_BULK" => {
-      for id in d.list("ids").iter().filter_map(Value::as_str) {
-        out.post(&event_post(
-          d,
-          "delete",
-          id,
-          &place_guild,
-          chat_name.as_deref(),
-        ));
-      }
-      return;
+    "MESSAGE_DELETE" => {
+      let id = d.str("id").unwrap_or_default();
+      vec![event_post(d, "delete", &id, guild, chat_name)]
     }
+    "MESSAGE_DELETE_BULK" => d
+      .list("ids")
+      .iter()
+      .filter_map(Value::as_str)
+      .map(|id| event_post(d, "delete", id, guild, chat_name))
+      .collect(),
     "MESSAGE_REACTION_ADD" | "MESSAGE_REACTION_REMOVE" => {
-      let kind = if event.ends_with("ADD") {
-        "reaction"
-      } else {
-        "unreaction"
-      };
-      let mut p = event_post(
-        d,
-        kind,
-        &d.str("message_id").unwrap_or_default(),
-        &place_guild,
-        chat_name.as_deref(),
-      );
-      p.text = Some(parse::emoji_name(d.at("emoji")));
-      p.author = Some(if d.at("member.user").is_object() {
-        parse::member(d.at("member"))
-      } else {
-        User {
-          id: d.str("user_id").unwrap_or_default(),
-          ..User::default()
-        }
-      });
-      p
+      vec![reaction_post(d, event.ends_with("ADD"), guild, chat_name)]
     }
-    _ => return,
-  };
-  post.extra.insert("event".into(), json!(event));
-  // Every event would repeat its payload; the stream shows the parsed form.
-  post.raw = None;
-  out.post(&post);
+    _ => Vec::new(),
+  }
+}
+
+fn reaction_post(d: &Value, added: bool, guild: &str, chat_name: Option<&str>) -> Post {
+  let kind = if added { "reaction" } else { "unreaction" };
+  let message = d.str("message_id").unwrap_or_default();
+  let mut p = event_post(d, kind, &message, guild, chat_name);
+  p.text = Some(parse::emoji_name(d.at("emoji")));
+  p.author = Some(if d.at("member.user").is_object() {
+    parse::member(d.at("member"))
+  } else {
+    User {
+      id: d.str("user_id").unwrap_or_default(),
+      ..User::default()
+    }
+  });
+  p
 }
 
 /// An event about a message that is not itself a message payload.
 fn event_post(d: &Value, kind: &str, message: &str, guild: &str, chat_name: Option<&str>) -> Post {
   let channel = d.str("channel_id").unwrap_or_default();
   let mut p = Post {
-    id: format!("{channel}/{message}"),
+    id: chat::message_id(&channel, message),
     kind: kind.into(),
     url: Some(parse::permalink(guild, &channel, Some(message))),
     created_at: Some(jiff::Timestamp::now()),

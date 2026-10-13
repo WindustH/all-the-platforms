@@ -12,10 +12,28 @@ use social_core::{
   Breakdown, Error, Insights, Point, Result, Series, Share, Value, ValueExt, json,
 };
 
+use crate::api::{Api, Mode};
 use crate::mt::{self, Conn, error};
 use crate::refs::{self, Chat};
 
-pub async fn channel(conn: &Conn, arg: &str, days: u32) -> Result<Insights> {
+/// Statistics of a channel or group the account administers, or of one post.
+pub async fn insights(api: &Api, post: Option<&str>, days: u32) -> Result<Insights> {
+  let Some(channel_arg) = post else {
+    return Err(Error::input(
+      "name a channel you administer: `social telegram insights @channel`",
+    ));
+  };
+  match api.mode()? {
+    Mode::User(_) => {
+      api
+        .as_user(async |c| channel(c, channel_arg, days).await)
+        .await
+    }
+    _ => Err(api.needs_account("channel statistics")),
+  }
+}
+
+async fn channel(conn: &Conn, arg: &str, days: u32) -> Result<Insights> {
   if let Ok(m) = refs::message(arg) {
     return message(conn, &m.chat, m.id).await;
   }
@@ -230,7 +248,6 @@ fn add_graph(out: &mut Insights, name: &str, v: &Value) {
     .filter_map(|n| n.as_i64())
     .collect();
   let by_category = name.contains("by_") || name == "language";
-  let hourly = name == "hour_of_day";
   let mut items = Vec::new();
   for col in columns
     .iter()
@@ -252,37 +269,45 @@ fn add_graph(out: &mut Insights, name: &str, v: &Value) {
         value: json!(values.iter().sum::<f64>()),
         ..Share::default()
       });
-      continue;
+    } else {
+      out.series.push(Series {
+        metric: format!("{name}.{}", snake(&label)),
+        points: points(&xs, &values, name == "hour_of_day"),
+      });
     }
-    let points = xs
-      .iter()
-      .zip(&values)
-      .map(|(x, y)| Point {
-        date: if hourly {
-          format!("{x:02}:00")
-        } else {
-          from_millis(*x)
-            .map(|t| t.strftime("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| x.to_string())
-        },
-        value: json!(y),
-      })
-      .collect();
-    out.series.push(Series {
-      metric: format!("{name}.{}", snake(&label)),
-      points,
-    });
   }
   if !items.is_empty() {
-    let total: f64 = items.iter().filter_map(|i| i.value.as_f64()).sum();
-    for i in &mut items {
-      i.ratio = i.value.as_f64().filter(|_| total > 0.0).map(|n| n / total);
-    }
-    out.breakdowns.push(Breakdown {
-      dimension: name.into(),
-      items,
-      ..Breakdown::default()
-    });
+    out.breakdowns.push(breakdown(name, items));
+  }
+}
+
+/// A series' points: dates, or hours of the day.
+fn points(xs: &[i64], values: &[f64], hourly: bool) -> Vec<Point> {
+  xs.iter()
+    .zip(values)
+    .map(|(x, y)| Point {
+      date: if hourly {
+        format!("{x:02}:00")
+      } else {
+        from_millis(*x)
+          .map(|t| t.strftime("%Y-%m-%d").to_string())
+          .unwrap_or_else(|| x.to_string())
+      },
+      value: json!(y),
+    })
+    .collect()
+}
+
+/// Category totals as shares of their sum.
+fn breakdown(name: &str, mut items: Vec<Share>) -> Breakdown {
+  let total: f64 = items.iter().filter_map(|i| i.value.as_f64()).sum();
+  for i in &mut items {
+    i.ratio = i.value.as_f64().filter(|_| total > 0.0).map(|n| n / total);
+  }
+  Breakdown {
+    dimension: name.into(),
+    items,
+    ..Breakdown::default()
   }
 }
 

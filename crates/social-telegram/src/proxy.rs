@@ -59,12 +59,29 @@ fn bridge(upstream: String) -> Result<String> {
 
 /// One SOCKS5 CONNECT (no authentication) relayed over HTTP CONNECT.
 async fn serve(mut client: TcpStream, upstream: &str) -> std::io::Result<()> {
+  let target = socks_request(&mut client).await?;
+  let mut server = TcpStream::connect(upstream).await?;
+  let refused = http_connect(&mut server, &target).await?;
+  // SOCKS5 reply: succeeded, or general failure.
+  let code = if refused.is_none() { 0 } else { 1 };
+  client.write_all(&[5, code, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
+  if let Some(status) = refused {
+    return Err(std::io::Error::other(format!(
+      "proxy refused CONNECT {target}: {status}"
+    )));
+  }
+  tokio::io::copy_bidirectional(&mut client, &mut server).await?;
+  Ok(())
+}
+
+/// The SOCKS5 greeting (no authentication) and the CONNECT request: the
+/// `host:port` to reach.
+async fn socks_request(client: &mut TcpStream) -> std::io::Result<String> {
   let mut head = [0u8; 2];
   client.read_exact(&mut head).await?;
   let mut methods = vec![0u8; head[1] as usize];
   client.read_exact(&mut methods).await?;
   client.write_all(&[5, 0]).await?;
-
   let mut req = [0u8; 4];
   client.read_exact(&mut req).await?;
   let host = match req[3] {
@@ -89,9 +106,11 @@ async fn serve(mut client: TcpStream, upstream: &str) -> std::io::Result<()> {
   };
   let mut port = [0u8; 2];
   client.read_exact(&mut port).await?;
-  let target = format!("{host}:{}", u16::from_be_bytes(port));
+  Ok(format!("{host}:{}", u16::from_be_bytes(port)))
+}
 
-  let mut server = TcpStream::connect(upstream).await?;
+/// Ask the HTTP proxy for a tunnel; `Some(status line)` when it refuses.
+async fn http_connect(server: &mut TcpStream, target: &str) -> std::io::Result<Option<String>> {
   server
     .write_all(format!("CONNECT {target} HTTP/1.1\r\nHost: {target}\r\n\r\n").as_bytes())
     .await?;
@@ -108,15 +127,5 @@ async fn serve(mut client: TcpStream, upstream: &str) -> std::io::Result<()> {
     .split_whitespace()
     .nth(1)
     .is_some_and(|code| code.starts_with('2'));
-  // SOCKS5 reply: succeeded, or general failure.
-  let code = if ok { 0 } else { 1 };
-  client.write_all(&[5, code, 0, 1, 0, 0, 0, 0, 0, 0]).await?;
-  if !ok {
-    return Err(std::io::Error::other(format!(
-      "proxy refused CONNECT {target}: {}",
-      status.lines().next().unwrap_or_default()
-    )));
-  }
-  tokio::io::copy_bidirectional(&mut client, &mut server).await?;
-  Ok(())
+  Ok((!ok).then(|| status.lines().next().unwrap_or_default().to_owned()))
 }

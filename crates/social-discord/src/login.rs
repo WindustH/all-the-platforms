@@ -1,4 +1,5 @@
-//! QR login through Discord's remote auth gateway, as the login page does:
+//! Logins: a token (`login --token`, user or bot, checked against the API),
+//! or a QR code through Discord's remote auth gateway, as the login page does:
 //! the app on a phone scans `https://discord.com/ra/<fingerprint>` and
 //! confirms; the token comes back encrypted to a key made for this login.
 //!
@@ -10,6 +11,7 @@
 //! `/users/@me/remote-auth/login` for the encrypted token. `cancel` means
 //! the phone declined; the socket closes when the code expires.
 
+use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
 use base64::Engine;
@@ -20,7 +22,7 @@ use rsa::{Oaep, RsaPrivateKey};
 use sha2::{Digest, Sha256};
 use social_core::http::Method;
 use social_core::socket::Socket;
-use social_core::{Error, QrStatus, Result, Value, ValueExt, json};
+use social_core::{Error, ErrorCode, QrStatus, QrTicket, Result, Value, ValueExt, json};
 
 use crate::api::{Api, Body, Kind, SOCKET_HEADERS, Token, WEB};
 
@@ -183,4 +185,74 @@ async fn next(socket: &mut Socket) -> Result<Value> {
     Ok(Err(e)) => Err(e),
     Err(_) => Err(Error::network("the remote auth gateway did not answer")),
   }
+}
+
+/// Check a token: as given, or (without a `Bot` prefix) as a user token,
+/// then as a bot token. Returns the kind Discord accepted it as.
+pub async fn verify(api: &Api, raw: &str) -> Result<Token> {
+  let (secret, kind) = Token::parse(raw);
+  if secret.is_empty() {
+    return Err(Error::input("the token is empty"));
+  }
+  let kinds = match kind {
+    Some(k) => vec![k],
+    None => vec![Kind::User, Kind::Bot],
+  };
+  let mut last = None;
+  for kind in kinds {
+    let token = Token {
+      secret: secret.clone(),
+      kind,
+    };
+    match api
+      .send(
+        Some(&token),
+        social_core::http::Method::GET,
+        "/users/@me",
+        &[],
+        crate::api::Body::None,
+      )
+      .await
+    {
+      Ok(v) if v.str("id").is_some() => {
+        // A bot token sent as a user token is refused; the reverse too.
+        let is_bot = v.bool("bot") == Some(true);
+        if is_bot == (kind == Kind::Bot) {
+          return Ok(token);
+        }
+      }
+      Ok(_) => {}
+      Err(e) if e.code == ErrorCode::NotAuthenticated => last = Some(e),
+      Err(e) => return Err(e),
+    }
+  }
+  Err(last.unwrap_or_else(|| Error::auth("Discord did not accept the token")))
+}
+
+/// `login --token`: check the token and keep it.
+pub async fn token(api: &Api, raw: &str) -> Result<()> {
+  let token = verify(api, raw).await?;
+  api.save_token(&token);
+  Ok(())
+}
+
+/// Start a QR login, keeping its state in `pending` for the polls.
+pub async fn qr_start(api: &Api, pending: &RefCell<Option<Pending>>) -> Result<QrTicket> {
+  let (state, url) = start(api).await?;
+  *pending.borrow_mut() = Some(state);
+  Ok(QrTicket {
+    url,
+    ..QrTicket::default()
+  })
+}
+
+pub async fn qr_poll(api: &Api, pending: &RefCell<Option<Pending>>) -> Result<QrStatus> {
+  let Some(mut state) = pending.borrow_mut().take() else {
+    return Ok(QrStatus::Expired);
+  };
+  let status = poll(api, &mut state).await;
+  if matches!(status, Ok(QrStatus::Waiting | QrStatus::Scanned)) {
+    *pending.borrow_mut() = Some(state);
+  }
+  status
 }

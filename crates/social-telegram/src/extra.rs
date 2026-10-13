@@ -1,10 +1,11 @@
 //! Telegram-only commands.
 
 use social_core::cli::PageArgs;
-use social_core::{Data, Result};
+use social_core::{Data, Page, Post, Result};
 
+use crate::api::{Api, Mode};
 use crate::refs::{self, Chat};
-use crate::{Mode, Telegram, login, user, web};
+use crate::{login, messages, mt, web};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -35,13 +36,10 @@ pub enum Command {
   Forward { message: String, to: String },
 }
 
-pub async fn run(tg: &Telegram, command: Command) -> Result<Data> {
-  let ctx = &tg.ctx;
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
+  let ctx = &api.ctx;
   Ok(match command {
-    Command::LoginPhone { phone } => {
-      let me = login::phone(ctx, &tg.mt, phone).await?;
-      Data::User(Box::new(me))
-    }
+    Command::LoginPhone { phone } => Data::User(Box::new(login::phone(api, phone).await?)),
     Command::SearchChat {
       chat,
       query,
@@ -49,56 +47,46 @@ pub async fn run(tg: &Telegram, command: Command) -> Result<Data> {
       page,
     } => {
       let chat = refs::chat(&ctx.collection_ref(&chat)?)?;
-      let filter = filter.as_deref();
-      let posts = match tg.mode()? {
-        Mode::User(_) => {
-          page
-            .collect_dated(async |r| {
-              tg.as_user(async |c| user::search_chat(c, &chat, &query, filter, &r).await)
-                .await
-            })
-            .await?
-        }
-        _ => match &chat {
-          Chat::Username(u) => {
-            page
-              .collect_dated(async |r| web::posts(ctx, u, Some(&query), r.cursor.as_deref()).await)
-              .await?
-          }
-          _ => return Err(tg.needs_account("searching this chat")),
-        },
-      };
-      Data::Posts(posts)
+      Data::Posts(search_chat(api, &chat, &query, filter.as_deref(), page).await?)
     }
     Command::MarkRead { chat } => {
       let chat = ctx.collection_ref(&chat)?;
-      Data::Action(
-        tg.as_user(async |c| user::mark_read(c, &chat).await)
-          .await?,
-      )
+      Data::Action(api.as_user(async |c| mt::mark_read(c, &chat).await).await?)
     }
     Command::Pin { message, undo } => {
-      let message = ctx.post_ref(&message)?;
-      Data::Action(match tg.mode()? {
-        Mode::User(_) => {
-          tg.as_user(async |c| user::pin(c, &message, undo).await)
-            .await?
-        }
-        Mode::Bot(b) => b.pin(ctx, &message, undo).await?,
-        Mode::Web => return Err(tg.needs_account("pinning")),
-      })
+      Data::Action(messages::pin(api, &ctx.post_ref(&message)?, undo).await?)
     }
     Command::Forward { message, to } => {
-      let message = ctx.post_ref(&message)?;
-      let to = ctx.collection_ref(&to)?;
-      Data::Action(match tg.mode()? {
-        Mode::User(_) => {
-          tg.as_user(async |c| user::forward(c, &message, &to).await)
-            .await?
-        }
-        Mode::Bot(b) => b.forward(ctx, &message, &to).await?,
-        Mode::Web => return Err(tg.needs_account("forwarding")),
-      })
+      let (message, to) = (ctx.post_ref(&message)?, ctx.collection_ref(&to)?);
+      Data::Action(messages::forward(api, &message, &to).await?)
     }
   })
+}
+
+/// One chat's messages matching `query`: through the account, or (public
+/// channels) the web preview.
+async fn search_chat(
+  api: &Api,
+  chat: &Chat,
+  query: &str,
+  filter: Option<&str>,
+  page: PageArgs,
+) -> Result<Page<Post>> {
+  match (api.mode()?, chat) {
+    (Mode::User(_), _) => {
+      page
+        .collect_dated(async |r| {
+          api
+            .as_user(async |c| mt::search_chat(c, chat, query, filter, &r).await)
+            .await
+        })
+        .await
+    }
+    (_, Chat::Username(u)) => {
+      page
+        .collect_dated(async |r| web::posts(&api.ctx, u, Some(query), r.cursor.as_deref()).await)
+        .await
+    }
+    _ => Err(api.needs_account("searching this chat")),
+  }
 }

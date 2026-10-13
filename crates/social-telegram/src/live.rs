@@ -11,14 +11,27 @@ use grammers_client::update::Update;
 use social_core::output::Stream;
 use social_core::{Ctx, Error, Post, Result};
 
-use crate::convert;
+use crate::api::{Api, Mode};
 use crate::mt::{self, Conn, Mt, boxed, error};
+use crate::parse;
 use crate::refs::{self, Chat};
 use crate::web;
 
 const WEB_EVERY: Duration = Duration::from_secs(30);
 
-pub async fn user(ctx: &Ctx, mt: &Mt, conn: &Conn, chats: &[String], out: &Stream) -> Result<()> {
+pub async fn listen(api: &Api, chats: &[String], out: &Stream) -> Result<()> {
+  match api.mode()? {
+    Mode::User(conn) => {
+      let result = user(&api.ctx, &api.mt, &conn, chats, out).await;
+      api.mt.save(&api.ctx);
+      result
+    }
+    Mode::Bot(b) => b.listen(&api.ctx, chats, out).await,
+    Mode::Web => web(&api.ctx, chats, out).await,
+  }
+}
+
+async fn user(ctx: &Ctx, mt: &Mt, conn: &Conn, chats: &[String], out: &Stream) -> Result<()> {
   let mut wanted = Vec::new();
   for c in chats {
     wanted.push(mt::peer(conn, &refs::chat(c)?).await?.id);
@@ -36,9 +49,9 @@ pub async fn user(ctx: &Ctx, mt: &Mt, conn: &Conn, chats: &[String], out: &Strea
   let pick = |id: PeerId| wanted.is_empty() || wanted.contains(&id);
   loop {
     match stream.next().await.map_err(error)? {
-      Update::NewMessage(m) if pick(m.peer_id()) => out.post(&convert::post(&m)),
+      Update::NewMessage(m) if pick(m.peer_id()) => out.post(&parse::post(&m)),
       Update::MessageEdited(m) if pick(m.peer_id()) => {
-        let mut p = convert::post(&m);
+        let mut p = parse::post(&m);
         p.kind = "edit".into();
         out.post(&p);
       }
@@ -58,7 +71,7 @@ pub async fn user(ctx: &Ctx, mt: &Mt, conn: &Conn, chats: &[String], out: &Strea
 
 /// A deletion as an event: private chats and basic groups do not say where.
 fn deleted(chat: Option<PeerId>, id: i32) -> Post {
-  let dialog = chat.map(convert::dialog_id);
+  let dialog = chat.map(parse::dialog_id);
   let mut post = Post {
     id: match dialog {
       Some(d) => refs::message_id(None, d, id),
@@ -75,7 +88,7 @@ fn deleted(chat: Option<PeerId>, id: i32) -> Post {
 }
 
 /// New posts of public channels, without an account.
-pub async fn web(ctx: &Ctx, chats: &[String], out: &Stream) -> Result<()> {
+async fn web(ctx: &Ctx, chats: &[String], out: &Stream) -> Result<()> {
   let mut names = Vec::new();
   for c in chats {
     match refs::chat(c)? {

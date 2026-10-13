@@ -3,11 +3,12 @@
 //! messages, edits, deletions and reactions become posts — otherwise
 //! polling the named conversations every few seconds.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::time::Duration;
 
+use social_core::live::{self, Backoff};
 use social_core::output::{Stream, note};
-use social_core::{Error, Post, Result, User, Value, ValueExt};
+use social_core::{Error, Post, Result, User, Value, ValueExt, chat};
 
 use crate::api::Api;
 use crate::{chats, messages, parse, users};
@@ -33,6 +34,7 @@ pub async fn listen(api: &Api, args: &[String], out: &Stream) -> Result<()> {
 
 async fn socket_mode(api: &Api, app: &str, ids: &HashSet<String>, out: &Stream) -> Result<()> {
   let mut failures = 0;
+  let mut backoff = Backoff::default();
   loop {
     let open = api
       .call_with(app, "apps.connections.open", Vec::new())
@@ -56,6 +58,7 @@ async fn socket_mode(api: &Api, app: &str, ids: &HashSet<String>, out: &Stream) 
         Some("hello") => {
           hello = true;
           failures = 0;
+          backoff.reset();
         }
         Some("disconnect") => break,
         Some("events_api") => event(api, frame.at("payload.event"), ids, out).await,
@@ -70,7 +73,7 @@ async fn socket_mode(api: &Api, app: &str, ids: &HashSet<String>, out: &Stream) 
         ));
       }
     }
-    tokio::time::sleep(Duration::from_secs_f64(rand::random_range(1.0..3.0))).await;
+    backoff.wait().await;
   }
 }
 
@@ -126,7 +129,7 @@ async fn reaction(api: &Api, e: &Value, channel: &str, kind: &str) -> Option<Pos
     });
   let ts = e.str("item.ts")?;
   let mut p = Post {
-    id: format!("{channel}/{ts}"),
+    id: chat::message_id(channel, &ts),
     kind: if kind == "reaction_added" {
       "reaction"
     } else {
@@ -146,38 +149,26 @@ async fn reaction(api: &Api, e: &Value, channel: &str, kind: &str) -> Option<Pos
   Some(p)
 }
 
-/// Ask each conversation for messages newer than the last one seen.
+/// Without Socket Mode: the newest messages of each conversation, every
+/// [`POLL`]; what existed when listening started is not printed.
 async fn poll(api: &Api, ids: &HashSet<String>, out: &Stream) -> Result<()> {
   note(&format!(
     "Polling {} conversation(s) every {}s; an app-level token gives live events (see `social guide slack`).",
     ids.len(),
     POLL.as_secs()
   ));
-  let now = jiff::Timestamp::now();
-  let start = format!("{}.{:06}", now.as_second(), now.subsec_microsecond());
-  let mut last: HashMap<String, String> = ids.iter().map(|c| (c.clone(), start.clone())).collect();
-  loop {
-    for (channel, since) in last.iter_mut() {
+  live::poll(out, POLL, async || {
+    let mut posts = Vec::new();
+    for channel in ids {
       let v = api
         .call(
           "conversations.history",
-          vec![
-            ("channel", channel.clone()),
-            ("oldest", since.clone()),
-            ("limit", "100".into()),
-          ],
+          vec![("channel", channel.clone()), ("limit", "100".into())],
         )
         .await?;
-      let mut rows = v.list("messages").to_vec();
-      rows.reverse();
-      if let Some(ts) = rows.last().and_then(|m| m.str("ts")) {
-        *since = ts;
-      }
-      for p in messages::posts(api, &rows, channel).await? {
-        out.post(&p);
-      }
+      posts.extend(messages::posts(api, v.list("messages"), channel).await?);
     }
-    let jitter = rand::random_range(0.0..3.0);
-    tokio::time::sleep(POLL + Duration::from_secs_f64(jitter)).await;
-  }
+    Ok(posts)
+  })
+  .await
 }

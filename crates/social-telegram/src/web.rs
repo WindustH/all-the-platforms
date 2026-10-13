@@ -6,6 +6,7 @@
 use std::sync::LazyLock;
 
 use regex::Regex;
+use social_core::chat;
 use social_core::text::{html_to_text, parse_count};
 use social_core::{Ctx, Error, Media, MediaKind, Page, Post, Result, User, Value, json};
 
@@ -175,15 +176,25 @@ pub async fn profile(ctx: &Ctx, name: &str) -> Result<User> {
     verified: html.contains("verified-icon"),
     ..User::default()
   };
-  // "10 405 871 subscribers", "1 234 members, 56 online" or "@name".
+  let kind = kind_and_counts(&mut user, &extra_line);
+  user.extra.insert("kind".into(), kind.into());
+  if PREVIEW_LINK.is_match(&html) {
+    preview_counters(ctx, name, &mut user).await;
+  }
+  Ok(user)
+}
+
+/// What the header line says ("10 405 871 subscribers", "1 234 members, 56
+/// online" or "@name"): the kind of chat, its counters into `user`.
+fn kind_and_counts(user: &mut User, line: &str) -> &'static str {
   let count = |word: &str| {
-    extra_line.split(',').find_map(|part| {
+    line.split(',').find_map(|part| {
       let part = part.trim();
       let number = part.strip_suffix(word)?.trim().replace([' ', '\u{a0}'], "");
       number.parse::<u64>().ok()
     })
   };
-  let kind = if let Some(n) = count("subscribers").or_else(|| count("subscriber")) {
+  if let Some(n) = count("subscribers").or_else(|| count("subscriber")) {
     user.stats.followers = Some(n);
     "channel"
   } else if let Some(n) = count("members").or_else(|| count("member")) {
@@ -192,34 +203,35 @@ pub async fn profile(ctx: &Ctx, name: &str) -> Result<User> {
       user.stats.other.insert("online".into(), online);
     }
     "group"
-  } else if extra_line.starts_with('@') {
+  } else if line.starts_with('@') {
     "user"
   } else {
     "unknown"
+  }
+}
+
+/// A channel's preview adds media counters, and its description and photo
+/// when the profile page lacks them.
+async fn preview_counters(ctx: &Ctx, name: &str, user: &mut User) {
+  let Ok(preview) = page(ctx, &format!("{HOME}/s/{name}")).await else {
+    return;
   };
-  user.extra.insert("kind".into(), kind.into());
-  if PREVIEW_LINK.is_match(&html) {
-    // The channel preview adds media counters.
-    if let Ok(preview) = page(ctx, &format!("{HOME}/s/{name}")).await {
-      for c in COUNTER.captures_iter(&preview) {
-        if let Some(n) = parse_count(&c[1]) {
-          let key = c[2].trim().to_owned();
-          if key.starts_with("subscriber") {
-            user.stats.followers = Some(n);
-          } else {
-            user.stats.other.insert(key, n);
-          }
-        }
-      }
-      if user.bio.is_none() {
-        user.bio = CHANNEL_DESC.captures(&preview).map(|c| html_to_text(&c[1]));
-      }
-      if user.avatar.is_none() {
-        user.avatar = CHANNEL_PHOTO.captures(&preview).map(|c| c[1].to_owned());
+  for c in COUNTER.captures_iter(&preview) {
+    if let Some(n) = parse_count(&c[1]) {
+      let key = c[2].trim().to_owned();
+      if key.starts_with("subscriber") {
+        user.stats.followers = Some(n);
+      } else {
+        user.stats.other.insert(key, n);
       }
     }
   }
-  Ok(user)
+  if user.bio.is_none() {
+    user.bio = CHANNEL_DESC.captures(&preview).map(|c| html_to_text(&c[1]));
+  }
+  if user.avatar.is_none() {
+    user.avatar = CHANNEL_PHOTO.captures(&preview).map(|c| c[1].to_owned());
+  }
 }
 
 /// Every message of a page, in page order (oldest first).
@@ -237,7 +249,7 @@ fn message(chunk: &str, chat_name: Option<&str>) -> Option<Post> {
   let owner = OWNER.captures(chunk);
   let owner_name = owner.as_ref().map(|c| html_to_text(&c[2]));
   let mut post = Post {
-    id: format!("{name}/{id}"),
+    id: chat::message_id(&name, &id.to_string()),
     kind: if chunk.contains("service_message") {
       "service".into()
     } else {
@@ -273,14 +285,21 @@ fn message(chunk: &str, chat_name: Option<&str>) -> Option<Post> {
     extra.insert("chat_name".into(), n.into());
   }
   extra.insert("message_id".into(), id.into());
+  if !reactions.is_empty() {
+    extra.insert("reactions".into(), Value::Array(reactions));
+  }
+  message_extra(&mut post, chunk);
+  Some(post)
+}
+
+/// Signature, edit mark, forward, reply, link preview, files and polls.
+fn message_extra(post: &mut Post, chunk: &str) {
+  let extra = &mut post.extra;
   if let Some(s) = SIGNATURE.captures(chunk) {
     extra.insert("signature".into(), html_to_text(&s[1]).into());
   }
   if chunk.contains("edited &nbsp;") {
     extra.insert("edited".into(), true.into());
-  }
-  if !reactions.is_empty() {
-    extra.insert("reactions".into(), Value::Array(reactions));
   }
   if let Some(f) = FORWARD.captures(chunk) {
     extra.insert(
@@ -304,7 +323,6 @@ fn message(chunk: &str, chat_name: Option<&str>) -> Option<Post> {
   if let Some(p) = POLL.captures(chunk) {
     extra.insert("poll".into(), html_to_text(&p[1]).into());
   }
-  Some(post)
 }
 
 /// Reactions as `{emoji, count}` (custom emoji by id), their total, and paid stars.
@@ -354,8 +372,8 @@ fn media(chunk: &str) -> Vec<Media> {
 }
 
 /// `1:02:05` -> 3725.
-fn seconds(s: &str) -> Option<f64> {
-  s.split(':').try_fold(0.0, |acc, part| {
+fn seconds(text: &str) -> Option<f64> {
+  text.split(':').try_fold(0.0, |acc, part| {
     part.parse::<f64>().ok().map(|n| acc * 60.0 + n)
   })
 }

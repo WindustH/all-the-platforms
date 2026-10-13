@@ -1,16 +1,16 @@
 //! Matrix for social-cli: any homeserver, through the client-server API
-//! ([`api`]). Rooms are collections ([`rooms`]), timeline events are posts
-//! with `ROOM/$event` ids ([`events`]), `listen` long-polls `/sync`
-//! ([`sync`]). End-to-end encrypted rooms are not decrypted: their messages
+//! ([`api`]). Rooms are collections ([`chats`]), timeline events are posts
+//! with `ROOM/$event` ids ([`messages`]), `listen` long-polls `/sync`
+//! ([`live`]). End-to-end encrypted rooms are not decrypted: their messages
 //! show as `encrypted` events.
 
 mod api;
-mod events;
+mod chats;
 mod extra;
+mod live;
+mod messages;
 mod parse;
 mod refs;
-mod rooms;
-mod sync;
 mod users;
 
 use std::collections::BTreeMap;
@@ -143,15 +143,15 @@ impl Platform for Matrix {
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    events::search(&self.api, query, page).await
+    messages::search(&self.api, query, page).await
   }
 
   async fn search_topics(&self, query: &Query, page: &PageReq) -> Result<Page<Collection>> {
-    rooms::directory(&self.api, Some(query), None, page).await
+    chats::directory(&self.api, Some(query), None, page).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    events::read(&self.api, post).await
+    messages::read(&self.api, post).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
@@ -163,7 +163,7 @@ impl Platform for Matrix {
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    rooms::unread(&self.api).await
+    chats::unread(&self.api).await
   }
 
   /// Answer a message in its room.
@@ -178,51 +178,51 @@ impl Platform for Matrix {
       reply_to: Some(target.to_owned()),
       files: reply.images.clone(),
     };
-    events::send(&self.api, &room, &message).await
+    messages::send(&self.api, &room, &message).await
   }
 
   /// Join a room (`--undo` leaves it).
   async fn follow(&self, room: &str, undo: bool) -> Result<Action> {
-    rooms::join(&self.api, room, undo).await
+    chats::join(&self.api, room, undo).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
-    events::delete(&self.api, post).await
+    messages::delete(&self.api, post).await
   }
 
   async fn media(&self, post: &str, _audio_only: bool) -> Result<(Post, Vec<Media>)> {
-    events::media(&self.api, post).await
+    messages::media(&self.api, post).await
   }
 
   async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
     match parent {
-      Some(space) => rooms::space(&self.api, space, page).await,
-      None => rooms::list(&self.api).await,
+      Some(space) => chats::space(&self.api, space, page).await,
+      None => chats::list(&self.api).await,
     }
   }
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
-    events::history(&self.api, chat, page).await
+    messages::history(&self.api, chat, page).await
   }
 
   async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
-    events::send(&self.api, chat, message).await
+    messages::send(&self.api, chat, message).await
   }
 
   async fn members(&self, chat: &str, _page: &PageReq) -> Result<Page<User>> {
-    rooms::members(&self.api, chat).await
+    chats::members(&self.api, chat).await
   }
 
   async fn react(&self, post: &str, emoji: &str, undo: bool) -> Result<Action> {
-    events::react(&self.api, post, emoji, undo).await
+    messages::react(&self.api, post, emoji, undo).await
   }
 
   async fn edit(&self, post: &str, text: &str) -> Result<Action> {
-    events::edit(&self.api, post, text).await
+    messages::edit(&self.api, post, text).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
-    sync::listen(&self.api, chats, out).await
+    live::listen(&self.api, chats, out).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

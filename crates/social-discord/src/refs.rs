@@ -6,6 +6,7 @@
 use std::sync::OnceLock;
 
 use regex::Regex;
+use social_core::chat;
 use social_core::{Error, Result};
 
 /// A message and the channel it is in (and its guild, when the link says).
@@ -14,6 +15,13 @@ pub struct MessageRef {
   pub channel: String,
   pub message: String,
   pub guild: Option<String>,
+}
+
+impl MessageRef {
+  /// The `CHANNEL/MESSAGE` id listed messages carry.
+  pub fn id(&self) -> String {
+    chat::message_id(&self.channel, &self.message)
+  }
 }
 
 /// A chat argument: what it names.
@@ -45,8 +53,8 @@ fn user_link() -> &'static Regex {
   })
 }
 
-pub fn is_snowflake(s: &str) -> bool {
-  (15..=21).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_digit())
+pub fn is_snowflake(id: &str) -> bool {
+  (15..=21).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_digit())
 }
 
 pub fn message(arg: &str) -> Result<MessageRef> {

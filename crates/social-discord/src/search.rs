@@ -28,9 +28,9 @@ struct Scope {
   words: Vec<String>,
 }
 
-fn scope(q: &Query) -> Result<Scope> {
+fn scope(query: &Query) -> Result<Scope> {
   let mut s = Scope::default();
-  for word in q.keyword.split_whitespace() {
+  for word in query.keyword.split_whitespace() {
     let Some((key, value)) = word.split_once(':').filter(|(k, v)| {
       !v.is_empty()
         && matches!(
@@ -56,14 +56,14 @@ fn scope(q: &Query) -> Result<Scope> {
       _ => unreachable!(),
     }
   }
-  if let Some(has) = &q.filter {
+  if let Some(has) = &query.filter {
     s.params.push(("has", has.clone()));
   }
   Ok(s)
 }
 
-fn id_of(c: refs::Chat) -> String {
-  match c {
+fn id_of(chat: refs::Chat) -> String {
+  match chat {
     refs::Chat::Id(id)
     | refs::Chat::Channel(id)
     | refs::Chat::Server(id)
@@ -74,32 +74,7 @@ fn id_of(c: refs::Chat) -> String {
 pub async fn messages(api: &Api, q: &Query, page: &PageReq) -> Result<Page<Post>> {
   api.require_user("search (bots cannot search messages)")?;
   let s = scope(q)?;
-  let (path, mut params) = match (&s.server, &s.channel) {
-    (Some(server), channel) => {
-      let mut params = Vec::new();
-      if let Some(c) = channel {
-        params.push(("channel_id", c.clone()));
-      }
-      (format!("/guilds/{server}/messages/search"), params)
-    }
-    (None, Some(channel)) => {
-      let info = api.channel(channel).await?;
-      if info.guild == "@me" {
-        (format!("/channels/{channel}/messages/search"), Vec::new())
-      } else {
-        (
-          format!("/guilds/{}/messages/search", info.guild),
-          vec![("channel_id", channel.clone())],
-        )
-      }
-    }
-    (None, None) => {
-      return Err(
-        Error::input("say where to search: add `server:ID` or `in:CHANNEL` to the query")
-          .with_hint("`social discord chats` lists servers and chats; e.g. `social discord search 'rust server:123'`"),
-      );
-    }
-  };
+  let (path, mut params) = endpoint(api, &s).await?;
   let words = s.words.join(" ");
   if !words.is_empty() {
     params.push(("content", words));
@@ -131,6 +106,35 @@ pub async fn messages(api: &Api, q: &Query, page: &PageReq) -> Result<Page<Post>
   let next = offset + PAGE;
   let more = !items.is_empty() && next < total && next <= MAX_OFFSET;
   Ok(Page::new(items, more.then(|| next.to_string())))
+}
+
+/// The search endpoint for the scope: a server's (narrowed to a channel), or
+/// a direct chat's.
+async fn endpoint(api: &Api, s: &Scope) -> Result<(String, Vec<(&'static str, String)>)> {
+  match (&s.server, &s.channel) {
+    (Some(server), channel) => {
+      let params = channel
+        .iter()
+        .map(|c| ("channel_id", c.clone()))
+        .collect();
+      Ok((format!("/guilds/{server}/messages/search"), params))
+    }
+    (None, Some(channel)) => {
+      let info = api.channel(channel).await?;
+      if info.guild == "@me" {
+        Ok((format!("/channels/{channel}/messages/search"), Vec::new()))
+      } else {
+        Ok((
+          format!("/guilds/{}/messages/search", info.guild),
+          vec![("channel_id", channel.clone())],
+        ))
+      }
+    }
+    (None, None) => Err(
+      Error::input("say where to search: add `server:ID` or `in:CHANNEL` to the query")
+        .with_hint("`social discord chats` lists servers and chats; e.g. `social discord search 'rust server:123'`"),
+    ),
+  }
 }
 
 /// The matching message of a result group (older answers hold context too).

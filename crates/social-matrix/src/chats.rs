@@ -64,8 +64,23 @@ pub async fn summary_sync(api: &Api) -> Result<Value> {
 pub async fn list(api: &Api) -> Result<Page<Collection>> {
   let v = summary_sync(api).await?;
   let me = api.user_id().unwrap_or_default();
-  let direct: HashSet<String> = v
-    .list("account_data.events")
+  let direct = direct_rooms(&v);
+  let mut out: Vec<(i64, Collection)> = Vec::new();
+  for section in ["join", "invite"] {
+    let Some(rooms) = v.at("rooms").get(section).and_then(Value::as_object) else {
+      continue;
+    };
+    for (rid, r) in rooms {
+      out.push(room(rid, r, section == "invite", direct.contains(rid), &me));
+    }
+  }
+  out.sort_by_key(|a| std::cmp::Reverse(a.0));
+  Ok(Page::last(out.into_iter().map(|(_, c)| c).collect()))
+}
+
+/// Rooms the account marked as direct chats (`m.direct` account data).
+fn direct_rooms(v: &Value) -> HashSet<String> {
+  v.list("account_data.events")
     .iter()
     .filter(|e| e.str("type").as_deref() == Some("m.direct"))
     .filter_map(|e| e.at("content").as_object().cloned())
@@ -78,95 +93,102 @@ pub async fn list(api: &Api) -> Result<Page<Collection>> {
         .into_iter()
         .filter_map(|r| r.as_str().map(str::to_owned))
     })
+    .collect()
+}
+
+/// One room of the sync summary, with its last activity for sorting.
+fn room(rid: &str, r: &Value, invite: bool, direct: bool, me: &str) -> (i64, Collection) {
+  let state: Vec<Value> = r
+    .list("state.events")
+    .iter()
+    .chain(r.list("timeline.events"))
+    .chain(r.list("invite_state.events"))
+    .cloned()
     .collect();
-  let mut out: Vec<(i64, Collection)> = Vec::new();
-  for (section, kind_default) in [("join", "room"), ("invite", "invite")] {
-    let Some(rooms) = v.at("rooms").get(section).and_then(Value::as_object) else {
-      continue;
-    };
-    for (rid, r) in rooms {
-      let state: Vec<Value> = r
-        .list("state.events")
-        .iter()
-        .chain(r.list("timeline.events"))
-        .chain(r.list("invite_state.events"))
-        .cloned()
-        .collect();
-      let mut members = Members::default();
-      members.absorb(&state);
-      let get = |t: &str, key: &str| {
-        state
-          .iter()
-          .rev()
-          .find(|e| e.str("type").as_deref() == Some(t))
-          .and_then(|e| e.at("content").str(key))
-      };
-      let heroes: Vec<String> = r
-        .at("summary")
-        .get("m.heroes")
-        .and_then(Value::as_array)
-        .map(|h| {
-          h.iter()
-            .filter_map(Value::as_str)
-            .filter(|id| *id != me)
-            .map(|id| members.user(id).name)
-            .collect()
-        })
-        .unwrap_or_default();
-      let name = get("m.room.name", "name")
-        .or_else(|| get("m.room.canonical_alias", "alias"))
-        .or_else(|| (!heroes.is_empty()).then(|| heroes.join(", ")))
-        .unwrap_or_else(|| rid.clone());
-      let space = get("m.room.create", "type").as_deref() == Some("m.space");
-      let kind = if section == "invite" {
-        kind_default
-      } else if space {
-        "space"
-      } else if direct.contains(rid) {
-        "dm"
-      } else {
-        "room"
-      };
-      let mut c = Collection {
-        id: rid.clone(),
-        kind: kind.into(),
-        name,
-        description: get("m.room.topic", "topic"),
-        url: Some(refs::permalink(rid, None)),
-        followers: r
-          .at("summary")
-          .get("m.joined_member_count")
-          .and_then(Value::as_u64),
-        raw: Some(r.clone()),
-        ..Collection::default()
-      };
-      if let Some(alias) = get("m.room.canonical_alias", "alias") {
-        c.extra.insert("alias".into(), json!(alias));
-      }
-      for (key, path) in [
-        ("unread", "unread_notifications.notification_count"),
-        ("highlights", "unread_notifications.highlight_count"),
-      ] {
-        if let Some(n) = r.u64(path).filter(|n| *n > 0) {
-          c.extra.insert(key.into(), json!(n));
-        }
-      }
-      if state
-        .iter()
-        .any(|e| e.str("type").as_deref() == Some("m.room.encryption"))
-      {
-        c.extra.insert("encrypted".into(), json!(true));
-      }
-      let last = r
-        .list("timeline.events")
-        .last()
-        .and_then(|e| e.i64("origin_server_ts"))
-        .unwrap_or_default();
-      out.push((last, c));
+  let get = |t: &str, key: &str| {
+    state
+      .iter()
+      .rev()
+      .find(|e| e.str("type").as_deref() == Some(t))
+      .and_then(|e| e.at("content").str(key))
+  };
+  let space = get("m.room.create", "type").as_deref() == Some("m.space");
+  let kind = match (invite, space, direct) {
+    (true, ..) => "invite",
+    (_, true, _) => "space",
+    (_, _, true) => "dm",
+    _ => "room",
+  };
+  let mut c = Collection {
+    id: rid.to_owned(),
+    kind: kind.into(),
+    name: room_name(rid, r, &state, me),
+    description: get("m.room.topic", "topic"),
+    url: Some(refs::permalink(rid, None)),
+    followers: r
+      .at("summary")
+      .get("m.joined_member_count")
+      .and_then(Value::as_u64),
+    raw: Some(r.clone()),
+    ..Collection::default()
+  };
+  if let Some(alias) = get("m.room.canonical_alias", "alias") {
+    c.extra.insert("alias".into(), json!(alias));
+  }
+  room_flags(&mut c, r, &state);
+  let last = r
+    .list("timeline.events")
+    .last()
+    .and_then(|e| e.i64("origin_server_ts"))
+    .unwrap_or_default();
+  (last, c)
+}
+
+/// The room's name, else its alias, else the names of its other members.
+fn room_name(rid: &str, r: &Value, state: &[Value], me: &str) -> String {
+  let get = |t: &str, key: &str| {
+    state
+      .iter()
+      .rev()
+      .find(|e| e.str("type").as_deref() == Some(t))
+      .and_then(|e| e.at("content").str(key))
+  };
+  let mut members = Members::default();
+  members.absorb(state);
+  let heroes: Vec<String> = r
+    .at("summary")
+    .get("m.heroes")
+    .and_then(Value::as_array)
+    .map(|h| {
+      h.iter()
+        .filter_map(Value::as_str)
+        .filter(|id| *id != me)
+        .map(|id| members.user(id).name)
+        .collect()
+    })
+    .unwrap_or_default();
+  get("m.room.name", "name")
+    .or_else(|| get("m.room.canonical_alias", "alias"))
+    .or_else(|| (!heroes.is_empty()).then(|| heroes.join(", ")))
+    .unwrap_or_else(|| rid.to_owned())
+}
+
+/// Unread and highlight counts, and whether the room is encrypted.
+fn room_flags(collection: &mut Collection, r: &Value, state: &[Value]) {
+  for (key, path) in [
+    ("unread", "unread_notifications.notification_count"),
+    ("highlights", "unread_notifications.highlight_count"),
+  ] {
+    if let Some(n) = r.u64(path).filter(|n| *n > 0) {
+      collection.extra.insert(key.into(), json!(n));
     }
   }
-  out.sort_by_key(|a| std::cmp::Reverse(a.0));
-  Ok(Page::last(out.into_iter().map(|(_, c)| c).collect()))
+  if state
+    .iter()
+    .any(|e| e.str("type").as_deref() == Some("m.room.encryption"))
+  {
+    collection.extra.insert("encrypted".into(), json!(true));
+  }
 }
 
 /// Unread counts: per kind of room, and highlights (mentions).
@@ -266,34 +288,54 @@ pub async fn directory(
   let term = query
     .map(|q| q.keyword.trim().to_lowercase())
     .filter(|t| !t.is_empty());
-  if api.logged_in() || term.is_none() {
+  match term {
+    Some(term) if !api.logged_in() => filter_directory(api, &term, server, page, size).await,
+    term => directory_page(api, term.as_deref(), server, page, size).await,
+  }
+}
+
+/// One page of the directory, searched by the server when logged in.
+async fn directory_page(
+  api: &Api,
+  term: Option<&str>,
+  server: Option<&str>,
+  page: &PageReq,
+  size: usize,
+) -> Result<Page<Collection>> {
+  let mut q: Vec<(&str, String)> = Vec::new();
+  if let Some(s) = server {
+    q.push(("server", s.to_owned()));
+  }
+  let v = if api.logged_in() {
     let mut body = json!({"limit": size});
     if let Some(c) = &page.cursor {
       body["since"] = json!(c);
     }
-    if let Some(t) = &term {
+    if let Some(t) = term {
       body["filter"] = json!({"generic_search_term": t});
     }
-    let mut q: Vec<(&str, String)> = Vec::new();
-    if let Some(s) = server {
-      q.push(("server", s.to_owned()));
+    api
+      .auth(Method::POST, "/publicRooms", &q, Some(&body))
+      .await?
+  } else {
+    q.push(("limit", size.to_string()));
+    if let Some(c) = &page.cursor {
+      q.push(("since", c.clone()));
     }
-    let v = if api.logged_in() {
-      api
-        .auth(Method::POST, "/publicRooms", &q, Some(&body))
-        .await?
-    } else {
-      q.push(("limit", size.to_string()));
-      if let Some(c) = &page.cursor {
-        q.push(("since", c.clone()));
-      }
-      api.call(Method::GET, "/publicRooms", &q, None).await?
-    };
-    let items = v.list("chunk").iter().map(parse::directory_room).collect();
-    return Ok(Page::new(items, v.str("next_batch")));
-  }
-  // Anonymous search: filter a few pages of the directory.
-  let term = term.unwrap_or_default();
+    api.call(Method::GET, "/publicRooms", &q, None).await?
+  };
+  let items = v.list("chunk").iter().map(parse::directory_room).collect();
+  Ok(Page::new(items, v.str("next_batch")))
+}
+
+/// Anonymous search: filter a few pages of the directory.
+async fn filter_directory(
+  api: &Api,
+  term: &str,
+  server: Option<&str>,
+  page: &PageReq,
+  size: usize,
+) -> Result<Page<Collection>> {
   let mut since = page.cursor.clone();
   let mut found = Vec::new();
   for _ in 0..5 {
@@ -313,7 +355,7 @@ pub async fn directory(
         r.str("canonical_alias").unwrap_or_default()
       )
       .to_lowercase();
-      if hay.contains(&term) {
+      if hay.contains(term) {
         found.push(parse::directory_room(r));
       }
     }

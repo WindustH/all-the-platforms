@@ -7,7 +7,7 @@ use social_core::{Data, Error, Result, Value, ValueExt, json};
 
 use crate::api::{Api, Body};
 use crate::refs::{self, Chat};
-use crate::{messages, parse, users};
+use crate::{parse, pins, users};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -48,75 +48,62 @@ pub enum Command {
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
     Command::Server { server } => Data::Value(server_detail(api, &server_id(&server)?).await?),
-    Command::Roles { server } => {
-      let v = api
-        .get(&format!("/guilds/{}/roles", server_id(&server)?), &[])
-        .await?;
-      let mut roles: Vec<Value> = v
-        .as_array()
-        .map(|rows| {
-          rows
-            .iter()
-            .map(|r| {
-              json!({
-                "id": r.str("id"),
-                "name": r.str("name"),
-                "position": r.i64("position"),
-                "color": r.i64("color").map(|c| format!("#{c:06x}")),
-                "hoist": r.bool("hoist"),
-                "mentionable": r.bool("mentionable"),
-                "managed": r.bool("managed"),
-                "permissions": r.str("permissions"),
-              })
-            })
-            .collect()
-        })
-        .unwrap_or_default();
-      roles.sort_by_key(|r| std::cmp::Reverse(r.i64("position").unwrap_or_default()));
-      Data::Value(json!(roles))
-    }
-    Command::Emojis { server } => {
-      let v = api
-        .get(&format!("/guilds/{}/emojis", server_id(&server)?), &[])
-        .await?;
-      let emojis: Vec<Value> = v
-        .as_array()
-        .map(|rows| {
-          rows
-            .iter()
-            .map(|e| {
-              json!({
-                "name": e.str("name"),
-                "id": e.str("id"),
-                "react_with": parse::emoji_name(e),
-                "animated": e.bool("animated"),
-                "available": e.bool("available"),
-              })
-            })
-            .collect()
-        })
-        .unwrap_or_default();
-      Data::Value(json!(emojis))
-    }
+    Command::Roles { server } => Data::Value(roles(api, &server_id(&server)?).await?),
+    Command::Emojis { server } => Data::Value(emojis(api, &server_id(&server)?).await?),
     Command::Pins { chat, page } => Data::Posts(
       page
-        .collect_dated(async |r| messages::pins(api, &chat, &r).await)
+        .collect_dated(async |r| pins::list(api, &chat, &r).await)
         .await?,
     ),
-    Command::Pin { message, undo } => Data::Action(messages::pin(api, &message, undo).await?),
+    Command::Pin { message, undo } => Data::Action(pins::pin(api, &message, undo).await?),
     Command::Invite { code } => Data::Value(invite(api, &code).await?),
-    Command::Invites { server } => {
-      let v = api
-        .get(&format!("/guilds/{}/invites", server_id(&server)?), &[])
-        .await?;
-      let rows: Vec<Value> = v
-        .as_array()
-        .map(|rows| rows.iter().map(invite_summary).collect())
-        .unwrap_or_default();
-      Data::Value(json!(rows))
-    }
+    Command::Invites { server } => Data::Value(invites(api, &server_id(&server)?).await?),
     Command::Friends { all } => Data::Users(users::relationships(api, all).await?),
   })
+}
+
+/// Each element of an array answer, mapped.
+fn each(v: &Value, f: impl Fn(&Value) -> Value) -> Vec<Value> {
+  v.as_array()
+    .map(|rows| rows.iter().map(f).collect())
+    .unwrap_or_default()
+}
+
+/// Roles, highest first.
+async fn roles(api: &Api, server: &str) -> Result<Value> {
+  let v = api.get(&format!("/guilds/{server}/roles"), &[]).await?;
+  let mut roles = each(&v, |r| {
+    json!({
+      "id": r.str("id"),
+      "name": r.str("name"),
+      "position": r.i64("position"),
+      "color": r.i64("color").map(|c| format!("#{c:06x}")),
+      "hoist": r.bool("hoist"),
+      "mentionable": r.bool("mentionable"),
+      "managed": r.bool("managed"),
+      "permissions": r.str("permissions"),
+    })
+  });
+  roles.sort_by_key(|r| std::cmp::Reverse(r.i64("position").unwrap_or_default()));
+  Ok(json!(roles))
+}
+
+async fn emojis(api: &Api, server: &str) -> Result<Value> {
+  let v = api.get(&format!("/guilds/{server}/emojis"), &[]).await?;
+  Ok(json!(each(&v, |e| {
+    json!({
+      "name": e.str("name"),
+      "id": e.str("id"),
+      "react_with": parse::emoji_name(e),
+      "animated": e.bool("animated"),
+      "available": e.bool("available"),
+    })
+  })))
+}
+
+async fn invites(api: &Api, server: &str) -> Result<Value> {
+  let v = api.get(&format!("/guilds/{server}/invites"), &[]).await?;
+  Ok(json!(each(&v, invite_summary)))
 }
 
 fn server_id(arg: &str) -> Result<String> {

@@ -7,6 +7,7 @@ use std::sync::LazyLock;
 
 use jiff::Timestamp;
 use regex::Regex;
+use social_core::chat;
 use social_core::{
   Collection, Comment, Media, MediaKind, Metrics, Post, User, Value, ValueExt, json,
 };
@@ -130,18 +131,7 @@ fn author(v: &Value, view: &View) -> Option<User> {
 fn file(f: &Value, token: &str) -> Option<Media> {
   let url = f.first_str(&["url_private_download", "url_private"])?;
   let mime = f.str("mimetype").unwrap_or_default();
-  let kind = if mime == "image/gif" {
-    MediaKind::Gif
-  } else if mime.starts_with("image/") {
-    MediaKind::Image
-  } else if mime.starts_with("video/") {
-    MediaKind::Video
-  } else if mime.starts_with("audio/") {
-    MediaKind::Audio
-  } else {
-    MediaKind::File
-  };
-  let mut m = Media::new(kind, url);
+  let mut m = Media::new(media_kind(&mime), url);
   m.width = f.u64("original_w").map(|w| w as u32);
   m.height = f.u64("original_h").map(|h| h as u32);
   m.size = f.u64("size");
@@ -150,35 +140,38 @@ fn file(f: &Value, token: &str) -> Option<Media> {
   Some(m)
 }
 
+fn media_kind(mime: &str) -> MediaKind {
+  match mime.split('/').next() {
+    _ if mime == "image/gif" => MediaKind::Gif,
+    Some("image") => MediaKind::Image,
+    Some("video") => MediaKind::Video,
+    Some("audio") => MediaKind::Audio,
+    _ => MediaKind::File,
+  }
+}
+
 /// A message of `channel`.
 pub fn message(v: &Value, channel: &str, view: &View) -> Post {
   let ts = v.str("ts").unwrap_or_default();
   let thread = v.str("thread_ts");
-  let reply = thread.as_deref().filter(|t| *t != ts);
-  let reactions: Vec<Value> = v
-    .list("reactions")
-    .iter()
-    .map(|r| json!({"emoji": r.str("name"), "count": r.u64("count")}))
-    .collect();
+  let reactions = reactions(v);
   let total: u64 = v
     .list("reactions")
     .iter()
     .filter_map(|r| r.u64("count"))
     .sum();
-  let files = v.list("files");
-  let text = v
-    .str("text")
-    .map(|t| readable(&t, view))
-    .filter(|t| !t.is_empty());
   let subtype = v.str("subtype");
   let kind = match subtype.as_deref() {
     None | Some("bot_message" | "thread_broadcast" | "file_share" | "me_message") => "message",
     Some(other) => other,
   };
-  let mut p = Post {
-    id: format!("{channel}/{ts}"),
+  let mut post = Post {
+    id: chat::message_id(channel, &ts),
     kind: kind.into(),
-    text,
+    text: v
+      .str("text")
+      .map(|t| readable(&t, view))
+      .filter(|t| !t.is_empty()),
     url: view
       .team_url
       .map(|base| permalink(base, channel, &ts, thread.as_deref())),
@@ -190,11 +183,38 @@ pub fn message(v: &Value, channel: &str, view: &View) -> Post {
       comments: v.u64("reply_count"),
       ..Metrics::default()
     },
-    media: files.iter().filter_map(|f| file(f, view.token)).collect(),
+    media: v
+      .list("files")
+      .iter()
+      .filter_map(|f| file(f, view.token))
+      .collect(),
     raw: Some(v.clone()),
     ..Post::default()
   };
-  let e = &mut p.extra;
+  let reply = thread.as_deref().filter(|t| *t != ts);
+  message_extra(&mut post, v, channel, &ts, reply, reactions, view);
+  post
+}
+
+fn reactions(v: &Value) -> Vec<Value> {
+  v.list("reactions")
+    .iter()
+    .map(|r| json!({"emoji": r.str("name"), "count": r.u64("count")}))
+    .collect()
+}
+
+/// What a message carries beyond the shared fields: chat, thread,
+/// reactions, files, attachments, pins.
+fn message_extra(
+  post: &mut Post,
+  v: &Value,
+  channel: &str,
+  ts: &str,
+  reply: Option<&str>,
+  reactions: Vec<Value>,
+  view: &View,
+) {
+  let e = &mut post.extra;
   e.insert("chat".into(), json!(channel));
   if let Some(c) = view.chats.get(channel) {
     e.insert("chat_name".into(), json!(c.name));
@@ -202,19 +222,20 @@ pub fn message(v: &Value, channel: &str, view: &View) -> Post {
   e.insert("message_id".into(), json!(ts));
   if let Some(t) = reply {
     e.insert("thread_ts".into(), json!(t));
-    e.insert("reply_to".into(), json!(format!("{channel}/{t}")));
+    e.insert("reply_to".into(), json!(chat::message_id(channel, t)));
   }
   if !reactions.is_empty() {
     e.insert("reactions".into(), json!(reactions));
   }
-  let file_info: Vec<Value> = files
+  let files: Vec<Value> = v
+    .list("files")
     .iter()
     .map(
       |f| json!({"name": f.str("name"), "title": f.str("title"), "permalink": f.str("permalink")}),
     )
     .collect();
-  if !file_info.is_empty() {
-    e.insert("files".into(), json!(file_info));
+  if !files.is_empty() {
+    e.insert("files".into(), json!(files));
   }
   let attachments: Vec<Value> = v
     .list("attachments")
@@ -231,10 +252,9 @@ pub fn message(v: &Value, channel: &str, view: &View) -> Post {
   if !v.list("pinned_to").is_empty() {
     e.insert("pinned".into(), json!(true));
   }
-  if let Some(s) = subtype {
+  if let Some(s) = v.str("subtype") {
     e.insert("subtype".into(), json!(s));
   }
-  p
 }
 
 /// A thread reply as a comment.

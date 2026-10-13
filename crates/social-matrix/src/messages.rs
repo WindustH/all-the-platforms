@@ -5,16 +5,18 @@
 
 use std::path::Path;
 
-use social_core::file::{Image, sniff};
+use social_core::chat;
+use social_core::file::Upload;
 use social_core::http::Method;
 use social_core::{
-  Action, Error, Media, Message, Page, PageReq, Post, Query, Result, Value, ValueExt, json,
+  Action, Error, Media, MediaKind, Message, Page, PageReq, Post, Query, Result, Value, ValueExt,
+  json,
 };
 
 use crate::api::{Api, seg, txn};
+use crate::chats;
 use crate::parse::{self, Members};
 use crate::refs::{self, Event};
-use crate::rooms;
 
 /// Only events that read as messages; member events come along for names.
 const HISTORY_FILTER: &str = r#"{"lazy_load_members":true,"types":["m.room.message","m.sticker","m.room.encrypted","m.reaction","m.room.redaction"]}"#;
@@ -38,7 +40,7 @@ async fn resolve_media(api: &Api, post: &mut Post) {
 }
 
 pub async fn history(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
-  let rid = rooms::id(api, arg).await?;
+  let rid = chats::id(api, arg).await?;
   let name = room_name(api, &rid).await;
   let mut query = vec![
     ("dir", "b".to_owned()),
@@ -67,7 +69,7 @@ pub async fn history(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>>
 async fn event_room(api: &Api, r: &Event) -> Result<String> {
   match &r.room {
     refs::Room::Id(id) => Ok(id.clone()),
-    refs::Room::Alias(a) => rooms::resolve_alias(api, a).await,
+    refs::Room::Alias(a) => chats::resolve_alias(api, a).await,
   }
 }
 
@@ -117,37 +119,24 @@ async fn send_event(api: &Api, rid: &str, kind: &str, content: &Value) -> Result
 
 /// A file message: uploaded to the media repository, typed by its content.
 async fn file_content(api: &Api, path: &Path) -> Result<Value> {
-  let data = tokio::fs::read(path)
-    .await
-    .map_err(|e| Error::input(format!("cannot read {}: {e}", path.display())))?;
-  let name = path
-    .file_name()
-    .and_then(|n| n.to_str())
-    .unwrap_or("file")
-    .to_owned();
-  let (msgtype, mime) = match sniff(&data) {
-    Some("jpg") => ("m.image", "image/jpeg"),
-    Some("png") => ("m.image", "image/png"),
-    Some("gif") => ("m.image", "image/gif"),
-    Some("webp") => ("m.image", "image/webp"),
-    Some("mp4") => ("m.video", "video/mp4"),
-    _ => ("m.file", "application/octet-stream"),
+  let file = Upload::read(path).await?;
+  let msgtype = match file.kind() {
+    MediaKind::Image | MediaKind::Gif => "m.image",
+    MediaKind::Video => "m.video",
+    _ => "m.file",
   };
-  let size = data.len();
-  let mut info = json!({"mimetype": mime, "size": size});
-  if msgtype == "m.image"
-    && let Ok(img) = Image::read(path).await
-  {
-    let (w, h) = img.size();
+  let mut info = json!({"mimetype": file.mime, "size": file.data.len()});
+  if let Some((w, h)) = file.size().filter(|_| msgtype == "m.image") {
     info["w"] = json!(w);
     info["h"] = json!(h);
   }
-  let uri = api.upload(&name, data, mime).await?;
+  let name = file.name.clone();
+  let uri = api.upload(&name, file.data, file.mime).await?;
   Ok(json!({"msgtype": msgtype, "body": name, "url": uri, "info": info}))
 }
 
 pub async fn send(api: &Api, arg: &str, message: &Message) -> Result<Action> {
-  let rid = rooms::id(api, arg).await?;
+  let rid = chats::id(api, arg).await?;
   let reply = match &message.reply_to {
     Some(r) => Some(refs::event(r)?.id),
     None => None,
@@ -176,7 +165,7 @@ pub async fn send(api: &Api, arg: &str, message: &Message) -> Result<Action> {
   let id = first.unwrap_or_default();
   Ok(
     Action::done(if reply.is_some() { "reply" } else { "send" }, &rid)
-      .with_id(format!("{rid}/{id}"))
+      .with_id(chat::message_id(&rid, &id))
       .with_url(refs::permalink(&rid, Some(&id))),
   )
 }
@@ -192,8 +181,8 @@ pub async fn edit(api: &Api, arg: &str, text: &str) -> Result<Action> {
   });
   let id = send_event(api, &rid, "m.room.message", &content).await?;
   Ok(
-    Action::done("edit", format!("{rid}/{}", r.id))
-      .with_id(format!("{rid}/{id}"))
+    Action::done("edit", chat::message_id(&rid, &r.id))
+      .with_id(chat::message_id(&rid, &id))
       .with_url(refs::permalink(&rid, Some(&r.id))),
   )
 }
@@ -213,14 +202,14 @@ pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
   let r = refs::event(arg)?;
   let rid = event_room(api, &r).await?;
   redact(api, &rid, &r.id).await?;
-  Ok(Action::done("delete", format!("{rid}/{}", r.id)))
+  Ok(Action::done("delete", chat::message_id(&rid, &r.id)))
 }
 
 pub async fn react(api: &Api, arg: &str, key: &str, undo: bool) -> Result<Action> {
   let r = refs::event(arg)?;
   let rid = event_room(api, &r).await?;
   let key = key.trim();
-  let target = format!("{rid}/{}", r.id);
+  let target = chat::message_id(&rid, &r.id);
   if !undo {
     let content = json!({
       "m.relates_to": {"rel_type": "m.annotation", "event_id": r.id, "key": key}
@@ -272,7 +261,7 @@ pub async fn search(api: &Api, q: &Query, page: &PageReq) -> Result<Page<Post>> 
     "event_context": {"before_limit": 0, "after_limit": 0, "include_profile": true},
   });
   if let Some(room) = &q.filter {
-    criteria["filter"]["rooms"] = json!([rooms::id(api, room).await?]);
+    criteria["filter"]["rooms"] = json!([chats::id(api, room).await?]);
   }
   let mut query = Vec::new();
   if let Some(c) = &page.cursor {

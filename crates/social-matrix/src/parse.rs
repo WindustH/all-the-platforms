@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use social_core::chat;
 use social_core::text::{from_millis, html_to_text};
 use social_core::{Collection, Media, MediaKind, Post, User, Value, ValueExt, json};
 
@@ -89,7 +90,7 @@ pub fn event(room: &str, room_name: &str, e: &Value, members: &Members) -> Optio
   };
   let sender = e.str("sender").unwrap_or_default();
   let mut post = Post {
-    id: format!("{room}/{id}"),
+    id: chat::message_id(room, &id),
     kind: post_kind.into(),
     text,
     url: Some(permalink(room, Some(&id))),

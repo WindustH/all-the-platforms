@@ -145,47 +145,9 @@ async fn threads(api: &Api, channel: &str, page: &PageReq) -> Result<Page<Collec
   }
   let token = api.require()?;
   let (rows, next) = if token.kind == Kind::User {
-    let offset = page.number_or(0);
-    let v = api
-      .get(
-        &format!("/channels/{channel}/threads/search"),
-        &[
-          ("archived", "true".into()),
-          ("sort_by", "last_message_time".into()),
-          ("sort_order", "desc".into()),
-          ("limit", "25".into()),
-          ("offset", offset.to_string()),
-        ],
-      )
-      .await?;
-    let rows = v.list("threads").to_vec();
-    let next = v
-      .bool("has_more")
-      .unwrap_or(false)
-      .then(|| (offset + rows.len() as u64).to_string());
-    (rows, next)
+    searched_threads(api, channel, page).await?
   } else {
-    let mut query = vec![("limit", "50".to_owned())];
-    if let Some(before) = &page.cursor {
-      query.push(("before", before.clone()));
-    }
-    let v = api
-      .get(
-        &format!("/channels/{channel}/threads/archived/public"),
-        &query,
-      )
-      .await?;
-    let rows = v.list("threads").to_vec();
-    let next = v
-      .bool("has_more")
-      .unwrap_or(false)
-      .then(|| {
-        rows
-          .last()
-          .and_then(|t| t.str("thread_metadata.archive_timestamp"))
-      })
-      .flatten();
-    (rows, next)
+    archived_threads(api, channel, page).await?
   };
   let items = rows
     .iter()
@@ -195,6 +157,62 @@ async fn threads(api: &Api, channel: &str, page: &PageReq) -> Result<Page<Collec
     })
     .collect();
   Ok(Page::new(items, next))
+}
+
+/// User accounts: active and archived threads, newest activity first.
+async fn searched_threads(
+  api: &Api,
+  channel: &str,
+  page: &PageReq,
+) -> Result<(Vec<Value>, Option<String>)> {
+  let offset = page.number_or(0);
+  let v = api
+    .get(
+      &format!("/channels/{channel}/threads/search"),
+      &[
+        ("archived", "true".into()),
+        ("sort_by", "last_message_time".into()),
+        ("sort_order", "desc".into()),
+        ("limit", "25".into()),
+        ("offset", offset.to_string()),
+      ],
+    )
+    .await?;
+  let rows = v.list("threads").to_vec();
+  let next = v
+    .bool("has_more")
+    .unwrap_or(false)
+    .then(|| (offset + rows.len() as u64).to_string());
+  Ok((rows, next))
+}
+
+/// Bots: archived public threads, paged by archive time.
+async fn archived_threads(
+  api: &Api,
+  channel: &str,
+  page: &PageReq,
+) -> Result<(Vec<Value>, Option<String>)> {
+  let mut query = vec![("limit", "50".to_owned())];
+  if let Some(before) = &page.cursor {
+    query.push(("before", before.clone()));
+  }
+  let v = api
+    .get(
+      &format!("/channels/{channel}/threads/archived/public"),
+      &query,
+    )
+    .await?;
+  let rows = v.list("threads").to_vec();
+  let next = v
+    .bool("has_more")
+    .unwrap_or(false)
+    .then(|| {
+      rows
+        .last()
+        .and_then(|t| t.str("thread_metadata.archive_timestamp"))
+    })
+    .flatten();
+  Ok((rows, next))
 }
 
 /// Members of a server (bots: the member list, up to 1000 a page; user

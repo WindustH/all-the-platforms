@@ -1,9 +1,9 @@
 //! Accounts: the logged-in one, profiles, and relationships (friends,
 //! requests, blocks) of a user account.
 
-use social_core::{Error, ErrorCode, Page, Result, User, Value, ValueExt, json};
+use social_core::{ErrorCode, Page, Result, User, Value, ValueExt, json};
 
-use crate::api::{Api, Kind, Token};
+use crate::api::{Api, Kind};
 use crate::{parse, refs};
 
 pub async fn whoami(api: &Api) -> Result<User> {
@@ -25,48 +25,6 @@ fn me(v: &Value, kind: Kind) -> User {
   }
   // The account's email and phone stay in `raw`.
   u
-}
-
-/// Check a token: as given, or (without a `Bot` prefix) as a user token,
-/// then as a bot token. Returns the kind Discord accepted it as.
-pub async fn verify(api: &Api, raw: &str) -> Result<Token> {
-  let (secret, kind) = Token::parse(raw);
-  if secret.is_empty() {
-    return Err(Error::input("the token is empty"));
-  }
-  let kinds = match kind {
-    Some(k) => vec![k],
-    None => vec![Kind::User, Kind::Bot],
-  };
-  let mut last = None;
-  for kind in kinds {
-    let token = Token {
-      secret: secret.clone(),
-      kind,
-    };
-    match api
-      .send(
-        Some(&token),
-        social_core::http::Method::GET,
-        "/users/@me",
-        &[],
-        crate::api::Body::None,
-      )
-      .await
-    {
-      Ok(v) if v.str("id").is_some() => {
-        // A bot token sent as a user token is refused; the reverse too.
-        let is_bot = v.bool("bot") == Some(true);
-        if is_bot == (kind == Kind::Bot) {
-          return Ok(token);
-        }
-      }
-      Ok(_) => {}
-      Err(e) if e.code == ErrorCode::NotAuthenticated => last = Some(e),
-      Err(e) => return Err(e),
-    }
-  }
-  Err(last.unwrap_or_else(|| Error::auth("Discord did not accept the token")))
 }
 
 /// A profile: user accounts see bio, connections and mutual servers; bots the basics.

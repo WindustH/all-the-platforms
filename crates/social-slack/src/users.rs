@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use social_core::{Error, Page, PageReq, Result, User, Value, ValueExt, json};
 
-use crate::api::{self, Api, Identity, Kind};
+use crate::api::{self, Api, Kind};
 
 /// Names of user ids, kept a day in the cache.
 const CACHE_TTL: Duration = Duration::from_secs(24 * 3600);
@@ -35,39 +35,6 @@ impl Brief {
     }
     u
   }
-}
-
-/// Check a token (and an optional app-level token) and keep them.
-pub async fn login(api: &Api, raw: &str) -> Result<()> {
-  let mut token = None;
-  let mut app = None;
-  for part in raw.split(|c: char| c == '|' || c.is_whitespace()) {
-    let part = part.trim();
-    if part.starts_with("xapp-") {
-      app = Some(part.to_owned());
-    } else if part.starts_with("xox") {
-      token = Some(part.to_owned());
-    } else if !part.is_empty() {
-      return Err(
-        Error::input("that is not a Slack token")
-          .with_hint("expected xoxb-… (bot) or xoxp-… (user), optionally with an xapp-… app token"),
-      );
-    }
-  }
-  let Some(token) = token else {
-    return Err(Error::input("no xoxb-… or xoxp-… token given").with_hint(
-      "an app-level xapp-… token alone cannot read anything; pass it together with the bot or user token",
-    ));
-  };
-  if token.starts_with("xoxc-") {
-    return Err(
-      Error::unsupported("xoxc- browser tokens")
-        .with_hint("create a Slack app (api.slack.com/apps) and use its bot or user OAuth token"),
-    );
-  }
-  let id: Identity = api::identity(&api.call_with(&token, "auth.test", Vec::new()).await?)?;
-  api.save(&token, app.as_deref(), &id);
-  Ok(())
 }
 
 pub async fn whoami(api: &Api) -> Result<User> {
@@ -227,10 +194,10 @@ pub async fn user_id(api: &Api, arg: &str) -> Result<String> {
     .ok_or_else(|| Error::not_found(format!("no user named {arg} in this workspace")))
 }
 
-pub fn is_user_id(s: &str) -> bool {
-  (s.starts_with('U') || s.starts_with('W'))
-    && s.len() >= 9
-    && s
+pub fn is_user_id(id: &str) -> bool {
+  (id.starts_with('U') || id.starts_with('W'))
+    && id.len() >= 9
+    && id
       .bytes()
       .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
 }

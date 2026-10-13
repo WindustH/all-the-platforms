@@ -17,12 +17,15 @@ use grammers_session::updates::UpdatesLike;
 use social_core::output::note;
 use social_core::{Ctx, Error, QrStatus, QrTicket, Result, User};
 
-use crate::convert;
+use crate::api::Api;
+use crate::bot::{self, Bot};
 use crate::mt::{self, Conn, Mt, error};
+use crate::parse;
 use crate::prompt;
 
 /// Start a QR login on a fresh connection.
-pub async fn qr_start(ctx: &Ctx, mt: &Mt) -> Result<QrTicket> {
+pub async fn qr_start(api: &Api) -> Result<QrTicket> {
+  let (ctx, mt) = (&api.ctx, &api.mt);
   let conn = mt.fresh(ctx)?;
   match export(&conn).await? {
     Exported::Token(url, expires) => {
@@ -44,7 +47,8 @@ pub async fn qr_start(ctx: &Ctx, mt: &Mt) -> Result<QrTicket> {
   }
 }
 
-pub async fn qr_poll(ctx: &Ctx, mt: &Mt, ticket: &QrTicket) -> Result<QrStatus> {
+pub async fn qr_poll(api: &Api, ticket: &QrTicket) -> Result<QrStatus> {
+  let (ctx, mt) = (&api.ctx, &api.mt);
   if ticket.extra.contains_key("done") {
     return Ok(QrStatus::Confirmed);
   }
@@ -189,12 +193,13 @@ async fn finish(ctx: &Ctx, mt: &Mt, conn: &Conn) -> Result<()> {
   // A user login replaces a bot token.
   ctx.set_extra(crate::bot::TOKEN, "");
   mt.save(ctx);
-  ctx.set_extra(mt::USER, &convert::dialog_id(me.id()).to_string());
+  ctx.set_extra(mt::USER, &parse::dialog_id(me.id()).to_string());
   Ok(())
 }
 
 /// `login-phone`: the code Telegram sends to the app or by SMS.
-pub async fn phone(ctx: &Ctx, mt: &Mt, number: Option<String>) -> Result<User> {
+pub async fn phone(api: &Api, number: Option<String>) -> Result<User> {
+  let (ctx, mt) = (&api.ctx, &api.mt);
   let number = match number {
     Some(n) => n,
     None => prompt::line("Phone number (international format, e.g. +44…): ")?,
@@ -224,7 +229,7 @@ pub async fn phone(ctx: &Ctx, mt: &Mt, number: Option<String>) -> Result<User> {
   }
   finish(ctx, mt, &conn).await?;
   let me = conn.client.get_me().await.map_err(error)?;
-  Ok(convert::user(&me))
+  Ok(parse::user(&me))
 }
 
 fn sign_in_error(e: SignInError) -> Error {
@@ -241,4 +246,18 @@ fn sign_in_error(e: SignInError) -> Error {
 
 fn sign_in_error_rpc(e: grammers_client::InvocationError) -> Error {
   error(e).with_hint("check the number (international format with +)")
+}
+
+/// `login --token`: a bot token from @BotFather; it replaces a user account.
+pub fn token(api: &Api, token: &str) -> Result<()> {
+  if !Bot::valid_token(token) {
+    return Err(Error::input(
+      "expected a bot token from @BotFather (`123456:ABC…`); user accounts log in with \
+       `social telegram login` (QR code) or `social telegram login-phone`",
+    ));
+  }
+  api.ctx.set_extra(bot::TOKEN, token);
+  api.ctx.set_extra(mt::KEYS, "");
+  api.ctx.set_extra(mt::USER, "");
+  Ok(())
 }

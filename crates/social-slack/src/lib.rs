@@ -10,6 +10,7 @@ mod api;
 mod chats;
 mod extra;
 mod live;
+mod login;
 mod messages;
 mod parse;
 mod refs;
@@ -87,7 +88,7 @@ impl Platform for Slack {
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    users::login(&self.api, token).await
+    login::login(&self.api, token).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {

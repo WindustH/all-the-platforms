@@ -2,20 +2,21 @@
 //!
 //! Talks to Discord's REST API with a user token, as the web client does,
 //! or with a bot token ([`api`]); QR login runs through the remote auth
-//! gateway ([`remote`]) and `listen` through the realtime gateway
-//! ([`gateway`]). Servers and channels are collections, messages are posts
+//! gateway ([`login`]) and `listen` through the realtime gateway
+//! ([`live`]). Servers and channels are collections, messages are posts
 //! with `CHANNEL/MESSAGE` ids and permalinks ([`parse`]); a message's
 //! thread is its comment list.
 
 mod api;
 mod chats;
 mod extra;
-mod gateway;
-mod inbox;
+mod live;
+mod login;
 mod messages;
+mod notifications;
 mod parse;
+mod pins;
 mod refs;
-mod remote;
 mod search;
 mod users;
 
@@ -32,7 +33,7 @@ use crate::api::Api;
 
 pub struct Discord {
   api: Api,
-  remote: RefCell<Option<remote::Pending>>,
+  remote: RefCell<Option<login::Pending>>,
 }
 
 impl Platform for Discord {
@@ -72,7 +73,7 @@ impl Platform for Discord {
       hot_category: &[],
       feed_kind: &[],
       comment_sort: &[],
-      notification_kind: inbox::KINDS,
+      notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_millis(800),
     guide: include_str!("../GUIDE.md"),
@@ -100,29 +101,15 @@ impl Platform for Discord {
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    let token = users::verify(&self.api, token).await?;
-    self.api.save_token(&token);
-    Ok(())
+    login::token(&self.api, token).await
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {
-    let (pending, url) = remote::start(&self.api).await?;
-    *self.remote.borrow_mut() = Some(pending);
-    Ok(QrTicket {
-      url,
-      ..QrTicket::default()
-    })
+    login::qr_start(&self.api, &self.remote).await
   }
 
   async fn qr_poll(&self, _ticket: &QrTicket) -> Result<QrStatus> {
-    let Some(mut pending) = self.remote.borrow_mut().take() else {
-      return Ok(QrStatus::Expired);
-    };
-    let status = remote::poll(&self.api, &mut pending).await;
-    if matches!(status, Ok(QrStatus::Waiting | QrStatus::Scanned)) {
-      *self.remote.borrow_mut() = Some(pending);
-    }
-    status
+    login::qr_poll(&self.api, &self.remote).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
@@ -151,7 +138,7 @@ impl Platform for Discord {
   }
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    inbox::mentions(&self.api, kind, page).await
+    notifications::mentions(&self.api, kind, page).await
   }
 
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
@@ -202,7 +189,7 @@ impl Platform for Discord {
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
-    gateway::listen(&self.api, chats, out).await
+    live::listen(&self.api, chats, out).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {
