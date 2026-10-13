@@ -7,18 +7,19 @@ use std::time::Duration;
 use social_core::{Ctx, Error, Media, Result, Value, ValueExt};
 use url::form_urlencoded::byte_serialize;
 
-use crate::api::{Account, CDN};
-use crate::convert::SCHEME;
-use crate::{crypto, local, refs};
+use crate::api::{Account, Api, CDN};
+use crate::parse::SCHEME;
+use crate::{archive, crypto, refs};
 
 pub async fn save(
-  ctx: &Ctx,
-  acct: &Account,
+  api: &Api,
+  account: &Account,
   media: &Media,
   dir: &Path,
   name: &str,
 ) -> Result<PathBuf> {
-  let (item, field) = item(ctx, acct, &media.url)?;
+  let ctx = &api.ctx;
+  let (item, field) = item(ctx, account, &media.url)?;
   let v = item.at(field);
   let m = v.at("media");
   let url = match m.str("full_url") {
@@ -58,7 +59,7 @@ pub async fn save(
 }
 
 /// The message item a `wechat-media:CHAT/MESSAGE/INDEX` URL points at.
-fn item(ctx: &Ctx, acct: &Account, url: &str) -> Result<(Value, &'static str)> {
+fn item(ctx: &Ctx, account: &Account, url: &str) -> Result<(Value, &'static str)> {
   let rest = url
     .strip_prefix(SCHEME)
     .ok_or_else(|| Error::input(format!("not a WeChat media reference: {url}")))?;
@@ -69,7 +70,7 @@ fn item(ctx: &Ctx, acct: &Account, url: &str) -> Result<(Value, &'static str)> {
   let index: usize = index
     .parse()
     .map_err(|_| Error::input(format!("not a WeChat media reference: {url}")))?;
-  let m = local::messages(ctx, acct, &chat)
+  let m = archive::messages(ctx, account, &chat)
     .into_iter()
     .find(|m| [m.str("message_id"), m.str("client_id")].contains(&Some(id.clone())))
     .ok_or_else(|| Error::not_found(format!("message {message} is not on record here")))?;

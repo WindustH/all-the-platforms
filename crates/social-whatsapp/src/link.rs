@@ -10,11 +10,11 @@ use social_core::{Error, ErrorCode, Result};
 use tokio::sync::mpsc;
 use whatsapp_rust::bot::BotHandle;
 use whatsapp_rust::pair_code::PairCodeOptions;
-use whatsapp_rust::prelude::{Bot, Client, Event};
+use whatsapp_rust::prelude::{Bot, Client, Event, wa};
 use whatsapp_rust::wacore::types::events::LazyHistorySync;
 
 use crate::archive::{Archive, Record, bare, kind_of};
-use crate::convert::{self, Item, Origin};
+use crate::parse::{self, Item, Origin};
 use crate::proxy::Dialer;
 use crate::store::FileBackend;
 
@@ -165,9 +165,9 @@ impl Link {
             ts: info.timestamp.timestamp(),
             push_name: Some(info.push_name.clone()),
           };
-          let item = convert::item(&m.message, origin);
+          let item = parse::item(&m.message, origin);
           let is_new = matches!(item, Item::Message(_));
-          if let Some(changed) = convert::apply(&mut self.archive, item) {
+          if let Some(changed) = parse::apply(&mut self.archive, item) {
             if is_new && !info.source.is_from_me {
               self.archive.chat_mut(&chat).unread += 1;
             }
@@ -223,63 +223,66 @@ impl Link {
     }
     let me = self.me();
     for c in &h.conversations {
-      let jid = c.id.clone();
-      {
-        let entry = self.archive.chat_mut(&jid);
-        entry.kind = kind_of(&jid).into();
-        if let Some(name) = c
-          .name
-          .as_ref()
-          .or(c.display_name.as_ref())
-          .filter(|n| !n.is_empty())
-        {
-          entry.name = Some(name.clone());
-        }
-        if let Some(n) = c.unread_count {
-          entry.unread = n;
-        }
-        entry.archived = c.archived.unwrap_or(entry.archived);
-        entry.pinned = c.pinned.is_some_and(|p| p > 0) || entry.pinned;
-        if let Some(d) = &c.description {
-          entry.description = Some(d.clone());
-        }
-        let ts = c
-          .conversation_timestamp
-          .or(c.last_msg_timestamp)
-          .unwrap_or_default() as i64;
-        entry.last = entry.last.max(ts);
-      }
+      self.history_chat(c);
       for hm in &c.messages {
-        let Some(w) = hm.message.as_option() else {
-          continue;
-        };
-        let Some(key) = w.key.as_option() else {
-          continue;
-        };
-        let Some(body) = w.message.as_option() else {
-          continue;
-        };
-        let from_me = key.from_me.unwrap_or(false);
-        let sender = if from_me {
-          me.clone()
-        } else {
-          key
-            .participant
-            .clone()
-            .or_else(|| w.participant.clone())
-            .unwrap_or_else(|| jid.clone())
-        };
-        let origin = Origin {
-          chat: jid.clone(),
-          sender: bare(&sender),
-          id: key.id.clone().unwrap_or_default(),
-          from_me,
-          ts: w.message_timestamp.unwrap_or_default() as i64,
-          push_name: w.push_name.clone(),
-        };
-        convert::apply(&mut self.archive, convert::item(body, origin));
+        if let Some(w) = hm.message.as_option() {
+          self.history_message(w, &c.id, &me);
+        }
       }
     }
+  }
+
+  /// A conversation of the history sync, into the archive's chat list.
+  fn history_chat(&mut self, c: &wa::Conversation) {
+    let entry = self.archive.chat_mut(&c.id);
+    entry.kind = kind_of(&c.id).into();
+    if let Some(name) = c
+      .name
+      .as_ref()
+      .or(c.display_name.as_ref())
+      .filter(|n| !n.is_empty())
+    {
+      entry.name = Some(name.clone());
+    }
+    if let Some(n) = c.unread_count {
+      entry.unread = n;
+    }
+    entry.archived = c.archived.unwrap_or(entry.archived);
+    entry.pinned = c.pinned.is_some_and(|p| p > 0) || entry.pinned;
+    if let Some(d) = &c.description {
+      entry.description = Some(d.clone());
+    }
+    let ts = c
+      .conversation_timestamp
+      .or(c.last_msg_timestamp)
+      .unwrap_or_default() as i64;
+    entry.last = entry.last.max(ts);
+  }
+
+  /// A message of the history sync, into the archive.
+  fn history_message(&mut self, w: &wa::WebMessageInfo, chat: &str, me: &str) {
+    let (Some(key), Some(body)) = (w.key.as_option(), w.message.as_option()) else {
+      return;
+    };
+    let from_me = key.from_me.unwrap_or(false);
+    let sender = if from_me {
+      me.to_owned()
+    } else {
+      key
+        .participant
+        .clone()
+        .or_else(|| w.participant.clone())
+        .unwrap_or_else(|| chat.to_owned())
+    };
+    let origin = Origin {
+      chat: chat.to_owned(),
+      sender: bare(&sender),
+      id: key.id.clone().unwrap_or_default(),
+      from_me,
+      ts: w.message_timestamp.unwrap_or_default() as i64,
+      push_name: w.push_name.clone(),
+    };
+    parse::apply(&mut self.archive, parse::item(body, origin));
   }
 
   /// This account's own JID (phone number form).

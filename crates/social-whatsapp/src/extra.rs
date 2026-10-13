@@ -1,8 +1,9 @@
 //! WhatsApp-only commands.
 
-use social_core::{Action, Data, Error, Result};
+use social_core::{Action, Data, Result};
 
-use crate::{Mode, WhatsApp, personal};
+use crate::api::{Api, Mode, not_logged_in};
+use crate::{chats, groups, login, messages, users};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -48,80 +49,51 @@ pub enum Command {
   },
 }
 
-pub async fn run(w: &WhatsApp, command: Command) -> Result<Data> {
-  let ctx = &w.ctx;
-  let p = &w.personal;
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
+  let ctx = &api.ctx;
   Ok(match command {
-    Command::LoginCode { phone } => {
-      let user = p.pair_code(ctx, &phone).await?;
-      for key in [crate::cloud::TOKEN, crate::cloud::PHONE, crate::cloud::WABA] {
-        ctx.set_extra(key, "");
-      }
-      Data::User(Box::new(user))
-    }
-    Command::Unlink => match w.mode() {
-      Mode::Personal => Data::Action(p.unlink(ctx).await?),
-      Mode::Cloud(_) => {
-        for key in [crate::cloud::TOKEN, crate::cloud::PHONE, crate::cloud::WABA] {
-          ctx.set_extra(key, "");
-        }
-        Data::Action(Action::done("unlink", "cloud-api").with_message("credentials forgotten"))
-      }
-      Mode::None => return Err(w.not_logged_in()),
-    },
+    Command::LoginCode { phone } => Data::User(Box::new(login::pair_code(api, &phone).await?)),
+    Command::Unlink => Data::Action(unlink(api).await?),
     Command::Older { chat, count } => {
       let chat = ctx.collection_ref(&chat)?;
-      let added = w
-        .personal("older", async |l| {
-          let me = l.me();
-          let jid = crate::refs::chat(&chat, &l.archive, &me)?;
-          l.fetch_older(&jid, count.clamp(1, 500)).await
-        })
-        .await?;
-      Data::Action(
-        Action::done("older", chat).with_message(format!("{added} older messages archived")),
-      )
+      Data::Action(chats::older(api, &chat, count).await?)
     }
-    Command::MarkRead { target } => match w.mode() {
-      Mode::Cloud(c) => Data::Action(c.mark_read(ctx, &ctx.post_ref(&target)?).await?),
-      _ => {
-        let chat = ctx.collection_ref(&target)?;
-        Data::Action(
-          w.personal("mark-read", async |l| personal::mark_read(l, &chat).await)
-            .await?,
-        )
-      }
-    },
+    Command::MarkRead { target } => Data::Action(messages::mark_read(api, &target).await?),
     Command::Groups => Data::Collections(
-      w.personal("groups", async |l| personal::groups(l).await)
+      api
+        .on_device("groups", async |link| groups::groups(link).await)
         .await?,
     ),
     Command::Check { numbers } => Data::Users(
-      w.personal("check", async |l| personal::check(l, &numbers).await)
+      api
+        .on_device("check", async |link| users::check(link, &numbers).await)
         .await?,
     ),
-    Command::Profile => Data::Value(cloud(w)?.profile(ctx).await?),
-    Command::Numbers => Data::Users(cloud(w)?.numbers(ctx).await?),
-    Command::Templates => Data::Collections(cloud(w)?.templates(ctx).await?),
+    Command::Profile => Data::Value(api.cloud("profile")?.profile(ctx).await?),
+    Command::Numbers => Data::Users(api.cloud("numbers")?.numbers(ctx).await?),
+    Command::Templates => Data::Collections(api.cloud("templates")?.templates(ctx).await?),
     Command::Template {
       to,
       name,
       lang,
       params,
     } => Data::Action(
-      cloud(w)?
+      api
+        .cloud("template")?
         .send_template(ctx, &to, &name, &lang, &params)
         .await?,
     ),
   })
 }
 
-fn cloud(w: &WhatsApp) -> Result<crate::cloud::Cloud> {
-  match w.mode() {
-    Mode::Cloud(c) => Ok(c),
-    Mode::Personal => Err(w.personal_cannot("this command")),
-    Mode::None => Err(Error::auth("no Cloud API credentials").with_hint(
-      "`social whatsapp login --token TOKEN:PHONE_NUMBER_ID[:WABA_ID]` or WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID",
-    )),
+/// Unlink the device, or forget Cloud API credentials.
+async fn unlink(api: &Api) -> Result<Action> {
+  match api.mode() {
+    Mode::Personal => api.personal.unlink(&api.ctx).await,
+    Mode::Cloud(_) => {
+      api.forget_cloud();
+      Ok(Action::done("unlink", "cloud-api").with_message("credentials forgotten"))
+    }
+    Mode::None => Err(not_logged_in()),
   }
 }

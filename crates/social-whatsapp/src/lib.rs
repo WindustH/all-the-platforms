@@ -10,17 +10,26 @@
 //!   read receipts, media, the business profile and messaging analytics.
 //!
 //! Chats are collections whose `id` is the JID; messages are posts whose
-//! `id` is `CHAT/MESSAGE` ([`refs`], [`convert`]).
+//! `id` is `CHAT/MESSAGE` ([`refs`], [`parse`]).
 
+mod api;
 mod archive;
+mod chats;
 mod cloud;
-mod convert;
 mod extra;
+mod files;
+mod groups;
 mod link;
+mod live;
+mod login;
+mod media;
+mod messages;
+mod parse;
 mod personal;
 mod proxy;
 mod refs;
 mod store;
+mod users;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -32,61 +41,10 @@ use social_core::{
   Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
 };
 
-use crate::cloud::Cloud;
-use crate::personal::Personal;
+use crate::api::Api;
 
 pub struct WhatsApp {
-  ctx: Ctx,
-  personal: Personal,
-}
-
-enum Mode {
-  Personal,
-  Cloud(Cloud),
-  None,
-}
-
-impl WhatsApp {
-  /// A linked device wins; else saved or environment Cloud API credentials.
-  fn mode(&self) -> Mode {
-    if self.personal.linked(&self.ctx) {
-      return Mode::Personal;
-    }
-    match Cloud::from_ctx(&self.ctx) {
-      Some(c) => Mode::Cloud(c),
-      None => Mode::None,
-    }
-  }
-
-  fn not_logged_in(&self) -> Error {
-    Error::auth("not logged in to WhatsApp").with_hint(
-      "link your account with `social whatsapp login` (QR code) or `social whatsapp login-code +NUMBER`; for the Business Cloud API use `social whatsapp login --token TOKEN:PHONE_NUMBER_ID`",
-    )
-  }
-
-  fn cloud_cannot(&self, what: &str) -> Error {
-    Error::unsupported(what).with_hint(
-      "the Cloud API only sends: incoming messages go to a webhook, and there is no chat list or history; link a personal account with `social whatsapp login` for this",
-    )
-  }
-
-  fn personal_cannot(&self, what: &str) -> Error {
-    Error::unsupported(what)
-      .with_hint("this is a Business Cloud API feature: `social whatsapp login --token TOKEN:PHONE_NUMBER_ID[:WABA_ID]`")
-  }
-
-  /// Run on the linked device, or fail with what each mode allows.
-  async fn personal<T>(
-    &self,
-    what: &str,
-    f: impl AsyncFnOnce(&mut link::Link) -> Result<T>,
-  ) -> Result<T> {
-    match self.mode() {
-      Mode::Personal => self.personal.with(&self.ctx, f).await,
-      Mode::Cloud(_) => Err(self.cloud_cannot(what)),
-      Mode::None => Err(self.not_logged_in()),
-    }
-  }
+  api: Api,
 }
 
 impl Platform for WhatsApp {
@@ -125,95 +83,62 @@ impl Platform for WhatsApp {
   type Extra = extra::Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
-    Ok(Self {
-      personal: Personal::new(&ctx),
-      ctx,
-    })
+    Ok(Self { api: Api::new(ctx) })
   }
 
   fn ctx(&self) -> &Ctx {
-    &self.ctx
+    &self.api.ctx
   }
 
   fn logged_in(&self) -> bool {
-    !matches!(self.mode(), Mode::None)
+    !matches!(self.api.mode(), api::Mode::None)
   }
 
   async fn whoami(&self) -> Result<User> {
-    match self.mode() {
-      Mode::Personal => {
-        self
-          .personal
-          .with(&self.ctx, async |l| Ok(personal::whoami(l)))
-          .await
-      }
-      Mode::Cloud(c) => c.whoami(&self.ctx).await,
-      Mode::None => Err(self.not_logged_in()),
-    }
+    users::me(&self.api).await
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    let (token, phone, waba) = Cloud::parse_token(token)?;
-    self.ctx.set_extra(cloud::TOKEN, &token);
-    self.ctx.set_extra(cloud::PHONE, &phone);
-    self
-      .ctx
-      .set_extra(cloud::WABA, waba.as_deref().unwrap_or(""));
-    self.ctx.set_extra(personal::DEVICE, "");
-    Ok(())
+    login::token(&self.api, token)
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {
-    self.personal.qr_start().await
+    login::qr_start(&self.api.personal).await
   }
 
   async fn qr_poll(&self, _ticket: &QrTicket) -> Result<QrStatus> {
-    let status = self.personal.qr_poll(&self.ctx).await?;
-    if status == QrStatus::Confirmed {
-      for key in [cloud::TOKEN, cloud::PHONE, cloud::WABA] {
-        self.ctx.set_extra(key, "");
-      }
-    }
-    Ok(status)
+    login::qr_poll(&self.api).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    let words = query.keyword.clone();
-    self
-      .personal("search", async |l| personal::search(l, &words, page))
-      .await
+    let words = &query.keyword;
+    let search = async |link: &mut link::Link| chats::search(link, words, page);
+    self.api.on_device("search", search).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    self
-      .personal("read", async |l| personal::read(l, post))
-      .await
+    let read = async |link: &mut link::Link| chats::read(link, post);
+    self.api.on_device("read", read).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    self
-      .personal("user", async |l| personal::user(l, user).await)
-      .await
+    let lookup = async |link: &mut link::Link| users::user(link, user).await;
+    self.api.on_device("user", lookup).await
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    self
-      .personal("unread", async |l| Ok(personal::unread(l)))
-      .await
+    let unread = async |link: &mut link::Link| Ok(chats::unread(link));
+    self.api.on_device("unread", unread).await
   }
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
-    self
-      .personal("follow (join a group)", async |l| {
-        personal::follow(l, user, undo).await
-      })
-      .await
+    let follow = async |link: &mut link::Link| groups::follow(link, user, undo).await;
+    self.api.on_device("follow (join a group)", follow).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
-    self
-      .personal("delete", async |l| personal::delete(l, post).await)
-      .await
+    let delete = async |link: &mut link::Link| messages::delete(link, post).await;
+    self.api.on_device("delete", delete).await
   }
 
   async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
@@ -222,101 +147,62 @@ impl Platform for WhatsApp {
         "WhatsApp chats have nothing inside them to list; use `messages CHAT` or `members GROUP`",
       ));
     }
-    self
-      .personal("chats", async |l| personal::chats(l, page).await)
-      .await
+    let chats = async |link: &mut link::Link| chats::chats(link, page).await;
+    self.api.on_device("chats", chats).await
   }
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
-    self
-      .personal("messages", async |l| {
-        personal::messages(l, chat, page).await
-      })
-      .await
+    let messages = async |link: &mut link::Link| chats::messages(link, chat, page).await;
+    self.api.on_device("messages", messages).await
   }
 
   async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
-    match self.mode() {
-      Mode::Personal => {
-        self
-          .personal
-          .with(&self.ctx, async |l| personal::send(l, chat, message).await)
-          .await
-      }
-      Mode::Cloud(c) => c.send(&self.ctx, chat, message).await,
-      Mode::None => Err(self.not_logged_in()),
-    }
+    messages::send(&self.api, chat, message).await
   }
 
   async fn members(&self, chat: &str, page: &PageReq) -> Result<Page<User>> {
-    self
-      .personal("members", async |l| personal::members(l, chat, page).await)
-      .await
+    let members = async |link: &mut link::Link| groups::members(link, chat, page).await;
+    self.api.on_device("members", members).await
   }
 
   async fn react(&self, post: &str, emoji: &str, undo: bool) -> Result<Action> {
-    match self.mode() {
-      Mode::Personal => {
-        self
-          .personal
-          .with(&self.ctx, async |l| {
-            personal::react(l, post, emoji, undo).await
-          })
-          .await
-      }
-      Mode::Cloud(c) => c.react(&self.ctx, post, emoji, undo).await,
-      Mode::None => Err(self.not_logged_in()),
-    }
+    messages::react(&self.api, post, emoji, undo).await
   }
 
   async fn edit(&self, post: &str, text: &str) -> Result<Action> {
-    self
-      .personal("edit", async |l| personal::edit(l, post, text).await)
-      .await
+    let edit = async |link: &mut link::Link| messages::edit(link, post, text).await;
+    self.api.on_device("edit", edit).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
-    self
-      .personal("listen", async |l| personal::listen(l, chats, out).await)
-      .await
+    let listen = async |link: &mut link::Link| live::listen(link, chats, out).await;
+    self.api.on_device("listen", listen).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
     if post.is_some() {
       return Err(Error::unsupported("insights for one message"));
     }
-    match self.mode() {
-      Mode::Cloud(c) => c.insights(&self.ctx, days).await,
-      Mode::Personal => Err(self.personal_cannot("insights")),
-      Mode::None => Err(self.not_logged_in()),
+    if matches!(self.api.mode(), api::Mode::None) {
+      return Err(api::not_logged_in());
     }
+    self
+      .api
+      .cloud("insights")?
+      .insights(&self.api.ctx, days)
+      .await
   }
 
-  /// Cloud API: a media id from a webhook; personal: an archived message.
   async fn media(&self, post: &str, _audio_only: bool) -> Result<(Post, Vec<Media>)> {
-    if let Mode::Cloud(c) = self.mode() {
-      let media = c.media(&self.ctx, post).await?;
-      let p = Post {
-        id: post.to_owned(),
-        kind: "media".into(),
-        ..Post::default()
-      };
-      return Ok((p, vec![media]));
-    }
-    let p = self.read(post).await?;
-    let media = p.media.clone();
-    if media.is_empty() {
-      return Err(Error::not_found("this message has no media"));
-    }
-    Ok((p, media))
+    media::media(&self.api, post).await
   }
 
   async fn save_media(&self, media: &Media, dir: &Path, name: &str) -> Option<Result<PathBuf>> {
-    let url = media.url.strip_prefix("wa-media:")?;
-    Some(self.personal.save_media(url, dir, name).await)
+    let url = media.url.strip_prefix(media::SCHEME)?;
+    Some(media::save(&self.api.personal, url, dir, name).await)
   }
 
   async fn run_extra(&self, command: extra::Command) -> Result<Data> {
-    extra::run(self, command).await
+    extra::run(&self.api, command).await
   }
 }

@@ -2,10 +2,10 @@
 
 use std::time::Duration;
 
-use social_core::{Action, Data, Error, Page, Result, ValueExt, json};
+use social_core::{Data, Result};
 
-use crate::api::{self, Account};
-use crate::{convert, live, local, refs};
+use crate::api::Api;
+use crate::{live, messages, refs};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -32,34 +32,16 @@ Examples:
 Messages are only ever delivered once; `chats` and `messages` show what
 earlier runs recorded on this machine.";
 
-pub async fn run(ctx: &social_core::Ctx, command: Command) -> Result<Data> {
-  let acct = Account::require(ctx)?;
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
+  let account = api.require_account()?;
   Ok(match command {
     Command::Sync { wait } => {
-      let (msgs, _) = live::fetch(ctx, &acct, Duration::from_secs(wait.max(1))).await?;
-      let mut posts: Vec<_> = msgs.iter().map(convert::post).collect();
-      posts.reverse();
-      Data::Posts(Page::last(posts))
+      let wait = Duration::from_secs(wait.max(1));
+      Data::Posts(live::sync(api, &account, wait).await?)
     }
     Command::Typing { chat, stop } => {
-      let chat = refs::chat(&ctx.collection_ref(&chat)?)?;
-      let token = local::contact(ctx, &acct, &chat).and_then(|c| c.context_token);
-      let mut body = json!({ "ilink_user_id": chat });
-      if let Some(t) = &token {
-        body["context_token"] = t.clone().into();
-      }
-      let config = api::call(ctx, &acct, "ilink/bot/getconfig", body).await?;
-      let ticket = config.str("typing_ticket").ok_or_else(|| {
-        Error::upstream("WeChat gave no typing ticket for this chat")
-          .with_hint("typing works in chats that messaged the bot recently")
-      })?;
-      let status = if stop { 2 } else { 1 };
-      let body = json!({ "ilink_user_id": chat, "typing_ticket": ticket, "status": status });
-      api::call(ctx, &acct, "ilink/bot/sendtyping", body).await?;
-      Data::Action(Action::done(
-        if stop { "stop-typing" } else { "typing" },
-        chat,
-      ))
+      let chat = refs::chat(&api.ctx.collection_ref(&chat)?)?;
+      Data::Action(messages::typing(api, &account, &chat, stop).await?)
     }
   })
 }

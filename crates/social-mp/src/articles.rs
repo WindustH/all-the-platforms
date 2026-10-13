@@ -76,33 +76,67 @@ pub fn parse(html: &str, requested: &str) -> Result<Post> {
       None => Error::upstream("not an article page (no #js_content)"),
     });
   };
-  let biz = var(html, "biz").or_else(|| var(html, "appuin"));
-  let mid = var(html, "mid").or_else(|| var(html, "appmsgid"));
-  let idx = var(html, "idx");
-  let bizuin = biz.as_deref().and_then(refs::bizuin);
-  let id = match (&bizuin, &mid, &idx) {
-    (Some(b), Some(m), Some(i)) => format!("{b}_{m}_{i}"),
-    _ => requested.rsplit('/').next().unwrap_or(requested).to_owned(),
-  };
+  let show_type = var(html, "item_show_type").unwrap_or_default();
   let link = var(html, "msg_link")
     .map(|l| entities(&l))
     .and_then(|l| refs::article_url(&l).ok())
     .unwrap_or_else(|| requested.to_owned());
-  let show_type = var(html, "item_show_type").unwrap_or_default();
-  let kind = match show_type.as_str() {
+  let mut post = Post {
+    id: article_id(html, requested),
+    kind: kind(&show_type).into(),
+    title: title(html),
+    text: Some(html_to_text(&content)).filter(|t| !t.is_empty()),
+    url: Some(link),
+    author: Some(account(html)),
+    created_at: var(html, "ct")
+      .or_else(|| var(html, "create_time"))
+      .and_then(|t| t.parse().ok())
+      .and_then(from_secs),
+    media: media(html, &content, &show_type),
+    ..Post::default()
+  };
+  add_details(&mut post, html);
+  post.raw = Some(json!({ "content_html": content }));
+  Ok(post)
+}
+
+/// `<bizuin>_<mid>_<idx>`, or the short link's id when the page lacks them.
+fn article_id(html: &str, requested: &str) -> String {
+  let bizuin = var(html, "biz")
+    .or_else(|| var(html, "appuin"))
+    .as_deref()
+    .and_then(refs::bizuin);
+  let mid = var(html, "mid").or_else(|| var(html, "appmsgid"));
+  match (bizuin, mid, var(html, "idx")) {
+    (Some(b), Some(m), Some(i)) => format!("{b}_{m}_{i}"),
+    _ => requested.rsplit('/').next().unwrap_or(requested).to_owned(),
+  }
+}
+
+/// The kind of an `item_show_type`.
+fn kind(show_type: &str) -> &'static str {
+  match show_type {
     "5" => "video",
     "7" => "audio",
     "8" => "images",
     "10" => "text",
     _ => "article",
-  };
-  let title = text(html, "msg_title").or_else(|| {
+  }
+}
+
+fn title(html: &str) -> Option<String> {
+  text(html, "msg_title").or_else(|| {
     META_TITLE
       .captures(html)
       .map(|m| entities(&m[1]))
       .filter(|t| !t.is_empty())
-  });
-  let author = User {
+  })
+}
+
+/// The publishing account.
+fn account(html: &str) -> User {
+  let biz = var(html, "biz").or_else(|| var(html, "appuin"));
+  User {
     id: var(html, "user_name").unwrap_or_default(),
     name: text(html, "nickname").unwrap_or_default(),
     handle: var(html, "alias"),
@@ -113,30 +147,22 @@ pub fn parse(html: &str, requested: &str) -> Result<Post> {
       .map(|b| ("biz".to_owned(), Value::from(b.as_str())))
       .collect(),
     ..User::default()
-  };
+  }
+}
 
-  let mut media = images(&content);
+/// Images (and a 图片消息's pictures), videos and audio, in that order.
+fn media(html: &str, content: &str, show_type: &str) -> Vec<Media> {
+  let mut media = images(content);
   if show_type == "8" {
     media.extend(pictures(html));
   }
   media.extend(videos(html));
-  media.extend(voices(&content));
+  media.extend(voices(content));
+  media
+}
 
-  let mut post = Post {
-    id,
-    kind: kind.into(),
-    title,
-    text: Some(html_to_text(&content)).filter(|t| !t.is_empty()),
-    url: Some(link),
-    author: Some(author),
-    created_at: var(html, "ct")
-      .or_else(|| var(html, "create_time"))
-      .and_then(|t| t.parse().ok())
-      .and_then(from_secs),
-    media,
-    raw: Some(json!({ "content_html": content })),
-    ..Post::default()
-  };
+/// Page variables that have no field of their own, into `extra`.
+fn add_details(post: &mut Post, html: &str) {
   let mut put = |key: &str, value: Option<Value>| {
     if let Some(v) = value {
       post.extra.insert(key.into(), v);
@@ -157,13 +183,12 @@ pub fn parse(html: &str, requested: &str) -> Result<Post> {
     "comment_id",
     s(var(html, "comment_id").filter(|c| c != "0")),
   );
-  put("biz", s(biz));
-  put("mid", s(mid));
-  put("idx", s(idx));
+  put("biz", s(var(html, "biz").or_else(|| var(html, "appuin"))));
+  put("mid", s(var(html, "mid").or_else(|| var(html, "appmsgid"))));
+  put("idx", s(var(html, "idx")));
   put("sn", s(var(html, "sn")));
   let albums = albums(html);
   put("albums", (!albums.is_empty()).then(|| Value::from(albums)));
-  Ok(post)
 }
 
 /// Inner HTML of `#js_content`: up to the `</div>` before the next script.

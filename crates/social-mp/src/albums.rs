@@ -11,22 +11,10 @@ use crate::refs::{self, HOME};
 
 pub async fn page(ctx: &Ctx, arg: &str, req: &PageReq) -> Result<(Collection, Page<Post>)> {
   let (biz, album_id) = refs::album(arg)?;
-  let count = req.size_within(20).to_string();
-  let mut query = vec![
-    ("action", "getalbum".to_owned()),
-    ("__biz", biz.clone()),
-    ("album_id", album_id.clone()),
-    ("count", count),
-    ("f", "json".to_owned()),
-  ];
-  if let Some((msgid, itemidx)) = req.cursor.as_deref().and_then(|c| c.split_once('_')) {
-    query.push(("begin_msgid", msgid.to_owned()));
-    query.push(("begin_itemidx", itemidx.to_owned()));
-  }
   let v = ctx
     .http
     .get(format!("{HOME}/mp/appmsgalbum"))
-    .queries(query)
+    .queries(query(&biz, &album_id, req))
     .value()
     .await?;
   match v.i64("base_resp.ret") {
@@ -47,28 +35,48 @@ pub async fn page(ctx: &Ctx, arg: &str, req: &PageReq) -> Result<(Collection, Pa
   };
   let posts: Vec<Post> = items.iter().map(|a| item(a, &owner)).collect();
   let next = (resp.str("continue_flag").as_deref() == Some("1"))
-    .then(|| {
-      items.last().map(|l| {
-        format!(
-          "{}_{}",
-          l.str("msgid").unwrap_or_default(),
-          l.str("itemidx").unwrap_or_default()
-        )
-      })
-    })
+    .then(|| items.last().map(cursor))
     .flatten();
-  let album = Collection {
-    id: album_id.clone(),
+  let album = collection(info, &biz, &album_id, owner);
+  Ok((album, Page::new(posts, next)))
+}
+
+fn query(biz: &str, album_id: &str, req: &PageReq) -> Vec<(&'static str, String)> {
+  let mut query = vec![
+    ("action", "getalbum".to_owned()),
+    ("__biz", biz.to_owned()),
+    ("album_id", album_id.to_owned()),
+    ("count", req.size_within(20).to_string()),
+    ("f", "json".to_owned()),
+  ];
+  if let Some((msgid, itemidx)) = req.cursor.as_deref().and_then(|c| c.split_once('_')) {
+    query.push(("begin_msgid", msgid.to_owned()));
+    query.push(("begin_itemidx", itemidx.to_owned()));
+  }
+  query
+}
+
+/// `<msgid>_<itemidx>` of the last item: the next page starts after it.
+fn cursor(last: &Value) -> String {
+  format!(
+    "{}_{}",
+    last.str("msgid").unwrap_or_default(),
+    last.str("itemidx").unwrap_or_default()
+  )
+}
+
+fn collection(info: &Value, biz: &str, album_id: &str, owner: User) -> Collection {
+  Collection {
+    id: album_id.to_owned(),
     kind: "album".into(),
     name: info.str("title").unwrap_or_default(),
     description: info.str("description"),
-    url: Some(refs::album_url(&biz, &album_id)),
+    url: Some(refs::album_url(biz, album_id)),
     items: info.u64("article_count"),
     views: info.u64("read_count"),
     owner: Some(owner).filter(|o| !o.name.is_empty()),
     ..Collection::default()
-  };
-  Ok((album, Page::new(posts, next)))
+  }
 }
 
 fn item(a: &Value, owner: &User) -> Post {
