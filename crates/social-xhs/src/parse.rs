@@ -197,10 +197,10 @@ fn images(card: &Value) -> Vec<Media> {
     ]) else {
       continue;
     };
-    let mut m = Media::image(original_image(&src).unwrap_or(src));
-    m.width = img.u64("width").map(|w| w as u32);
-    m.height = img.u64("height").map(|h| h as u32);
-    out.push(m);
+    let mut media = Media::image(original_image(&src).unwrap_or(src));
+    media.width = img.u64("width").map(|w| w as u32);
+    media.height = img.u64("height").map(|h| h as u32);
+    out.push(media);
     if img.bool("live_photo") == Some(true) {
       out.extend(best_stream(img.at("stream")));
     }
@@ -218,11 +218,11 @@ fn original_image(url: &str) -> Option<String> {
 
 fn video(card: &Value) -> Option<Media> {
   let v = card.at("video");
-  let mut m = best_stream(v.at("media.stream"))?;
+  let mut media = best_stream(v.at("media.stream"))?;
   if let Some(secs) = v.f64("capa.duration") {
-    m.duration = Some(secs);
+    media.duration = Some(secs);
   }
-  Some(m)
+  Some(media)
 }
 
 /// The highest-resolution stream, preferring H.264 on ties.
@@ -237,11 +237,11 @@ fn best_stream(streams: &Value) -> Option<Media> {
     }
   }
   let (_, s) = best?;
-  let mut m = Media::video(s.str("master_url")?);
-  m.width = s.u64("width").map(|w| w as u32);
-  m.height = s.u64("height").map(|h| h as u32);
-  m.duration = s.f64("duration").map(|ms| ms / 1000.0);
-  Some(m)
+  let mut media = Media::video(s.str("master_url")?);
+  media.width = s.u64("width").map(|w| w as u32);
+  media.height = s.u64("height").map(|h| h as u32);
+  media.duration = s.f64("duration").map(|ms| ms / 1000.0);
+  Some(media)
 }
 
 /// A note of the creator center list (`my-notes`).
@@ -254,9 +254,13 @@ pub fn creator_note(v: &Value) -> Option<Post> {
     url: Some(note_url(&id, token.as_deref(), SOURCE_FEED)),
     // `time`: Unix milliseconds, or `2024-09-28 14:03` in Beijing time.
     created_at: v.i64("time").and_then(from_unix).or_else(|| {
-      let t = v.str("time")?;
-      let t = if t.len() == 16 { format!("{t}:00") } else { t };
-      parse_time(&format!("{}+08:00", t.replacen(' ', "T", 1)))
+      let time = v.str("time")?;
+      let time = if time.len() == 16 {
+        format!("{time}:00")
+      } else {
+        time
+      };
+      parse_time(&format!("{}+08:00", time.replacen(' ', "T", 1)))
     }),
     metrics: Metrics {
       views: v.first_count(&["view_count"]),

@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use social_core::{Error, Result, Value, ValueExt};
 
-use crate::api::{Client, HOME};
+use crate::api::{Api, HOME};
 use crate::parse::snake_keys;
 use crate::refs::NoteRef;
 
@@ -17,12 +17,12 @@ static UNDEFINED: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"([:,])\s*undefined").expect("regex"));
 
 /// The HTML of `/explore/<id>`, with the token in the query when known.
-pub async fn fetch(c: &Client, note: &NoteRef) -> Result<String> {
+pub async fn html(api: &Api, note: &NoteRef) -> Result<String> {
   let url = match note.token {
     Some(_) => note.url(),
     None => format!("{HOME}/explore/{}", note.id),
   };
-  let resp = c
+  let resp = api
     .ctx
     .http
     .get(url)
@@ -73,6 +73,9 @@ pub fn token(html: &str, id: &str) -> Option<(String, Option<String>)> {
     r#"{id}\?[^"'<>\s]*?xsec_token=([^&"'\\\s]+)(?:&(?:amp;)?xsec_source=([^&"'\\\s]+))?"#
   ))
   .ok()?;
-  let c = link.captures(html)?;
-  Some((c[1].to_owned(), c.get(2).map(|s| s.as_str().to_owned())))
+  let found = link.captures(html)?;
+  Some((
+    found[1].to_owned(),
+    found.get(2).map(|s| s.as_str().to_owned()),
+  ))
 }

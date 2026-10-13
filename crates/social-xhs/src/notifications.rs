@@ -4,18 +4,18 @@ use std::collections::BTreeMap;
 
 use social_core::{Error, Notification, Page, PageReq, Result, ValueExt};
 
-use crate::api::Client;
+use crate::api::Api;
 use crate::parse;
 
 /// `notifications --type` values; the first is the default.
 pub const KINDS: &[&str] = &["mentions", "likes", "connections"];
 
 pub async fn notifications(
-  c: &Client,
+  api: &Api,
   kind: Option<&str>,
   page: &PageReq,
 ) -> Result<Page<Notification>> {
-  c.require_login()?;
+  api.require_login()?;
   let (path, fallback) = match kind.unwrap_or(KINDS[0]) {
     "mentions" => ("/api/sns/web/v1/you/mentions", "mention"),
     "likes" => ("/api/sns/web/v1/you/likes", "like"),
@@ -24,7 +24,7 @@ pub async fn notifications(
   };
   let num = page.size_within(20).to_string();
   let cursor = page.cursor.clone().unwrap_or_default();
-  let data = c
+  let data = api
     .get(path, &[("num", num.as_str()), ("cursor", cursor.as_str())])
     .await?;
   let items = data
@@ -39,27 +39,28 @@ pub async fn notifications(
 }
 
 /// Mark one notification tab (or all of them) as read.
-pub async fn mark_read(c: &Client, kind: Option<&str>) -> Result<social_core::Action> {
-  c.require_login()?;
+pub async fn mark_read(api: &Api, kind: Option<&str>) -> Result<social_core::Action> {
+  api.require_login()?;
   let kinds: Vec<&str> = match kind {
     Some(k) if KINDS.contains(&k) => vec![k],
     Some(other) => return Err(Error::input(format!("unknown notification type `{other}`"))),
     None => KINDS.to_vec(),
   };
   for k in &kinds {
-    c.post(
-      "/api/sns/web/v1/message/read",
-      &social_core::json!({"type": k}),
-    )
-    .await?;
+    api
+      .post(
+        "/api/sns/web/v1/message/read",
+        &social_core::json!({"type": k}),
+      )
+      .await?;
   }
   Ok(social_core::Action::done("mark-read", kinds.join(",")))
 }
 
 /// `unread_count`, `mentions`, `likes`, `connections` and any other counter.
-pub async fn unread(c: &Client) -> Result<BTreeMap<String, u64>> {
-  c.require_login()?;
-  let data = c.get("/api/sns/web/unread_count", &[]).await?;
+pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
+  api.require_login()?;
+  let data = api.get("/api/sns/web/unread_count", &[]).await?;
   Ok(
     data
       .as_object()

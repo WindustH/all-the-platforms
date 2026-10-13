@@ -9,7 +9,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use social_core::{Ctx, Error, Result};
 
-use crate::api::{Client, HOME};
+use crate::api::{Api, HOME};
 
 /// `xsec_source` of feed / listing tokens, and the default like the reference client.
 pub const SOURCE_FEED: &str = "pc_feed";
@@ -70,8 +70,8 @@ fn extract_url(arg: &str) -> &str {
   URL_IN_TEXT.find(arg).map_or(arg, |m| m.as_str())
 }
 
-fn valid_id(s: &str) -> bool {
-  s.len() >= 8 && s.len() <= 40 && s.bytes().all(|b| b.is_ascii_alphanumeric())
+fn valid_id(text: &str) -> bool {
+  text.len() >= 8 && text.len() <= 40 && text.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
 /// A `xiaohongshu.com` URL.
@@ -146,8 +146,8 @@ fn is_short_link(arg: &str) -> bool {
 }
 
 /// Follow an xhslink.com short link to the page it points at.
-async fn expand(c: &Client, link: &str) -> Result<String> {
-  let target = c.ctx.http.final_url(link).await?;
+async fn expand(api: &Api, link: &str) -> Result<String> {
+  let target = api.ctx.http.final_url(link).await?;
   let url = url::Url::parse(&target)
     .map_err(|e| Error::upstream(format!("short link led to a bad URL: {e}")))?;
   // Login walls wrap the target page in `redirectPath`.
@@ -163,28 +163,31 @@ async fn expand(c: &Client, link: &str) -> Result<String> {
 
 /// Resolve a note argument: short links are followed, a missing token comes
 /// from the cache, and a token given explicitly is cached.
-pub async fn note_ref(c: &Client, arg: &str) -> Result<NoteRef> {
-  let mut r = match extract_url(arg) {
-    link if is_short_link(link) => parse_note(&expand(c, link).await?)?,
+pub async fn note_ref(api: &Api, arg: &str) -> Result<NoteRef> {
+  let mut note = match extract_url(arg) {
+    link if is_short_link(link) => parse_note(&expand(api, link).await?)?,
     other => parse_note(other)?,
   };
-  match &r.token {
-    Some(token) => remember(&c.ctx, [(r.id.as_str(), token.as_str(), r.source())]),
+  match &note.token {
+    Some(token) => remember(
+      &api.ctx,
+      [(note.id.as_str(), token.as_str(), note.source())],
+    ),
     None => {
-      if let Some(entry) = load(&c.ctx).remove(&r.id) {
-        r.token = Some(entry.token);
-        r.source = Some(entry.source).filter(|s| !s.is_empty());
-        r.cached = true;
+      if let Some(entry) = load(&api.ctx).remove(&note.id) {
+        note.token = Some(entry.token);
+        note.source = Some(entry.source).filter(|s| !s.is_empty());
+        note.cached = true;
       }
     }
   }
-  Ok(r)
+  Ok(note)
 }
 
 /// Resolve a user argument (id, profile URL or short link).
-pub async fn user_ref(c: &Client, arg: &str) -> Result<String> {
+pub async fn user_ref(api: &Api, arg: &str) -> Result<String> {
   match extract_url(arg) {
-    link if is_short_link(link) => parse_user(&expand(c, link).await?),
+    link if is_short_link(link) => parse_user(&expand(api, link).await?),
     other => parse_user(other),
   }
 }

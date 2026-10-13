@@ -6,7 +6,7 @@
 
 use social_core::{Error, QrStatus, QrTicket, Result, Value, ValueExt};
 
-use crate::api::Client;
+use crate::api::Api;
 
 const PASSPORT: &str = "https://passport.weibo.com";
 const SIGNIN_REFERER: &str = "https://passport.weibo.com/sso/signin?entry=miniblog&source=miniblog&url=https%3A%2F%2Fweibo.com%2F";
@@ -17,8 +17,8 @@ const EXPIRED: i64 = 50114004;
 /// Passport client version the web page sends when polling.
 const VERSION: &str = "20250520";
 
-async fn passport(c: &Client, path: &str, query: &[(&str, &str)]) -> Result<Value> {
-  let http = &c.ctx.http;
+async fn passport(api: &Api, path: &str, query: &[(&str, &str)]) -> Result<Value> {
+  let http = &api.ctx.http;
   let mut req = http
     .get(format!("{PASSPORT}{path}"))
     .header("referer", SIGNIN_REFERER)
@@ -30,9 +30,10 @@ async fn passport(c: &Client, path: &str, query: &[(&str, &str)]) -> Result<Valu
   req.send().await?.value()
 }
 
-pub async fn qr_start(c: &Client) -> Result<QrTicket> {
+pub async fn qr_start(api: &Api) -> Result<QrTicket> {
   // The sign-in page sets the X-CSRF-TOKEN cookie the QR calls echo.
-  c.ctx
+  api
+    .ctx
     .http
     .get(format!("{PASSPORT}/sso/signin"))
     .header("accept", "text/html")
@@ -44,7 +45,7 @@ pub async fn qr_start(c: &Client) -> Result<QrTicket> {
     .send()
     .await?;
   let v = passport(
-    c,
+    api,
     "/sso/v2/qrcode/image",
     &[("entry", "miniblog"), ("size", "180")],
   )
@@ -80,9 +81,9 @@ pub async fn qr_start(c: &Client) -> Result<QrTicket> {
   })
 }
 
-pub async fn qr_poll(c: &Client, ticket: &QrTicket) -> Result<QrStatus> {
+pub async fn qr_poll(api: &Api, ticket: &QrTicket) -> Result<QrStatus> {
   let v = passport(
-    c,
+    api,
     "/sso/v2/qrcode/check",
     &[
       ("entry", "miniblog"),
@@ -96,7 +97,7 @@ pub async fn qr_poll(c: &Client, ticket: &QrTicket) -> Result<QrStatus> {
   .await?;
   match v.i64("retcode") {
     Some(OK) => {
-      finish(c, &v).await?;
+      finish(api, &v).await?;
       Ok(QrStatus::Confirmed)
     }
     Some(WAITING) => Ok(QrStatus::Waiting),
@@ -116,8 +117,8 @@ pub async fn qr_poll(c: &Client, ticket: &QrTicket) -> Result<QrStatus> {
 }
 
 /// Turn the confirmation into weibo.com cookies.
-async fn finish(c: &Client, v: &Value) -> Result<()> {
-  let http = &c.ctx.http;
+async fn finish(api: &Api, v: &Value) -> Result<()> {
+  let http = &api.ctx.http;
   if let Some(alt) = v.str("data.alt") {
     let resp = http
       .get("https://login.sina.com.cn/sso/login.php")
@@ -157,7 +158,7 @@ async fn finish(c: &Client, v: &Value) -> Result<()> {
       .send()
       .await;
   }
-  if !c.logged_in() {
+  if !api.logged_in() {
     return Err(
       Error::auth("the scan was confirmed but Weibo set no session cookie")
         .with_hint("log in with `social weibo login --browser` or `--cookie '...'`"),

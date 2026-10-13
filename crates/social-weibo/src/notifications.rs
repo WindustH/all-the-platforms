@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use social_core::{Error, Notification, Page, PageReq, Result, Value, ValueExt};
 
-use crate::api::Client;
+use crate::api::Api;
 use crate::parse;
 
 /// `notifications --type` values; the first is the default.
@@ -17,8 +17,8 @@ pub const KINDS: &[&str] = &[
   "likes",
 ];
 
-pub async fn list(c: &Client, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-  c.require_login()?;
+pub async fn list(api: &Api, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
+  api.require_login()?;
   // (endpoint, list key, notification kind)
   let (path, key, label) = match kind.unwrap_or("comments") {
     "comments" => ("/ajax/message/cmt", "comments", "comment"),
@@ -33,7 +33,7 @@ pub async fn list(c: &Client, kind: Option<&str>, page: &PageReq) -> Result<Page
     query.push(("max_id", cursor.clone()));
   }
   let q: Vec<(&str, &str)> = query.iter().map(|(k, v)| (*k, v.as_str())).collect();
-  let v = c.get(path, &q).await?;
+  let v = api.get(path, &q).await?;
   let data = v.at("data");
   let mut items: Vec<Notification> = data
     .list(key)
@@ -52,9 +52,9 @@ pub async fn list(c: &Client, kind: Option<&str>, page: &PageReq) -> Result<Page
 }
 
 /// Unread counters of the notification bell.
-pub async fn unread(c: &Client) -> Result<BTreeMap<String, u64>> {
-  c.require_login()?;
-  let resp = c
+pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
+  api.require_login()?;
+  let resp = api
     .ctx
     .http
     .get("https://rm.api.weibo.com/2/remind/push_count.json")
@@ -80,10 +80,10 @@ pub async fn unread(c: &Client) -> Result<BTreeMap<String, u64>> {
   };
   let v: Value = serde_json::from_str(body)
     .map_err(|_| Error::upstream("unexpected answer from Weibo's unread counter"))?;
-  if v.i64("code").is_some_and(|c| c != 1) {
+  if v.i64("code").is_some_and(|code| code != 1) {
     return Err(
       Error::auth("Weibo did not accept this session for the unread counter")
-        .with_hint(c.ctx.login_hint()),
+        .with_hint(api.ctx.login_hint()),
     );
   }
   let data = if v.at("data").is_object() {

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use social_core::{Error, ErrorCode, QrStatus, QrTicket, Result, Value, ValueExt};
 
-use crate::api::Client;
+use crate::api::Api;
 
 const PASSPORT: &str = "https://passport.baidu.com";
 /// The unicast poll holds the connection until something happens.
@@ -30,8 +30,8 @@ fn loose_json(text: &str) -> Option<Value> {
     .or_else(|| serde_json::from_str(&body.replace("\\&", "&").replace('\'', "\"")).ok())
 }
 
-pub async fn qr_start(c: &Client) -> Result<QrTicket> {
-  let resp = c
+pub async fn qr_start(api: &Api) -> Result<QrTicket> {
+  let resp = api
     .ctx
     .http
     .get(format!("{PASSPORT}/v2/api/getqrcode"))
@@ -49,7 +49,7 @@ pub async fn qr_start(c: &Client) -> Result<QrTicket> {
   } else {
     format!("https://{img}")
   };
-  let image = c.ctx.http.get(&img).send().await?.check()?.body;
+  let image = api.ctx.http.get(&img).send().await?.check()?.body;
   Ok(QrTicket {
     url: img,
     token: sign,
@@ -58,8 +58,8 @@ pub async fn qr_start(c: &Client) -> Result<QrTicket> {
   })
 }
 
-pub async fn qr_poll(c: &Client, ticket: &QrTicket) -> Result<QrStatus> {
-  let sent = c
+pub async fn qr_poll(api: &Api, ticket: &QrTicket) -> Result<QrStatus> {
+  let sent = api
     .ctx
     .http
     .get(format!("{PASSPORT}/channel/unicast"))
@@ -100,14 +100,14 @@ pub async fn qr_poll(c: &Client, ticket: &QrTicket) -> Result<QrStatus> {
   let code = channel
     .str("v")
     .ok_or_else(|| Error::auth("the QR login was confirmed without a login code"))?;
-  finish(c, &code).await?;
+  finish(api, &code).await?;
   Ok(QrStatus::Confirmed)
 }
 
 /// Trade the one-time code for the session cookies.
-async fn finish(c: &Client, code: &str) -> Result<()> {
+async fn finish(api: &Api, code: &str) -> Result<()> {
   let tt = now();
-  let resp = c
+  let resp = api
     .ctx
     .http
     .get(format!("{PASSPORT}/v3/login/main/qrbdusslogin"))
@@ -136,9 +136,9 @@ async fn finish(c: &Client, code: &str) -> Result<()> {
         .to_owned(),
     ));
   };
-  c.ctx.http.set_cookie("BDUSS", &bduss);
+  api.ctx.http.set_cookie("BDUSS", &bduss);
   if let Some(stoken) = session.str("stokenList").and_then(|l| tieba_stoken(&l)) {
-    c.ctx.http.set_cookie("STOKEN", &stoken);
+    api.ctx.http.set_cookie("STOKEN", &stoken);
   }
   Ok(())
 }

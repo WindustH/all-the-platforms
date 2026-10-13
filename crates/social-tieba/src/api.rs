@@ -13,6 +13,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::time::Duration;
 
 use md5::{Digest, Md5};
 use rand::Rng;
@@ -44,7 +45,7 @@ pub struct Me {
   pub tbs: String,
 }
 
-pub struct Client {
+pub struct Api {
   pub ctx: Ctx,
   cuid: String,
   client_id: String,
@@ -53,7 +54,7 @@ pub struct Client {
   uids: RefCell<HashMap<String, String>>,
 }
 
-impl Client {
+impl Api {
   pub fn new(ctx: Ctx) -> Self {
     let cuid = ctx.extra("cuid").unwrap_or_else(|| {
       let cuid = new_cuid();
@@ -212,47 +213,60 @@ impl Client {
     let v = self
       .web("/mo/q/newmoindex", &[("need_user", "1".into())])
       .await?;
-    let d = v.at("data");
-    let uid = d.str("uid").filter(|u| u != "0");
-    let (Some(uid), true) = (uid, d.bool("is_login") != Some(false)) else {
+    let data = v.at("data");
+    let uid = data.str("uid").filter(|u| u != "0");
+    let (Some(uid), true) = (uid, data.bool("is_login") != Some(false)) else {
       return Err(
         Error::auth("Tieba did not accept the session (BDUSS)").with_hint(self.ctx.login_hint()),
       );
     };
     let me = Me {
       uid,
-      name: d.first_str(&["name_show", "name"]).unwrap_or_default(),
-      tbs: d.first_str(&["tbs", "itb_tbs"]).unwrap_or_default(),
+      name: data.first_str(&["name_show", "name"]).unwrap_or_default(),
+      tbs: data.first_str(&["tbs", "itb_tbs"]).unwrap_or_default(),
     };
     *self.me.borrow_mut() = Some(me.clone());
     Ok(me)
   }
 
   /// The anti-CSRF token writes need.
+  /// A short random pause before a write: bursts get flagged.
+  pub async fn write_pause(&self) {
+    self
+      .ctx
+      .http
+      .pause(Duration::from_millis(800), Duration::from_millis(2000))
+      .await;
+  }
+
   pub async fn tbs(&self) -> Result<String> {
     Ok(self.me().await?.tbs)
   }
 
   pub fn error(&self, code: &str, msg: &str) -> Error {
-    let e = error(code, msg);
-    if e.code == ErrorCode::NotAuthenticated {
-      e.with_hint(self.ctx.login_hint())
+    let failure = error(code, msg);
+    if failure.code == ErrorCode::NotAuthenticated {
+      failure.with_hint(self.ctx.login_hint())
     } else {
-      e
+      failure
     }
   }
 }
 
 /// Upper-case MD5 of the pairs (already sorted) and the app secret.
 fn sign(pairs: &[(String, String)]) -> String {
-  let mut h = Md5::new();
+  let mut hasher = Md5::new();
   for (k, v) in pairs {
-    h.update(k.as_bytes());
-    h.update(b"=");
-    h.update(v.as_bytes());
+    hasher.update(k.as_bytes());
+    hasher.update(b"=");
+    hasher.update(v.as_bytes());
   }
-  h.update(SECRET.as_bytes());
-  h.finalize().iter().map(|b| format!("{b:02X}")).collect()
+  hasher.update(SECRET.as_bytes());
+  hasher
+    .finalize()
+    .iter()
+    .map(|b| format!("{b:02X}"))
+    .collect()
 }
 
 /// A device id the way the app makes one (`baidutiebaapp` + a UUID).
@@ -306,4 +320,18 @@ pub fn error(code: &str, msg: &str) -> Error {
     format!("Tieba error {code}: {msg}")
   };
   Error::new(kind, text)
+}
+
+/// A captcha the app would show means stop and use the app or browser.
+pub fn check_vcode(v: &Value) -> Result<()> {
+  if v.str("info.need_vcode").as_deref() == Some("1") {
+    return Err(
+      Error::new(
+        ErrorCode::VerificationRequired,
+        "Tieba asks for a captcha for this post",
+      )
+      .with_hint("post it once in the app or browser, wait a while, then retry"),
+    );
+  }
+  Ok(())
 }

@@ -3,13 +3,13 @@
 use std::path::PathBuf;
 
 use social_core::cli::{PageArgs, check_images, read_text};
-use social_core::{Data, Draft, Result};
+use social_core::{Action, Data, Draft, Error, Result};
 
-use crate::api::Client;
-use crate::{creator, discover, events, history, inbox, people, write};
+use crate::api::Api;
+use crate::{events, feeds, history, insights, interactions, notes, notifications, search, users};
 
 #[derive(Debug, clap::Subcommand)]
-pub enum XhsCommand {
+pub enum Command {
   /// Your own published notes (creator center)
   MyNotes {
     #[command(flatten)]
@@ -109,84 +109,99 @@ pub enum XhsCommand {
   },
 }
 
-pub async fn run(c: &Client, command: XhsCommand) -> Result<Data> {
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
-    XhsCommand::MyNotes { page } => Data::Posts(
+    Command::MyNotes { page } => Data::Posts(
       page
-        .collect_dated(async |r| creator::my_notes(c, &r).await)
+        .collect_dated(async |r| notes::my_notes(api, &r).await)
         .await?,
     ),
-    XhsCommand::NoteStats { page } => Data::Posts(
+    Command::NoteStats { page } => Data::Posts(
       page
-        .collect_dated(async |r| creator::note_stats(c, &r).await)
+        .collect_dated(async |r| insights::note_stats(api, &r).await)
         .await?,
     ),
-    XhsCommand::Events {
+    Command::Events {
       keyword,
       kept,
       latest,
     } => {
-      let rows = events::list(c, kept, latest).await?;
+      let rows = events::list(api, kept, latest).await?;
       Data::Collections(events::page(&events::matching(rows, keyword.as_deref())))
     }
-    XhsCommand::Event { event } => Data::Value(events::detail(&events::find(c, &event).await?)),
-    XhsCommand::KeepEvent { event, undo } => Data::Action(events::keep(c, &event, undo).await?),
-    XhsCommand::JoinEvent {
+    Command::Event { event } => Data::Value(events::detail(&events::find(api, &event).await?)),
+    Command::KeepEvent { event, undo } => Data::Action(events::keep(api, &event, undo).await?),
+    Command::JoinEvent {
       event,
       text,
       title,
       images,
       topics,
-    } => {
-      check_images(&images)?;
-      let draft = Draft {
-        title,
-        text: read_text(text)?,
-        images,
-        topics,
-        ..Draft::default()
-      };
-      Data::Action(events::join(c, &event, &draft).await?)
-    }
-    XhsCommand::Channels => Data::Collections(discover::channels(c).await?),
-    XhsCommand::Trending => Data::Collections(discover::trending(c).await?),
-    XhsCommand::Suggest { keyword } => Data::Collections(discover::suggest(c, &keyword).await?),
-    XhsCommand::SearchSaved {
+    } => Data::Action(join_event(api, &event, text, title, images, topics).await?),
+    Command::Channels => Data::Collections(feeds::channels(api).await?),
+    Command::Trending => Data::Collections(search::trending(api).await?),
+    Command::Suggest { keyword } => Data::Collections(search::suggest(api, &keyword).await?),
+    Command::SearchSaved {
       keyword,
       likes,
       page,
     } => Data::Posts(
       page
-        .collect_dated(async |r| people::search_saved(c, &keyword, likes, &r).await)
+        .collect_dated(async |r| users::search_saved(api, &keyword, likes, &r).await)
         .await?,
     ),
-    XhsCommand::LikeComment {
+    Command::LikeComment {
       note,
       comment,
       undo,
     } => {
-      let note = c.ctx.post_ref(&note)?;
-      Data::Action(write::like_comment(c, &note, &comment, undo).await?)
+      let note = api.ctx.post_ref(&note)?;
+      Data::Action(interactions::like_comment(api, &note, &comment, undo).await?)
     }
-    XhsCommand::MarkRead { kind } => Data::Action(inbox::mark_read(c, kind.as_deref()).await?),
-    XhsCommand::HistoryCount => Data::Value(history::count(c).await?),
-    XhsCommand::HistoryDelete { notes } => {
-      let notes = notes
-        .iter()
-        .map(|n| c.ctx.post_ref(n))
-        .collect::<Result<Vec<_>>>()?;
-      Data::Action(history::delete(c, &notes).await?)
+    Command::MarkRead { kind } => {
+      Data::Action(notifications::mark_read(api, kind.as_deref()).await?)
     }
-    XhsCommand::HistoryClear { yes } => {
-      if !yes {
-        return Err(social_core::Error::input(
-          "refusing to clear the browsing history without --yes",
-        ));
-      }
-      Data::Action(history::clear(c).await?)
-    }
-    XhsCommand::ActiveFans { days } => Data::Users(creator::active_fans(c, days).await?),
+    Command::HistoryCount => Data::Value(history::count(api).await?),
+    Command::HistoryDelete { notes } => Data::Action(history_delete(api, &notes).await?),
+    Command::HistoryClear { yes } => Data::Action(history_clear(api, yes).await?),
+    Command::ActiveFans { days } => Data::Users(insights::active_fans(api, days).await?),
   })
+}
+
+async fn join_event(
+  api: &Api,
+  event: &str,
+  text: Option<String>,
+  title: Option<String>,
+  images: Vec<PathBuf>,
+  topics: Vec<String>,
+) -> Result<Action> {
+  check_images(&images)?;
+  let draft = Draft {
+    title,
+    text: read_text(text)?,
+    images,
+    topics,
+    ..Draft::default()
+  };
+  events::join(api, event, &draft).await
+}
+
+async fn history_delete(api: &Api, notes: &[String]) -> Result<Action> {
+  let notes = notes
+    .iter()
+    .map(|n| api.ctx.post_ref(n))
+    .collect::<Result<Vec<_>>>()?;
+  history::delete(api, &notes).await
+}
+
+async fn history_clear(api: &Api, yes: bool) -> Result<Action> {
+  if !yes {
+    return Err(Error::input(
+      "refusing to clear the browsing history without --yes",
+    ));
+  }
+  history::clear(api).await
 }
 
 const EX_EVENTS: &str = "\

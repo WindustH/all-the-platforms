@@ -8,10 +8,11 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use social_core::chat;
 use social_core::text::from_millis;
 use social_core::{Collection, Error, Page, PageReq, Post, Result, User, Value, ValueExt};
 
-use crate::api::Client;
+use crate::api::Api;
 use crate::refs::user_url;
 
 const CHATS: &str = "/api/im/web/v3/chats";
@@ -21,8 +22,8 @@ const NAMES: &str = "chat-names";
 const NAMES_TTL: Duration = Duration::from_secs(30 * 86400);
 
 /// Conversations, most recent first (page-numbered).
-pub async fn chats(c: &Client, req: &PageReq) -> Result<Page<Collection>> {
-  c.require_login()?;
+pub async fn chats(api: &Api, req: &PageReq) -> Result<Page<Collection>> {
+  api.require_login()?;
   let page = req.number_or(0);
   let limit = req.size_within(100);
   let (page_s, limit_s) = (page.to_string(), limit.to_string());
@@ -32,9 +33,9 @@ pub async fn chats(c: &Client, req: &PageReq) -> Result<Page<Collection>> {
     ("page", page_s.as_str()),
     ("source", "pc"),
   ];
-  let data = c.get(CHATS, &params).await?;
+  let data = api.get(CHATS, &params).await?;
   let items: Vec<Collection> = data.list("chats").iter().filter_map(chat).collect();
-  remember_names(c, &items);
+  remember_names(api, &items);
   let seen = (page + 1) * limit as u64;
   let next = (!items.is_empty() && data.u64("total").is_some_and(|t| seen < t))
     .then(|| (page + 1).to_string());
@@ -44,7 +45,7 @@ pub async fn chats(c: &Client, req: &PageReq) -> Result<Page<Collection>> {
 fn chat(v: &Value) -> Option<Collection> {
   let id = v.str("chat_user_id")?;
   let info = v.at("info");
-  let mut c = Collection {
+  let mut collection = Collection {
     kind: "dm".into(),
     name: info
       .first_str(&["nickname", "user_name"])
@@ -67,17 +68,17 @@ fn chat(v: &Value) -> Option<Collection> {
     ("avatar", info.get("avatar").cloned()),
   ] {
     if let Some(value) = value.filter(|v| !v.is_null()) {
-      c.extra.insert(key.into(), value);
+      collection.extra.insert(key.into(), value);
     }
   }
-  c.id = id;
-  Some(c)
+  collection.id = id;
+  Some(collection)
 }
 
 /// One page of a conversation, newest first; the cursor is the store id of
 /// the oldest message seen.
-pub async fn messages(c: &Client, arg: &str, req: &PageReq) -> Result<Page<Post>> {
-  c.require_login()?;
+pub async fn messages(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
   let peer = chat_id(arg)?;
   let limit = req.size_within(50);
   let last = req.cursor.clone().unwrap_or_else(|| "0".into());
@@ -88,8 +89,8 @@ pub async fn messages(c: &Client, arg: &str, req: &PageReq) -> Result<Page<Post>
     ("start_id", "0"),
     ("limit", limit_s.as_str()),
   ];
-  let data = c.get(HISTORY, &params).await?;
-  let name = names(c).remove(&peer);
+  let data = api.get(HISTORY, &params).await?;
+  let name = names(api).remove(&peer);
   let rows = data.list("out_message_list");
   let items: Vec<Post> = rows
     .iter()
@@ -102,38 +103,42 @@ pub async fn messages(c: &Client, arg: &str, req: &PageReq) -> Result<Page<Post>
   Ok(Page::new(items, next))
 }
 
-fn names(c: &Client) -> BTreeMap<String, String> {
-  c.ctx.store.cache_get(NAMES, NAMES_TTL).unwrap_or_default()
+fn names(api: &Api) -> BTreeMap<String, String> {
+  api
+    .ctx
+    .store
+    .cache_get(NAMES, NAMES_TTL)
+    .unwrap_or_default()
 }
 
-fn remember_names(c: &Client, chats: &[Collection]) {
-  let mut map = names(c);
+fn remember_names(api: &Api, chats: &[Collection]) {
+  let mut map = names(api);
   for chat in chats {
     map.insert(chat.id.clone(), chat.name.clone());
   }
-  c.ctx.store.cache_put(NAMES, &map);
+  api.ctx.store.cache_put(NAMES, &map);
 }
 
-fn message(m: &Value, peer: &str, peer_name: Option<&str>) -> Option<Post> {
-  let id = m.str("id")?;
-  let sender = m.str("sender_id").unwrap_or_default();
+fn message(item: &Value, peer: &str, peer_name: Option<&str>) -> Option<Post> {
+  let id = item.str("id")?;
+  let sender = item.str("sender_id").unwrap_or_default();
   // `content` is itself JSON: `{content, content_type, …}`.
-  let body: Value = m
+  let body: Value = item
     .str("content")
     .and_then(|s| serde_json::from_str(&s).ok())
     .unwrap_or(Value::Null);
   let content_type = body.i64("content_type");
   let text = match content_type {
-    Some(1) | None => body.str("content").or_else(|| m.str("content")),
+    Some(1) | None => body.str("content").or_else(|| item.str("content")),
     Some(t) => Some(
       body
         .str("content")
         .unwrap_or_else(|| format!("[message type {t}]")),
     ),
   };
-  let revoked = m.bool("revoked") == Some(true);
+  let revoked = item.bool("revoked") == Some(true);
   let mut post = Post {
-    id: format!("{peer}/{id}"),
+    id: chat::message_id(peer, &id),
     kind: if revoked { "revoked" } else { "message" }.into(),
     text,
     author: Some(User {
@@ -146,8 +151,8 @@ fn message(m: &Value, peer: &str, peer_name: Option<&str>) -> Option<Post> {
       id: sender,
       ..User::default()
     }),
-    created_at: m.i64("created_at").and_then(from_millis),
-    raw: Some(m.clone()),
+    created_at: item.i64("created_at").and_then(from_millis),
+    raw: Some(item.clone()),
     ..Post::default()
   };
   post.extra.insert("chat".into(), Value::from(peer));

@@ -5,7 +5,7 @@
 use social_core::text::from_millis;
 use social_core::{Action, Page, PageReq, Post, Result, Value, ValueExt, json};
 
-use crate::api::Client;
+use crate::api::Api;
 use crate::parse;
 use crate::refs::{self, SOURCE_FEED};
 
@@ -17,8 +17,8 @@ const COUNT: &str = "/api/sns/web/v2/note/browsing_history/count";
 const NOTES: &str = "note";
 
 /// One page; the cursor is `<cursor_score>|<note_index>`.
-pub async fn page(c: &Client, req: &PageReq) -> Result<Page<Post>> {
-  c.require_login()?;
+pub async fn page(api: &Api, req: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
   let cursor = req.cursor.as_deref().unwrap_or_default();
   let (score, index) = cursor.split_once('|').unwrap_or((cursor, "0"));
   let index: u64 = index.parse().unwrap_or(0);
@@ -29,10 +29,10 @@ pub async fn page(c: &Client, req: &PageReq) -> Result<Page<Post>> {
     ("note_index", index_s.as_str()),
     ("image_formats", "jpg,webp,avif"),
   ];
-  let data = c.get(LIST, &params).await?;
+  let data = api.get(LIST, &params).await?;
   let rows = data.list("data");
   refs::remember(
-    &c.ctx,
+    &api.ctx,
     rows
       .iter()
       .filter_map(|r| Some((r.str("id")?, r.str("xsec_token")?)))
@@ -75,26 +75,27 @@ fn entry(row: &Value) -> Option<Post> {
 }
 
 /// Remove notes from the history.
-pub async fn delete(c: &Client, notes: &[String]) -> Result<Action> {
-  c.require_login()?;
+pub async fn delete(api: &Api, notes: &[String]) -> Result<Action> {
+  api.require_login()?;
   let mut ids = Vec::new();
   for arg in notes {
-    ids.push(refs::note_ref(c, arg).await?.id);
+    ids.push(refs::note_ref(api, arg).await?.id);
   }
-  c.post(DELETE, &json!({"item_ids": ids, "type": NOTES}))
+  api
+    .post(DELETE, &json!({"item_ids": ids, "type": NOTES}))
     .await?;
   Ok(Action::done("history-delete", ids.join(",")))
 }
 
 /// Empty the history of notes.
-pub async fn clear(c: &Client) -> Result<Action> {
-  c.require_login()?;
-  c.post(CLEAR, &json!({"type": NOTES})).await?;
+pub async fn clear(api: &Api) -> Result<Action> {
+  api.require_login()?;
+  api.post(CLEAR, &json!({"type": NOTES})).await?;
   Ok(Action::done("history-clear", "browsing history"))
 }
 
 /// How many notes the history holds.
-pub async fn count(c: &Client) -> Result<Value> {
-  c.require_login()?;
-  c.get(COUNT, &[("content_type", NOTES)]).await
+pub async fn count(api: &Api) -> Result<Value> {
+  api.require_login()?;
+  api.get(COUNT, &[("content_type", NOTES)]).await
 }
