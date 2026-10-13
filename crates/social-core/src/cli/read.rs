@@ -51,7 +51,6 @@ pub enum ReadCommand {
     page: PageArgs,
   },
   /// Show one post
-  #[command(visible_alias = "show")]
   Read { post: String },
   /// Comments of a post
   #[command(after_long_help = EX_COMMENTS)]
@@ -98,7 +97,7 @@ pub enum ReadCommand {
   /// Show a user profile
   User { user: String },
   /// Posts of a user (yours when USER is omitted)
-  #[command(visible_alias = "posts", after_long_help = EX_USER_POSTS)]
+  #[command(after_long_help = EX_USER_POSTS)]
   UserPosts {
     user: Option<String>,
     #[command(flatten)]

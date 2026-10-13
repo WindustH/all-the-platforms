@@ -16,7 +16,6 @@ pub enum LibraryCommand {
     page: PageArgs,
   },
   /// Saved / bookmarked posts (yours when USER is omitted)
-  #[command(visible_alias = "bookmarks")]
   Favorites {
     user: Option<String>,
     /// Only this folder / collection id

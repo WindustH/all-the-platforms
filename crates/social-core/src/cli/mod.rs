@@ -96,6 +96,15 @@ fn with_choices(
   })
 }
 
+/// Shorter names of shared commands. A platform whose own commands use one
+/// of these names keeps it for its command, so the two never collide.
+const ALIASES: &[(&str, &str)] = &[
+  ("read", "show"),
+  ("user-posts", "posts"),
+  ("favorites", "bookmarks"),
+  ("post", "publish"),
+];
+
 /// The clap command of one platform: shared commands plus its extras.
 pub fn command<P: Platform>() -> clap::Command {
   let info = P::INFO;
@@ -113,6 +122,12 @@ pub fn command<P: Platform>() -> clap::Command {
       "Guide: `social guide {}` (references, login, analytics, limits); `social guide` for all topics.",
       info.id
     ));
+  let own = extra_names::<P>();
+  for (sub, alias) in ALIASES {
+    if !own.iter().any(|n| n == alias) {
+      cmd = cmd.mut_subcommand(sub, |c| c.visible_alias(*alias));
+    }
+  }
   let names: Vec<String> = cmd
     .get_subcommands()
     .map(|s| s.get_name().to_owned())
@@ -137,6 +152,17 @@ pub fn command<P: Platform>() -> clap::Command {
   cmd = with_choices(cmd, "feed", "kind", ch.feed_kind);
   cmd = with_choices(cmd, "comments", "sort", ch.comment_sort);
   with_choices(cmd, "notifications", "kind", ch.notification_kind)
+}
+
+/// Names and aliases of the platform-only commands.
+fn extra_names<P: Platform>() -> Vec<String> {
+  <P::Extra as Subcommand>::augment_subcommands(clap::Command::new(""))
+    .get_subcommands()
+    .flat_map(|s| {
+      let aliases = s.get_all_aliases().map(str::to_owned).collect::<Vec<_>>();
+      std::iter::once(s.get_name().to_owned()).chain(aliases)
+    })
+    .collect()
 }
 
 /// Names of the platform-only commands.

@@ -86,7 +86,7 @@ pub enum WriteCommand {
   /// Unfollow a user
   Unfollow { user: String },
   /// Publish a post
-  #[command(name = "post", visible_alias = "publish", after_long_help = EX_POST)]
+  #[command(name = "post", after_long_help = EX_POST)]
   Publish(PublishArgs),
   /// Delete one of your posts
   Delete {
