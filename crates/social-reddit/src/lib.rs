@@ -73,6 +73,7 @@ impl Platform for Reddit {
       Cap::Follow,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
@@ -133,6 +134,10 @@ impl Platform for Reddit {
 
   async fn feed(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
     posts::feed(&self.api, kind, page).await
+  }
+
+  async fn edit(&self, post: &str, text: &str) -> Result<Action> {
+    write::edit(&self.api, post, text).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {

@@ -48,12 +48,6 @@ pub enum Command {
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Replace the text of your post or comment (`t1_…` id or comment link)
-  Edit {
-    post: String,
-    /// New text (Markdown)
-    text: String,
-  },
   /// Mark every inbox item as read
   MarkRead,
 }
@@ -98,7 +92,6 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
           .await?,
       )
     }
-    C::Edit { post, text } => Data::Action(write::edit(api, &ctx.post_ref(&post)?, &text).await?),
     C::MarkRead => Data::Action(inbox::mark_read(api).await?),
   })
 }
