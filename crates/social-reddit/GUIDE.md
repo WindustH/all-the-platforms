@@ -38,5 +38,38 @@ Reddit refuses anonymous API requests from many networks; log in (or use
   a single URL as text makes a link post, `-i` images an image or gallery
   post, `--quote POST` a crosspost.
 - `downvote THING [--undo]`, `edit THING "text"`, `follow r/<sub>` or
-  `follow u/<user>`, `mark-read` (marks the whole inbox read).
-- `user-comments USER` lists a user's comments.
+  `follow u/<user>`, `block USER [--undo]`, `hide POST [--undo]`.
+- `mark-read` marks the whole inbox read; `mark-read ID… [--unread]` only
+  those items (`t1_…` / `t4_…` ids from `notifications`).
+- `user-comments USER` lists a user's comments; `trophies [USER]`;
+  `moderated [USER]` the subreddits they moderate.
+- Your other lists: `saved-comments`, `hidden`, `downvoted`.
+- Polls show their options, vote counts (when Reddit reveals them), total,
+  end time and your choice in `extra.poll`.
+
+## Communities
+
+- `rules SUB`, `mods SUB` (moderators and permissions), `wiki SUB` (page
+  list) and `wiki SUB PAGE` (one page as Markdown, `#N` after the list).
+- `search-in SUB QUERY [--sort …] [--time …]` searches one subreddit;
+  `domain github.com [--sort …]` lists posts linking a site.
+- Multireddits: `multis [USER]` (yours, or a user's public ones) and
+  `multi u/USER/m/NAME [--sort …]` (or `#N` after `multis`).
+- Flair: `flairs SUB` lists post flairs; `flair POST [TEXT] --template ID`
+  (or `--template '#N'`) sets your post's flair.
+
+## Managing posts
+
+- `flag THING nsfw|spoiler|replies|lock|sticky [--undo]`: NSFW, spoiler and
+  inbox replies are yours to set on your own posts; lock and sticky need a
+  moderator, as do `approve THING` and `remove THING [--spam]`.
+
+## Messages and live updates
+
+- `chats` lists your private-message threads, `messages THREAD` shows one,
+  `send u/USER "text"` starts a conversation (the first line is the
+  subject), `send r/SUB "text"` writes to its moderators, and `send THREAD
+  "text"` (or `--reply-to MESSAGE`) answers. Reddit's newer chat (the chat
+  icon) is a separate system without a public API, so it is not covered.
+- `listen [r/SUB|u/USER|inbox …]` polls about every 30 s and prints new
+  posts, comments or inbox items; with no argument it follows your inbox.
