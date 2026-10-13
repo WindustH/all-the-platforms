@@ -92,29 +92,30 @@ pub const NOTE: &[Metric] = &[
 
 /// A number in our unit; `None` when missing or negative ("not available").
 fn number(v: &Value, unit: Unit) -> Option<Value> {
-  let n = match v {
-    Value::Number(n) => n.as_f64()?,
-    Value::String(s) => {
-      let s = s.trim().trim_end_matches('%');
-      s.parse()
+  let amount = match v {
+    Value::Number(amount) => amount.as_f64()?,
+    Value::String(text) => {
+      let text = text.trim().trim_end_matches('%');
+      text
+        .parse()
         .ok()
-        .or_else(|| parse_count(s).map(|c| c as f64))?
+        .or_else(|| parse_count(text).map(|c| c as f64))?
     }
     _ => return None,
   };
-  if n < 0.0 || !n.is_finite() {
+  if amount < 0.0 || !amount.is_finite() {
     return None;
   }
   Some(match unit {
-    Percent => json!(round(n / 100.0)),
-    Fraction => json!(round(n)),
-    Count | Seconds if n.fract() == 0.0 => json!(n as u64),
-    Count | Seconds => json!(round(n)),
+    Percent => json!(round(amount / 100.0)),
+    Fraction => json!(round(amount)),
+    Count | Seconds if amount.fract() == 0.0 => json!(amount as u64),
+    Count | Seconds => json!(round(amount)),
   })
 }
 
-fn round(x: f64) -> f64 {
-  (x * 1e6).round() / 1e6
+fn round(value: f64) -> f64 {
+  (value * 1e6).round() / 1e6
 }
 
 /// Headline numbers of `block`; a metric already set is kept.
@@ -157,8 +158,8 @@ pub fn series(ins: &mut Insights, block: &Value, metrics: &[Metric], since: Opti
 }
 
 /// The Beijing-time day (`YYYY-MM-DD`) of a Unix time in seconds or milliseconds.
-pub fn day(t: i64) -> Option<String> {
-  let ms = from_unix(t)?.as_millisecond() + 8 * 3_600_000;
+pub fn day(millis: i64) -> Option<String> {
+  let ms = from_unix(millis)?.as_millisecond() + 8 * 3_600_000;
   Some(from_millis(ms)?.to_string().get(..10)?.to_owned())
 }
 
@@ -267,19 +268,19 @@ pub fn note_row(v: &Value) -> Option<Post> {
     raw: Some(v.clone()),
     ..Post::default()
   };
-  let m = &mut post.metrics;
-  m.views = v.u64("read_count");
-  m.likes = v.u64("like_count");
-  m.comments = v.u64("comment_count");
-  m.favorites = v.u64("fav_count");
-  m.shares = v.u64("share_count");
+  let metrics = &mut post.metrics;
+  metrics.views = v.u64("read_count");
+  metrics.likes = v.u64("like_count");
+  metrics.comments = v.u64("comment_count");
+  metrics.favorites = v.u64("fav_count");
+  metrics.shares = v.u64("share_count");
   for (key, name) in [
     ("imp_count", "impressions"),
     ("increase_fans_count", "new_followers"),
     ("danmaku_count", "danmaku"),
   ] {
     if let Some(n) = v.u64(key) {
-      m.other.insert(name.into(), n);
+      metrics.other.insert(name.into(), n);
     }
   }
   let rates = [

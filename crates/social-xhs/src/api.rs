@@ -31,14 +31,14 @@ enum Body<'a> {
   Json(String),
 }
 
-pub struct Client {
+pub struct Api {
   pub ctx: Ctx,
   session: RefCell<SignSession>,
   /// Consecutive captcha responses, for the cooldown.
   verify_count: Cell<u32>,
 }
 
-impl Client {
+impl Api {
   pub fn new(ctx: Ctx) -> Self {
     Self {
       ctx,
@@ -100,8 +100,8 @@ impl Client {
       now,
     );
     if RAP_PATHS.contains(&path) {
-      let api = format!("//edith.xiaohongshu.com{path}");
-      signed.push(("x-rap-param", sign::x_rap_param(&api, &rap_data, now)));
+      let rap_url = format!("//edith.xiaohongshu.com{path}");
+      signed.push(("x-rap-param", sign::x_rap_param(&rap_url, &rap_data, now)));
     }
     let url = format!("{EDITH}{target}");
     let mut req = match body {
@@ -211,16 +211,25 @@ impl Client {
     }
   }
 
+  /// A short random pause before a write: bursts get flagged.
+  pub async fn write_pause(&self) {
+    self
+      .ctx
+      .http
+      .pause(Duration::from_millis(800), Duration::from_millis(2000))
+      .await;
+  }
+
   // ── responses ────────────────────────────────────────────────────────
 
   async fn finish(&self, resp: Resp) -> Result<Value> {
     let status = resp.status.as_u16();
     if matches!(status, 461 | 471) {
-      let n = self.verify_count.get() + 1;
-      self.verify_count.set(n);
+      let count = self.verify_count.get() + 1;
+      self.verify_count.set(count);
       // Same cooldown as the reference client: 5 s, doubling, capped at 30 s.
-      let cooldown = (5u64 << (n - 1).min(3)).min(30);
-      tracing::warn!("captcha triggered (count {n}), cooling down {cooldown} s");
+      let cooldown = (5u64 << (count - 1).min(3)).min(30);
+      tracing::warn!("captcha triggered (count {count}), cooling down {cooldown} s");
       tokio::time::sleep(Duration::from_secs(cooldown)).await;
       let kind = resp.header("verifytype").unwrap_or("unknown");
       let uuid = resp.header("verifyuuid").unwrap_or("unknown");

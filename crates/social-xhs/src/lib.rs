@@ -1,30 +1,31 @@
 //! Xiaohongshu / RedNote for social-cli.
 //!
 //! - [`api`]: signed transport and error mapping; [`sign`]: x-s / x-s-common / XYW.
-//! - [`refs`]: note and user references; [`parse`]: JSON → models; [`page`]: note pages.
-//! - Endpoints by domain: [`discover`], [`notes`], [`people`], [`inbox`], [`write`],
-//!   [`history`], [`boards`], [`chat`] (private messages, read-only), [`creator`],
-//!   [`insights`] (with [`stats`]), [`login`]; platform-only commands in [`extra`].
+//! - [`refs`]: note and user references; [`parse`]: JSON → models; [`pages`]: note pages.
+//! - Endpoints by subject: [`search`], [`feeds`], [`notes`] (reading, publishing),
+//!   [`uploads`], [`users`], [`notifications`], [`interactions`], [`history`],
+//!   [`boards`], [`messages`] (private messages, read-only), [`events`] (activity
+//!   center), [`insights`], [`login`]; platform-only commands in [`extra`].
 
 mod api;
 mod boards;
-mod chat;
-mod creator;
-mod discover;
 mod events;
 mod extra;
+mod feeds;
 mod history;
-mod inbox;
 mod insights;
+mod interactions;
 mod login;
+mod messages;
 mod notes;
-mod page;
+mod notifications;
+mod pages;
 mod parse;
-mod people;
 mod refs;
+mod search;
 mod sign;
-mod stats;
-mod write;
+mod uploads;
+mod users;
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -35,10 +36,10 @@ use social_core::{
   PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
-use api::Client;
+use api::Api;
 
 pub struct Xhs {
-  client: Client,
+  api: Api,
   qr_errors: Cell<u32>,
 }
 
@@ -84,70 +85,70 @@ impl Platform for Xhs {
       Cap::Messages,
     ],
     choices: Choices {
-      search_sort: discover::SEARCH_SORTS,
-      search_filter: discover::SEARCH_FILTERS,
-      hot_category: discover::HOT_CATEGORIES,
-      feed_kind: discover::FEED_KINDS,
+      search_sort: search::SEARCH_SORTS,
+      search_filter: search::SEARCH_FILTERS,
+      hot_category: feeds::HOT_CATEGORIES,
+      feed_kind: feeds::FEED_KINDS,
       comment_sort: &[],
-      notification_kind: inbox::KINDS,
+      notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_secs(1),
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = extra::XhsCommand;
+  type Extra = extra::Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self {
-      client: Client::new(ctx),
+      api: Api::new(ctx),
       qr_errors: Cell::new(0),
     })
   }
 
   fn ctx(&self) -> &Ctx {
-    &self.client.ctx
+    &self.api.ctx
   }
 
   async fn whoami(&self) -> Result<User> {
-    people::whoami(&self.client).await
+    users::whoami(&self.api).await
   }
 
   async fn prepare_login(&self) -> Result<()> {
-    login::prepare(&self.client);
+    login::prepare(&self.api);
     Ok(())
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {
     self.qr_errors.set(0);
-    login::qr_start(&self.client).await
+    login::qr_start(&self.api).await
   }
 
   async fn qr_poll(&self, ticket: &QrTicket) -> Result<QrStatus> {
-    login::qr_poll(&self.client, ticket, &self.qr_errors).await
+    login::qr_poll(&self.api, ticket, &self.qr_errors).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    discover::search(&self.client, query, page).await
+    search::search(&self.api, query, page).await
   }
 
   async fn search_users(&self, query: &Query, page: &PageReq) -> Result<Page<User>> {
-    creator::search_users(&self.client, query, page).await
+    search::search_users(&self.api, query, page).await
   }
 
   async fn search_topics(&self, query: &Query, page: &PageReq) -> Result<Page<Collection>> {
-    creator::search_topics(&self.client, query, page).await
+    search::search_topics(&self.api, query, page).await
   }
 
   async fn hot(&self, category: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    discover::hot(&self.client, category, page).await
+    feeds::hot(&self.api, category, page).await
   }
 
   async fn feed(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    discover::feed(&self.client, kind, page).await
+    feeds::feed(&self.api, kind, page).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    notes::read(&self.client, post).await
+    notes::read(&self.api, post).await
   }
 
   async fn comments(
@@ -156,27 +157,27 @@ impl Platform for Xhs {
     _sort: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Comment>> {
-    notes::comments(&self.client, post, page).await
+    notes::comments(&self.api, post, page).await
   }
 
   async fn replies(&self, post: &str, comment: &str, page: &PageReq) -> Result<Page<Comment>> {
-    notes::replies(&self.client, post, comment, page).await
+    notes::replies(&self.api, post, comment, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    people::user(&self.client, user).await
+    users::user(&self.api, user).await
   }
 
   async fn user_posts(&self, user: &str, page: &PageReq) -> Result<Page<Post>> {
-    people::user_posts(&self.client, user, page).await
+    users::user_posts(&self.api, user, page).await
   }
 
   async fn following(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    people::following(&self.client, user, page).await
+    users::following(&self.api, user, page).await
   }
 
   async fn collections(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
-    boards::list(&self.client, user, page).await
+    boards::list(&self.api, user, page).await
   }
 
   async fn favorites(
@@ -186,59 +187,59 @@ impl Platform for Xhs {
     page: &PageReq,
   ) -> Result<Page<Post>> {
     match folder {
-      Some(board) => boards::notes(&self.client, board, page).await,
-      None => people::favorites(&self.client, user, page).await,
+      Some(board) => boards::notes(&self.api, board, page).await,
+      None => users::favorites(&self.api, user, page).await,
     }
   }
 
   async fn history(&self, page: &PageReq) -> Result<Page<Post>> {
-    history::page(&self.client, page).await
+    history::page(&self.api, page).await
   }
 
   async fn likes(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    people::likes(&self.client, user, page).await
+    users::likes(&self.api, user, page).await
   }
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    inbox::notifications(&self.client, kind, page).await
+    notifications::notifications(&self.api, kind, page).await
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    inbox::unread(&self.client).await
+    notifications::unread(&self.api).await
   }
 
   async fn like(&self, post: &str, undo: bool) -> Result<Action> {
-    write::like(&self.client, post, undo).await
+    interactions::like(&self.api, post, undo).await
   }
 
   async fn favorite(&self, post: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
-    write::favorite(&self.client, post, folder, undo).await
+    interactions::favorite(&self.api, post, folder, undo).await
   }
 
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
-    write::comment(&self.client, post, reply).await
+    interactions::comment(&self.api, post, reply).await
   }
 
   async fn delete_comment(&self, post: &str, comment: &str) -> Result<Action> {
-    write::delete_comment(&self.client, post, comment).await
+    interactions::delete_comment(&self.api, post, comment).await
   }
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
-    write::follow(&self.client, user, undo).await
+    interactions::follow(&self.api, user, undo).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {
-    creator::publish(&self.client, draft).await
+    notes::publish(&self.api, draft).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
-    creator::delete(&self.client, post).await
+    notes::delete(&self.api, post).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
     match post {
-      None => insights::account(&self.client, days).await,
-      Some(post) => insights::note(&self.client, post, days).await,
+      None => insights::account(&self.api, days).await,
+      Some(post) => insights::note(&self.api, post, days).await,
     }
   }
 
@@ -246,14 +247,14 @@ impl Platform for Xhs {
     if parent.is_some() {
       return Err(social_core::Error::unsupported("chats PARENT"));
     }
-    chat::chats(&self.client, page).await
+    messages::chats(&self.api, page).await
   }
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
-    chat::messages(&self.client, chat, page).await
+    messages::messages(&self.api, chat, page).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {
-    extra::run(&self.client, command).await
+    extra::run(&self.api, command).await
   }
 }

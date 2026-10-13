@@ -29,7 +29,7 @@ const LOGIN_WORDS: &[&str] = &["请先登录", "请登录", "登录后", "用户
 const CAPTCHA_WORDS: &[&str] = &["验证码", "安全验证", "身份验证", "geetest", "滑块"];
 const BUSY_WORDS: &[&str] = &["频繁", "稍后再试", "操作过快"];
 
-pub struct Client {
+pub struct Api {
   pub ctx: Ctx,
   visitor: RefCell<Option<String>>,
 }
@@ -40,7 +40,7 @@ enum Site {
   Mobile,
 }
 
-impl Client {
+impl Api {
   pub fn new(ctx: Ctx) -> Self {
     Self {
       ctx,
@@ -289,7 +289,7 @@ impl Client {
   }
 }
 
-fn classify(c: &Client, message: &str, session: bool) -> Error {
+fn classify(api: &Api, message: &str, session: bool) -> Error {
   let message = if message.is_empty() {
     "Weibo refused the request".to_owned()
   } else {
@@ -297,9 +297,9 @@ fn classify(c: &Client, message: &str, session: bool) -> Error {
   };
   if LOGIN_WORDS.iter().any(|w| message.contains(w)) {
     return if session {
-      expired(c)
+      expired(api)
     } else {
-      needs_login(c, "this")
+      needs_login(api, "this")
     };
   }
   if CAPTCHA_WORDS.iter().any(|w| message.contains(w)) {
@@ -319,13 +319,13 @@ fn classify(c: &Client, message: &str, session: bool) -> Error {
   Error::upstream(message)
 }
 
-fn needs_login(c: &Client, what: &str) -> Error {
+fn needs_login(api: &Api, what: &str) -> Error {
   Error::auth(format!("Weibo shows {what} to logged-in accounts only"))
-    .with_hint(c.ctx.login_hint())
+    .with_hint(api.ctx.login_hint())
 }
 
-fn expired(c: &Client) -> Error {
-  Error::auth("the Weibo session has expired or was refused").with_hint(c.ctx.login_hint())
+fn expired(api: &Api) -> Error {
+  Error::auth("the Weibo session has expired or was refused").with_hint(api.ctx.login_hint())
 }
 
 /// A visitor request that may succeed with a new visitor cookie.
@@ -339,12 +339,12 @@ impl Retry {
   }
 
   /// A retry that did not help: Weibo wants a login.
-  fn finish(e: Error) -> Error {
-    if e.code == Self::CODE {
+  fn finish(error: Error) -> Error {
+    if error.code == Self::CODE {
       Error::auth("Weibo shows this to logged-in accounts only")
         .with_hint("log in with `social weibo login` (QR code), `--browser` or `--cookie '...'`")
     } else {
-      e
+      error
     }
   }
 }

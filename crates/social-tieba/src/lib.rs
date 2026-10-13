@@ -4,19 +4,24 @@
 //!   logged-in account; [`refs`]: thread, user, forum and topic references;
 //!   [`login`]: QR login through Baidu passport.
 //! - [`parse`]: JSON → models (threads are posts, floors comments).
-//! - By domain: [`forum`] (forums, hot topics, search), [`thread`],
-//!   [`people`], [`inbox`], [`write`]; platform-only commands in [`extra`].
+//! - By subject: [`forums`] (threads of a forum, details, follows, sign-in),
+//!   [`threads`] (reading, posting, deleting), [`topics`], [`search`],
+//!   [`interactions`], [`uploads`], [`users`], [`notifications`];
+//!   platform-only commands in [`extra`].
 
 mod api;
 mod extra;
-mod forum;
-mod inbox;
+mod forums;
+mod interactions;
 mod login;
+mod notifications;
 mod parse;
-mod people;
 mod refs;
-mod thread;
-mod write;
+mod search;
+mod threads;
+mod topics;
+mod uploads;
+mod users;
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -26,10 +31,10 @@ use social_core::{
   Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
-use api::Client;
+use api::Api;
 
 pub struct Tieba {
-  client: Client,
+  api: Api,
 }
 
 impl Platform for Tieba {
@@ -69,12 +74,12 @@ impl Platform for Tieba {
       Cap::Download,
     ],
     choices: Choices {
-      search_sort: forum::SEARCH_SORTS,
-      search_filter: forum::SEARCH_FILTERS,
+      search_sort: search::SEARCH_SORTS,
+      search_filter: search::SEARCH_FILTERS,
       hot_category: &[],
       feed_kind: &[],
-      comment_sort: thread::COMMENT_SORTS,
-      notification_kind: inbox::KINDS,
+      comment_sort: threads::COMMENT_SORTS,
+      notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_secs(1),
     guide: include_str!("../GUIDE.md"),
@@ -83,41 +88,39 @@ impl Platform for Tieba {
   type Extra = extra::Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
-    Ok(Self {
-      client: Client::new(ctx),
-    })
+    Ok(Self { api: Api::new(ctx) })
   }
 
   fn ctx(&self) -> &Ctx {
-    &self.client.ctx
+    &self.api.ctx
   }
 
   async fn whoami(&self) -> Result<User> {
-    people::whoami(&self.client).await
+    users::whoami(&self.api).await
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {
-    login::qr_start(&self.client).await
+    login::qr_start(&self.api).await
   }
 
   async fn qr_poll(&self, ticket: &QrTicket) -> Result<QrStatus> {
-    login::qr_poll(&self.client, ticket).await
+    login::qr_poll(&self.api, ticket).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    forum::search(&self.client, query, None, page).await
+    search::search(&self.api, query, None, page).await
   }
 
   async fn search_users(&self, query: &Query, _page: &PageReq) -> Result<Page<User>> {
-    forum::search_users(&self.client, query).await
+    search::search_users(&self.api, query).await
   }
 
   async fn search_topics(&self, query: &Query, _page: &PageReq) -> Result<Page<Collection>> {
-    forum::search_forums(&self.client, query).await
+    search::search_forums(&self.api, query).await
   }
 
   async fn hot(&self, _category: Option<&str>, _page: &PageReq) -> Result<Page<Post>> {
-    forum::hot(&self.client).await
+    topics::hot(&self.api).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
@@ -127,7 +130,7 @@ impl Platform for Tieba {
           .with_hint("list its threads with `social tieba topic TOPIC`"),
       );
     }
-    thread::read(&self.client, post).await
+    threads::read(&self.api, post).await
   }
 
   async fn comments(
@@ -136,31 +139,31 @@ impl Platform for Tieba {
     sort: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Comment>> {
-    thread::comments(&self.client, post, sort, page).await
+    threads::comments(&self.api, post, sort, page).await
   }
 
   async fn replies(&self, post: &str, comment: &str, page: &PageReq) -> Result<Page<Comment>> {
-    thread::replies(&self.client, post, comment, page).await
+    threads::replies(&self.api, post, comment, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    people::user(&self.client, user).await
+    users::user(&self.api, user).await
   }
 
   async fn user_posts(&self, user: &str, page: &PageReq) -> Result<Page<Post>> {
-    people::posts(&self.client, user, true, page).await
+    users::posts(&self.api, user, true, page).await
   }
 
   async fn followers(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    people::people(&self.client, user, true, page).await
+    users::relations(&self.api, user, true, page).await
   }
 
   async fn following(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    people::people(&self.client, user, false, page).await
+    users::relations(&self.api, user, false, page).await
   }
 
   async fn collections(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
-    people::forums(&self.client, user, page).await
+    users::forums(&self.api, user, page).await
   }
 
   async fn favorites(
@@ -174,46 +177,46 @@ impl Platform for Tieba {
         Error::unsupported("favorites USER").with_hint("only your own saved threads are listed"),
       );
     }
-    inbox::favorites(&self.client, page).await
+    notifications::favorites(&self.api, page).await
   }
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    inbox::notifications(&self.client, kind, page).await
+    notifications::notifications(&self.api, kind, page).await
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    inbox::unread(&self.client).await
+    notifications::unread(&self.api).await
   }
 
   async fn like(&self, post: &str, undo: bool) -> Result<Action> {
-    write::like(&self.client, post, undo).await
+    interactions::like(&self.api, post, undo).await
   }
 
   async fn favorite(&self, post: &str, _folder: Option<&str>, undo: bool) -> Result<Action> {
-    write::favorite(&self.client, post, undo).await
+    interactions::favorite(&self.api, post, undo).await
   }
 
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
-    write::comment(&self.client, post, reply).await
+    interactions::comment(&self.api, post, reply).await
   }
 
   async fn delete_comment(&self, post: &str, comment: &str) -> Result<Action> {
-    write::delete_comment(&self.client, post, comment).await
+    interactions::delete_comment(&self.api, post, comment).await
   }
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
-    write::follow(&self.client, user, undo).await
+    interactions::follow(&self.api, user, undo).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {
-    write::publish(&self.client, draft).await
+    threads::publish(&self.api, draft).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
-    write::delete(&self.client, post).await
+    threads::delete(&self.api, post).await
   }
 
   async fn run_extra(&self, command: extra::Command) -> Result<Data> {
-    extra::run(&self.client, command).await
+    extra::run(&self.api, command).await
   }
 }

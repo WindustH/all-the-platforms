@@ -36,14 +36,14 @@ pub fn avatar_url(portrait: &str) -> String {
 }
 
 /// `tb.1.xxx` out of a bare portrait, a `?t=` stamped one or an avatar URL.
-pub fn clean_portrait(s: &str) -> String {
-  let last = s.rsplit('/').next().unwrap_or(s);
+pub fn clean_portrait(text: &str) -> String {
+  let last = text.rsplit('/').next().unwrap_or(text);
   let bare = last.split(['?', '&', '#']).next().unwrap_or(last);
   bare.trim_end_matches(".jpg").to_owned()
 }
 
-fn is_id(s: &str) -> bool {
-  (4..=20).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_digit())
+fn is_id(text: &str) -> bool {
+  (4..=20).contains(&text.len()) && text.bytes().all(|b| b.is_ascii_digit())
 }
 
 /// A Baidu URL, also without its scheme.
@@ -138,13 +138,13 @@ pub fn user(arg: &str) -> Result<UserRef> {
   })
 }
 
-fn classify(s: &str) -> UserRef {
-  if s.bytes().all(|b| b.is_ascii_digit()) {
-    UserRef::Uid(s.to_owned())
-  } else if s.starts_with("tb.") {
-    UserRef::Portrait(clean_portrait(s))
+fn classify(text: &str) -> UserRef {
+  if text.bytes().all(|b| b.is_ascii_digit()) {
+    UserRef::Uid(text.to_owned())
+  } else if text.starts_with("tb.") {
+    UserRef::Portrait(clean_portrait(text))
   } else {
-    UserRef::Name(s.to_owned())
+    UserRef::Name(text.to_owned())
   }
 }
 

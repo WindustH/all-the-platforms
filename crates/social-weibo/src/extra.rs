@@ -4,8 +4,8 @@
 use social_core::cli::{PageArgs, read_text};
 use social_core::{Collection, Data, Page, PageReq, Post, Result, ValueExt};
 
-use crate::api::Client;
-use crate::{discover, people, write};
+use crate::api::Api;
+use crate::{feeds, posts, search, users};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -44,8 +44,8 @@ Examples:
   social weibo repost '#3'
   social weibo repost https://weibo.com/2761630725/RmbnfkgUR '说得好' --comment";
 
-pub async fn run(c: &Client, command: Command) -> Result<Data> {
-  let ctx = &c.ctx;
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
+  let ctx = &api.ctx;
   Ok(match command {
     Command::Repost {
       post,
@@ -53,29 +53,29 @@ pub async fn run(c: &Client, command: Command) -> Result<Data> {
       comment,
     } => {
       let text = read_text(text)?;
-      Data::Action(write::repost(c, &ctx.post_ref(&post)?, &text, comment).await?)
+      Data::Action(posts::repost(api, &ctx.post_ref(&post)?, &text, comment).await?)
     }
     Command::Topic { name, page } => Data::Posts(
       page
-        .collect_dated(async |r| discover::topic(c, &name, &r).await)
+        .collect_dated(async |r| search::topic(api, &name, &r).await)
         .await?,
     ),
-    Command::Folders => Data::Collections(people::folders(c).await?),
-    Command::Groups => Data::Collections(groups(c).await?),
+    Command::Folders => Data::Collections(users::folders(api).await?),
+    Command::Groups => Data::Collections(groups(api).await?),
     Command::Group { gid, page } => {
       let gid = ctx.collection_ref(&gid)?;
       Data::Posts(
         page
-          .collect_dated(async |r| group(c, &gid, &r).await)
+          .collect_dated(async |r| group(api, &gid, &r).await)
           .await?,
       )
     }
   })
 }
 
-async fn groups(c: &Client) -> Result<Page<Collection>> {
-  c.require_login()?;
-  let v = c
+async fn groups(api: &Api) -> Result<Page<Collection>> {
+  api.require_login()?;
+  let v = api
     .get(
       "/ajax/feed/allGroups",
       &[("is_new_segment", "1"), ("fetch_hot", "1")],
@@ -104,11 +104,11 @@ async fn groups(c: &Client) -> Result<Page<Collection>> {
   Ok(Page::last(items))
 }
 
-async fn group(c: &Client, gid: &str, page: &PageReq) -> Result<Page<Post>> {
-  c.require_login()?;
+async fn group(api: &Api, gid: &str, page: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
   let max_id = page.cursor.clone().unwrap_or_default();
   let count = page.size_within(20).to_string();
-  let v = c
+  let v = api
     .get(
       "/ajax/feed/groupstimeline",
       &[
@@ -120,5 +120,5 @@ async fn group(c: &Client, gid: &str, page: &PageReq) -> Result<Page<Post>> {
       ],
     )
     .await?;
-  Ok(discover::timeline(&v))
+  Ok(feeds::timeline(&v))
 }

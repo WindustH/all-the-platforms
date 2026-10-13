@@ -10,19 +10,19 @@
 use social_core::text::{from_millis, html_to_text};
 use social_core::{Action, Collection, Draft, Error, Page, Result, Value, ValueExt, json};
 
-use crate::api::Client;
-use crate::creator;
+use crate::api::Api;
+use crate::notes;
 
 const LIST: &str = "/api/galaxy/v2/creator/activity_center/list";
 const KEEP: &str = "/api/galaxy/v2/creator/activity_favor";
 
 /// The activity list: all (`type=1`) or the kept ones (`type=2`), in the
 /// center's order (`sort=1`) or latest first (`sort=2`).
-pub async fn list(c: &Client, kept: bool, latest: bool) -> Result<Vec<Value>> {
-  c.require_login()?;
+pub async fn list(api: &Api, kept: bool, latest: bool) -> Result<Vec<Value>> {
+  api.require_login()?;
   let kind = if kept { "2" } else { "1" };
   let sort = if kept || latest { "2" } else { "1" };
-  let data = c
+  let data = api
     .creator_get(
       LIST,
       &[
@@ -56,8 +56,8 @@ pub fn matching(rows: Vec<Value>, keyword: Option<&str>) -> Vec<Value> {
 
 /// One activity by `#N` of the last list, its numeric activity id, its page
 /// id, a detail link, or its exact name.
-pub async fn find(c: &Client, arg: &str) -> Result<Value> {
-  let arg = c.ctx.collection_ref(arg)?;
+pub async fn find(api: &Api, arg: &str) -> Result<Value> {
+  let arg = api.ctx.collection_ref(arg)?;
   let arg = arg.as_str();
   let page_id = arg
     .split(['?', '#'])
@@ -70,7 +70,7 @@ pub async fn find(c: &Client, arg: &str) -> Result<Value> {
       || a.str("activity_name").as_deref() == Some(arg)
   };
   for kept in [false, true] {
-    if let Some(a) = list(c, kept, false).await?.into_iter().find(hit) {
+    if let Some(a) = list(api, kept, false).await?.into_iter().find(hit) {
       return Ok(a);
     }
   }
@@ -80,43 +80,48 @@ pub async fn find(c: &Client, arg: &str) -> Result<Value> {
 }
 
 /// An activity as a collection: its topics are what notes join it with.
-pub fn collection(a: &Value) -> Collection {
-  let mut c = Collection {
-    id: a.str("activity_id").unwrap_or_default(),
+pub fn collection(activity: &Value) -> Collection {
+  let mut event = Collection {
+    id: activity.str("activity_id").unwrap_or_default(),
     kind: "event".into(),
-    name: a.str("activity_name").unwrap_or_default(),
-    description: a.str("activity_reward").map(|r| html_to_text(&r)),
-    url: a.str("activity_link"),
-    raw: Some(a.clone()),
+    name: activity.str("activity_name").unwrap_or_default(),
+    description: activity.str("activity_reward").map(|r| html_to_text(&r)),
+    url: activity.str("activity_link"),
+    raw: Some(activity.clone()),
     ..Collection::default()
   };
-  let topics: Vec<String> = a
+  let topics: Vec<String> = activity
     .list("topic_infos")
     .iter()
     .filter_map(|t| t.str("name"))
     .collect();
-  let time = |k: &str| a.i64(k).and_then(from_millis).map(|t| json!(t.to_string()));
+  let time = |k: &str| {
+    activity
+      .i64(k)
+      .and_then(from_millis)
+      .map(|t| json!(t.to_string()))
+  };
   for (key, value) in [
-    ("page_id", a.str("page_id").map(Value::from)),
+    ("page_id", activity.str("page_id").map(Value::from)),
     ("start", time("start_time")),
     ("end", time("end_time")),
     ("topics", Some(json!(topics))),
-    ("status", a.i64("activity_status").map(Value::from)),
-    ("kept", Some(json!(a.i64("focus_status") == Some(1)))),
-    ("post_link", a.str("pc_post_link").map(Value::from)),
+    ("status", activity.i64("activity_status").map(Value::from)),
+    ("kept", Some(json!(activity.i64("focus_status") == Some(1)))),
+    ("post_link", activity.str("pc_post_link").map(Value::from)),
   ] {
     if let Some(v) = value {
-      c.extra.insert(key.into(), v);
+      event.extra.insert(key.into(), v);
     }
   }
-  c
+  event
 }
 
 /// One activity with every field shown (a table would hide the period).
-pub fn detail(a: &Value) -> Value {
-  let mut c = collection(a);
-  c.raw = None;
-  json!(c)
+pub fn detail(activity: &Value) -> Value {
+  let mut event = collection(activity);
+  event.raw = None;
+  json!(event)
 }
 
 pub fn page(rows: &[Value]) -> Page<Collection> {
@@ -124,22 +129,22 @@ pub fn page(rows: &[Value]) -> Page<Collection> {
 }
 
 /// Keep (收藏) an activity, or drop it with `undo`.
-pub async fn keep(c: &Client, arg: &str, undo: bool) -> Result<Action> {
-  let a = find(c, arg).await?;
-  let page_id = a
+pub async fn keep(api: &Api, arg: &str, undo: bool) -> Result<Action> {
+  let activity = find(api, arg).await?;
+  let page_id = activity
     .str("page_id")
     .ok_or_else(|| Error::upstream("the activity has no page id"))?;
   let body = json!({ "type": if undo { "2" } else { "1" }, "target_id": page_id });
-  c.creator_post(KEEP, &body).await?;
-  let name = a.str("activity_name").unwrap_or_default();
+  api.creator_post(KEEP, &body).await?;
+  let name = activity.str("activity_name").unwrap_or_default();
   Ok(Action::done(if undo { "unkeep" } else { "keep" }, name).with_id(page_id))
 }
 
 /// Publish a note that joins an activity.
-pub async fn join(c: &Client, arg: &str, draft: &Draft) -> Result<Action> {
-  let a = find(c, arg).await?;
-  let event = association(&a)?;
-  let action = creator::publish_note(c, draft, Some(&event)).await?;
+pub async fn join(api: &Api, arg: &str, draft: &Draft) -> Result<Action> {
+  let activity = find(api, arg).await?;
+  let event = association(&activity)?;
+  let action = notes::publish_note(api, draft, Some(&event)).await?;
   Ok(action.with_message(format!("joined {}", event.name)))
 }
 
@@ -161,16 +166,16 @@ impl Association {
   }
 }
 
-fn association(a: &Value) -> Result<Association> {
-  let id = a
+fn association(activity: &Value) -> Result<Association> {
+  let id = activity
     .str("activity_id")
     .ok_or_else(|| Error::upstream("the activity has no id"))?;
-  let name = a.str("activity_name").unwrap_or_default();
+  let name = activity.str("activity_name").unwrap_or_default();
   let info = json!({
     "id": id,
     "name": name,
-    "start_time": a.i64("start_time"),
-    "end_time": a.i64("end_time"),
+    "start_time": activity.i64("start_time"),
+    "end_time": activity.i64("end_time"),
   });
   let relation = json!({
     "type": "ACTIVITY_COMPONENT",
@@ -180,7 +185,7 @@ fn association(a: &Value) -> Result<Association> {
       "extraInfo": info.to_string(),
     }],
   });
-  let topics = a
+  let topics = activity
     .list("topic_infos")
     .iter()
     .filter(|t| t.str("id").is_some() && t.str("name").is_some())

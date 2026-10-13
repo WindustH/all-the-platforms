@@ -5,18 +5,18 @@ use std::collections::BTreeMap;
 
 use social_core::{Error, Notification, Page, PageReq, Post, Result, ValueExt};
 
-use crate::api::{Client, LEGACY, Params};
+use crate::api::{Api, LEGACY, Params};
 use crate::parse;
 
 /// `notifications --type` values: replies to you, @ mentions, agrees.
 pub const KINDS: &[&str] = &["reply", "at", "agree"];
 
 pub async fn notifications(
-  c: &Client,
+  api: &Api,
   kind: Option<&str>,
   req: &PageReq,
 ) -> Result<Page<Notification>> {
-  c.require_login()?;
+  api.require_login()?;
   let kind = kind.unwrap_or("reply");
   let path = match kind {
     "reply" => "/c/u/feed/replyme",
@@ -30,7 +30,7 @@ pub async fn notifications(
     }
   };
   let pn = req.number_or(1);
-  let v = c
+  let v = api
     .call_as(path, vec![("pn", pn.to_string())], LEGACY)
     .await?;
   let list = ["reply_list", "at_list", "agree_list", "list"]
@@ -44,12 +44,12 @@ pub async fn notifications(
 }
 
 /// Unread counters: replies, @ mentions, agrees, new fans, saved-thread updates.
-pub async fn unread(c: &Client) -> Result<BTreeMap<String, u64>> {
-  c.require_login()?;
-  let v = c
+pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
+  api.require_login()?;
+  let v = api
     .call_as("/c/s/msg", vec![("bookmark", "1".into())], LEGACY)
     .await?;
-  let m = v.at("message");
+  let message = v.at("message");
   let mut out = BTreeMap::new();
   for (key, name) in [
     ("replyme", "reply"),
@@ -59,7 +59,7 @@ pub async fn unread(c: &Client) -> Result<BTreeMap<String, u64>> {
     ("storethread", "favorites"),
     ("recycle", "recycle"),
   ] {
-    if let Some(n) = m.u64(key) {
+    if let Some(n) = message.u64(key) {
       out.insert(name.to_owned(), n);
     }
   }
@@ -67,17 +67,17 @@ pub async fn unread(c: &Client) -> Result<BTreeMap<String, u64>> {
 }
 
 /// One page of your saved threads (收藏).
-pub async fn favorites(c: &Client, req: &PageReq) -> Result<Page<Post>> {
-  let me = c.me().await?;
+pub async fn favorites(api: &Api, req: &PageReq) -> Result<Page<Post>> {
+  let me = api.me().await?;
   let offset = req.number_or(0);
   let rn = req.size_within(50);
   let params: Params = vec![
     ("rn", rn.to_string()),
     ("offset", offset.to_string()),
     ("user_id", me.uid),
-    ("stoken", c.stoken()),
+    ("stoken", api.stoken()),
   ];
-  let v = c.call("/c/f/post/threadstore", params).await?;
+  let v = api.call("/c/f/post/threadstore", params).await?;
   let none = parse::Users::new();
   let list = v.list("store_thread");
   let items: Vec<Post> = list.iter().map(|t| parse::thread(t, &none)).collect();

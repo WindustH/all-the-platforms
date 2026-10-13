@@ -3,7 +3,7 @@
 
 use social_core::{Error, Page, PageReq, Post, Result, User, Value, ValueExt};
 
-use crate::api::Client;
+use crate::api::Api;
 use crate::refs::{self, SOURCE_FEED, user_url};
 use crate::{parse, sign};
 
@@ -14,27 +14,27 @@ const FOLLOWING: &str = "/api/im/web/users/following/all";
 const SAVED_SEARCH: &str = "/api/sns/v1/note/user/page/search/web";
 
 /// The logged-in account; a guest session counts as not logged in.
-pub async fn whoami(c: &Client) -> Result<User> {
-  c.require_login()?;
-  let me = c.get(ME, &[]).await?;
+pub async fn whoami(api: &Api) -> Result<User> {
+  api.require_login()?;
+  let me = api.get(ME, &[]).await?;
   if me.bool("guest") == Some(true) {
     return Err(Error::auth("not logged in (guest session)").with_hint("run `social xhs login`"));
   }
   Ok(parse::profile(&me, None))
 }
 
-pub async fn user(c: &Client, arg: &str) -> Result<User> {
-  c.require_login()?;
-  let id = refs::user_ref(c, arg).await?;
-  let data = c
+pub async fn user(api: &Api, arg: &str) -> Result<User> {
+  api.require_login()?;
+  let id = refs::user_ref(api, arg).await?;
+  let data = api
     .get("/api/sns/web/v1/user/otherinfo", &[("target_user_id", &id)])
     .await?;
   Ok(parse::profile(&data, Some(&id)))
 }
 
-pub async fn user_posts(c: &Client, arg: &str, page: &PageReq) -> Result<Page<Post>> {
-  c.require_login()?;
-  let id = refs::user_ref(c, arg).await?;
+pub async fn user_posts(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
+  let id = refs::user_ref(api, arg).await?;
   let num = page.size_within(30).to_string();
   let cursor = page.cursor.clone().unwrap_or_default();
   let params = [
@@ -44,26 +44,26 @@ pub async fn user_posts(c: &Client, arg: &str, page: &PageReq) -> Result<Page<Po
     ("image_scenes", "FD_WM_WEBP"),
   ];
   Ok(note_page(
-    c,
-    &c.get("/api/sns/web/v1/user_posted", &params).await?,
+    api,
+    &api.get("/api/sns/web/v1/user_posted", &params).await?,
   ))
 }
 
 /// Notes a user collected (default: the logged-in account).
-pub async fn favorites(c: &Client, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-  saved(c, "/api/sns/web/v2/note/collect/page", user, page).await
+pub async fn favorites(api: &Api, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+  saved(api, "/api/sns/web/v2/note/collect/page", user, page).await
 }
 
 /// Notes a user liked (default: the logged-in account).
-pub async fn likes(c: &Client, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-  saved(c, "/api/sns/web/v1/note/like/page", user, page).await
+pub async fn likes(api: &Api, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+  saved(api, "/api/sns/web/v1/note/like/page", user, page).await
 }
 
-async fn saved(c: &Client, path: &str, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-  c.require_login()?;
+async fn saved(api: &Api, path: &str, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
   let id = match user {
-    Some(arg) => refs::user_ref(c, arg).await?,
-    None => whoami(c).await?.id,
+    Some(arg) => refs::user_ref(api, arg).await?,
+    None => whoami(api).await?.id,
   };
   let num = page.size_within(30).to_string();
   let cursor = page.cursor.clone().unwrap_or_default();
@@ -72,15 +72,15 @@ async fn saved(c: &Client, path: &str, user: Option<&str>, page: &PageReq) -> Re
     ("cursor", cursor.as_str()),
     ("num", num.as_str()),
   ];
-  Ok(note_page(c, &c.get(path, &params).await?))
+  Ok(note_page(api, &api.get(path, &params).await?))
 }
 
 /// Accounts the logged-in user follows. Xiaohongshu shows other accounts'
 /// follow lists only as counts.
-pub async fn following(c: &Client, user: &str, req: &PageReq) -> Result<Page<User>> {
-  c.require_login()?;
-  let me = whoami(c).await?.id;
-  let target = refs::user_ref(c, user).await?;
+pub async fn following(api: &Api, user: &str, req: &PageReq) -> Result<Page<User>> {
+  api.require_login()?;
+  let me = whoami(api).await?.id;
+  let target = refs::user_ref(api, user).await?;
   if target != me {
     return Err(Error::unsupported(
       "following of other accounts (Xiaohongshu shows only the count)",
@@ -88,7 +88,7 @@ pub async fn following(c: &Client, user: &str, req: &PageReq) -> Result<Page<Use
   }
   let page = req.number_or(1);
   let (page_s, size) = (page.to_string(), req.size_within(200).to_string());
-  let data = c
+  let data = api
     .get(
       FOLLOWING,
       &[("page", page_s.as_str()), ("size", size.as_str())],
@@ -116,13 +116,13 @@ pub async fn following(c: &Client, user: &str, req: &PageReq) -> Result<Page<Use
 
 /// Your collected (or with `likes`, liked) notes that match `keyword`.
 pub async fn search_saved(
-  c: &Client,
+  api: &Api,
   keyword: &str,
   likes: bool,
   req: &PageReq,
 ) -> Result<Page<Post>> {
-  c.require_login()?;
-  let me = whoami(c).await?.id;
+  api.require_login()?;
+  let me = whoami(api).await?.id;
   let tab = if likes { "like" } else { "collect" };
   let cursor = req.cursor.clone().unwrap_or_default();
   let size = req.size_within(30).to_string();
@@ -136,19 +136,19 @@ pub async fn search_saved(
     ("keyword", keyword.trim()),
     ("search_id", search_id.as_str()),
   ];
-  let data = c.get(SAVED_SEARCH, &params).await?;
-  Ok(note_page(c, data.at(tab)))
+  let data = api.get(SAVED_SEARCH, &params).await?;
+  Ok(note_page(api, data.at(tab)))
 }
 
 /// `{notes, cursor, has_more}` pages, remembering the note tokens.
-pub(crate) fn note_page(c: &Client, data: &Value) -> Page<Post> {
+pub(crate) fn note_page(api: &Api, data: &Value) -> Page<Post> {
   let notes = data.list("notes");
   let tokens: Vec<(String, String)> = notes
     .iter()
     .filter_map(|n| Some((n.str("note_id")?, n.str("xsec_token")?)))
     .collect();
   refs::remember(
-    &c.ctx,
+    &api.ctx,
     tokens
       .iter()
       .map(|(id, t)| (id.as_str(), t.as_str(), SOURCE_FEED)),

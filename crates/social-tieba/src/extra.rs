@@ -3,11 +3,12 @@
 
 use clap::builder::PossibleValuesParser;
 use social_core::cli::PageArgs;
-use social_core::{Data, Page, Query, Result};
+use social_core::{Data, Error, Page, Post, Query, Result, Value};
 
-use crate::api::Client;
-use crate::forum::{SEARCH_FILTERS, SEARCH_SORTS, SORTS};
-use crate::{forum, people, write};
+use crate::api::Api;
+use crate::forums::SORTS;
+use crate::search::{SEARCH_FILTERS, SEARCH_SORTS};
+use crate::{forums, search, topics, users};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -71,20 +72,20 @@ pub enum Command {
   },
 }
 
-pub async fn run(c: &Client, command: Command) -> Result<Data> {
-  let ctx = &c.ctx;
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
+  let ctx = &api.ctx;
   Ok(match command {
     Command::Forum { forum, sort, page } => {
       let forum = ctx.collection_ref(&forum)?;
       Data::Posts(
         page
-          .collect_dated(async |r| forum::threads(c, &forum, &sort, &r).await)
+          .collect_dated(async |r| forums::threads(api, &forum, &sort, &r).await)
           .await?,
       )
     }
     Command::ForumInfo { forum } => {
       let forum = ctx.collection_ref(&forum)?;
-      Data::Collections(Page::last(vec![forum::info(c, &forum).await?]))
+      Data::Collections(Page::last(vec![forums::info(api, &forum).await?]))
     }
     Command::ForumSearch {
       forum,
@@ -93,62 +94,70 @@ pub async fn run(c: &Client, command: Command) -> Result<Data> {
       filter,
       page,
     } => {
-      let forum = ctx.collection_ref(&forum)?;
-      let q = Query {
+      let query = Query {
         keyword: query,
         sort: Some(sort),
         filter: Some(filter),
       };
-      Data::Posts(
-        page
-          .collect_dated(async |r| forum::search(c, &q, Some(&forum), &r).await)
-          .await?,
-      )
+      Data::Posts(forum_search(api, &forum, &query, page).await?)
     }
     Command::Topic { topic, page } => {
       let topic = ctx.post_ref(&topic)?;
       Data::Posts(
         page
-          .collect_dated(async |r| forum::topic(c, &topic, &r).await)
+          .collect_dated(async |r| topics::topic(api, &topic, &r).await)
           .await?,
       )
     }
     Command::UserReplies { user, page } => {
-      let user = match user {
-        Some(u) => ctx.user_ref(&u)?,
-        None => c.me().await?.uid,
-      };
+      let user = user_or_me(api, user).await?;
       Data::Posts(
         page
-          .collect_dated(async |r| people::posts(c, &user, false, &r).await)
+          .collect_dated(async |r| users::posts(api, &user, false, &r).await)
           .await?,
       )
     }
     Command::FollowForum { forum, undo } => {
       let forum = ctx.collection_ref(&forum)?;
-      Data::Action(write::follow_forum(c, &forum, undo).await?)
+      Data::Action(forums::follow_forum(api, &forum, undo).await?)
     }
     Command::UnfollowForum { forum } => {
       let forum = ctx.collection_ref(&forum)?;
-      Data::Action(write::follow_forum(c, &forum, true).await?)
+      Data::Action(forums::follow_forum(api, &forum, true).await?)
     }
-    Command::Sign { forums, all } => {
-      let rows = if all {
-        write::sign_all(c).await?
-      } else if forums.is_empty() {
-        return Err(social_core::Error::input(
-          "name the forums to sign in to, or pass --all",
-        ));
-      } else {
-        let mut rows = Vec::new();
-        for f in forums {
-          rows.push(write::sign(c, &ctx.collection_ref(&f)?).await?);
-        }
-        rows
-      };
-      Data::Value(rows.into())
-    }
+    Command::Sign { forums: names, all } => Data::Value(sign(api, &names, all).await?.into()),
   })
+}
+
+/// Threads of one forum matching a search.
+async fn forum_search(api: &Api, forum: &str, query: &Query, page: PageArgs) -> Result<Page<Post>> {
+  let forum = api.ctx.collection_ref(forum)?;
+  page
+    .collect_dated(async |r| search::search(api, query, Some(&forum), &r).await)
+    .await
+}
+
+/// A user argument, or the logged-in account when it is omitted.
+async fn user_or_me(api: &Api, user: Option<String>) -> Result<String> {
+  match user {
+    Some(u) => api.ctx.user_ref(&u),
+    None => Ok(api.me().await?.uid),
+  }
+}
+
+/// 签到 in the named forums, or in every followed one with `--all`.
+async fn sign(api: &Api, names: &[String], all: bool) -> Result<Vec<Value>> {
+  if all {
+    return forums::sign_all(api).await;
+  }
+  if names.is_empty() {
+    return Err(Error::input("name the forums to sign in to, or pass --all"));
+  }
+  let mut rows = Vec::new();
+  for name in names {
+    rows.push(forums::sign(api, &api.ctx.collection_ref(name)?).await?);
+  }
+  Ok(rows)
 }
 
 const EX_FORUM: &str = "\

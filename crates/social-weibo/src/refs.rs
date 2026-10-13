@@ -37,13 +37,13 @@ pub fn mid_to_bid(mid: &str) -> Option<String> {
       .ok()?
       .parse()
       .ok()?;
-    let mut s = to_base62(n);
+    let mut out = to_base62(n);
     if start > 0 {
-      while s.len() < 4 {
-        s.insert(0, '0');
+      while out.len() < 4 {
+        out.insert(0, '0');
       }
     }
-    groups.push(s);
+    groups.push(out);
     end = start;
   }
   groups.reverse();
@@ -64,13 +64,13 @@ pub fn bid_to_mid(bid: &str) -> Option<String> {
     for c in &chars[start..end] {
       n = n * 62 + BASE62.iter().position(|b| b == c)? as u64;
     }
-    let mut s = n.to_string();
+    let mut out = n.to_string();
     if start > 0 {
-      while s.len() < 7 {
-        s.insert(0, '0');
+      while out.len() < 7 {
+        out.insert(0, '0');
       }
     }
-    groups.push(s);
+    groups.push(out);
     end = start;
   }
   groups.reverse();
@@ -78,31 +78,31 @@ pub fn bid_to_mid(bid: &str) -> Option<String> {
   (!mid.is_empty()).then_some(mid)
 }
 
-fn to_base62(mut n: u64) -> String {
-  if n == 0 {
+fn to_base62(mut number: u64) -> String {
+  if number == 0 {
     return "0".into();
   }
   let mut out = Vec::new();
-  while n > 0 {
-    out.push(BASE62[(n % 62) as usize]);
-    n /= 62;
+  while number > 0 {
+    out.push(BASE62[(number % 62) as usize]);
+    number /= 62;
   }
   out.reverse();
   String::from_utf8(out).unwrap_or_default()
 }
 
-fn is_mid(s: &str) -> bool {
-  s.len() >= 12 && s.len() <= 20 && s.bytes().all(|b| b.is_ascii_digit())
+fn is_mid(text: &str) -> bool {
+  text.len() >= 12 && text.len() <= 20 && text.bytes().all(|b| b.is_ascii_digit())
 }
 
-fn is_bid(s: &str) -> bool {
-  (8..=10).contains(&s.len())
-    && s.bytes().all(|b| b.is_ascii_alphanumeric())
-    && s.bytes().any(|b| b.is_ascii_alphabetic())
+fn is_bid(text: &str) -> bool {
+  (8..=10).contains(&text.len())
+    && text.bytes().all(|b| b.is_ascii_alphanumeric())
+    && text.bytes().any(|b| b.is_ascii_alphabetic())
 }
 
-fn is_uid(s: &str) -> bool {
-  (5..=12).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_digit())
+fn is_uid(text: &str) -> bool {
+  (5..=12).contains(&text.len()) && text.bytes().all(|b| b.is_ascii_digit())
 }
 
 fn parse_url(arg: &str) -> Option<Url> {
@@ -137,11 +137,11 @@ pub fn mid(arg: &str) -> Result<String> {
 }
 
 /// A numeric id or a bid, as a numeric id.
-fn post_token(s: &str) -> Option<String> {
-  if is_mid(s) {
-    Some(s.to_owned())
-  } else if is_bid(s) {
-    bid_to_mid(s)
+fn post_token(text: &str) -> Option<String> {
+  if is_mid(text) {
+    Some(text.to_owned())
+  } else if is_bid(text) {
+    bid_to_mid(text)
   } else {
     None
   }

@@ -8,9 +8,9 @@ use std::sync::LazyLock;
 use regex::Regex;
 use social_core::{Collection, Error, Page, PageReq, Post, Result, Value, ValueExt};
 
-use crate::api::Client;
-use crate::people::{self, note_page};
+use crate::api::Api;
 use crate::refs;
+use crate::users::{self, note_page};
 
 const USER_BOARDS: &str = "/api/sns/web/v1/board/user";
 const BOARD_NOTES: &str = "/api/sns/web/v1/board/note";
@@ -19,11 +19,11 @@ static BOARD_LINK: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"/board/([0-9a-f]{24})").expect("regex"));
 
 /// A user's boards (default: the logged-in account).
-pub async fn list(c: &Client, user: Option<&str>, req: &PageReq) -> Result<Page<Collection>> {
-  c.require_login()?;
+pub async fn list(api: &Api, user: Option<&str>, req: &PageReq) -> Result<Page<Collection>> {
+  api.require_login()?;
   let id = match user {
-    Some(arg) => refs::user_ref(c, arg).await?,
-    None => people::whoami(c).await?.id,
+    Some(arg) => refs::user_ref(api, arg).await?,
+    None => users::whoami(api).await?.id,
   };
   let page = req.number_or(1);
   let (page_s, num) = (page.to_string(), req.size_within(15).to_string());
@@ -32,7 +32,7 @@ pub async fn list(c: &Client, user: Option<&str>, req: &PageReq) -> Result<Page<
     ("num", num.as_str()),
     ("page", page_s.as_str()),
   ];
-  let data = c.get(USER_BOARDS, &params).await?;
+  let data = api.get(USER_BOARDS, &params).await?;
   let items: Vec<Collection> = data.list("boards").iter().filter_map(board).collect();
   let next =
     (!items.is_empty() && data.bool("has_more") != Some(false)).then(|| (page + 1).to_string());
@@ -40,8 +40,8 @@ pub async fn list(c: &Client, user: Option<&str>, req: &PageReq) -> Result<Page<
 }
 
 /// Notes of one board, by id or `/board/<id>` link.
-pub async fn notes(c: &Client, arg: &str, req: &PageReq) -> Result<Page<Post>> {
-  c.require_login()?;
+pub async fn notes(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
   let id = board_id(arg)?;
   let num = req.size_within(30).to_string();
   let cursor = req.cursor.clone().unwrap_or_default();
@@ -51,7 +51,7 @@ pub async fn notes(c: &Client, arg: &str, req: &PageReq) -> Result<Page<Post>> {
     ("cursor", cursor.as_str()),
     ("image_formats", "jpg,webp,avif"),
   ];
-  Ok(note_page(c, &c.get(BOARD_NOTES, &params).await?))
+  Ok(note_page(api, &api.get(BOARD_NOTES, &params).await?))
 }
 
 fn board_id(arg: &str) -> Result<String> {
@@ -73,7 +73,7 @@ fn board(v: &Value) -> Option<Collection> {
     .list("images")
     .first()
     .and_then(|i| i.as_str().map(str::to_owned).or_else(|| i.str("url")));
-  let mut c = Collection {
+  let mut collection = Collection {
     url: Some(format!("{}/board/{id}", crate::api::HOME)),
     kind: "board".into(),
     name: v.first_str(&["name", "title"]).unwrap_or_default(),
@@ -89,8 +89,8 @@ fn board(v: &Value) -> Option<Collection> {
     ("private", v.get("privacy").cloned()),
   ] {
     if let Some(value) = value.filter(|v| !v.is_null()) {
-      c.extra.insert(key.into(), value);
+      collection.extra.insert(key.into(), value);
     }
   }
-  Some(c)
+  Some(collection)
 }
