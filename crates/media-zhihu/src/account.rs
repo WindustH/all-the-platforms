@@ -84,7 +84,7 @@ pub async fn qr_start(ctx: &Ctx) -> Result<QrTicket> {
   let ticket = QrTicket {
     url,
     token,
-    extra: BTreeMap::new(),
+    ..QrTicket::default()
   };
   // Poll once before the code is shown, so a blocked network fails before anyone scans.
   qr_poll(ctx, &ticket).await?;

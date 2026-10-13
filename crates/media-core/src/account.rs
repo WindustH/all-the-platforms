@@ -61,10 +61,27 @@ fn missing_cookie(info: &PlatformInfo, ctx: &Ctx) -> Option<&'static str> {
 pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
   let info = P::INFO;
   let ctx = p.ctx();
-  let use_qr =
-    args.qrcode || (args.cookie.is_none() && args.browser.is_none() && info.supports(Cap::QrLogin));
+  let use_qr = args.qrcode
+    || (args.cookie.is_none()
+      && args.browser.is_none()
+      && args.token.is_none()
+      && info.supports(Cap::QrLogin));
 
-  let source = if let Some(raw) = args.cookie {
+  let source = if let Some(raw) = args.token {
+    if !info.supports(Cap::TokenLogin) {
+      return Err(Error::unsupported("login --token").with_hint(ctx.login_hint()));
+    }
+    let token = if raw == "-" {
+      std::io::read_to_string(std::io::stdin())?
+    } else {
+      raw
+    };
+    if token.trim().is_empty() {
+      return Err(Error::input("the token is empty"));
+    }
+    p.login_token(token.trim()).await?;
+    "token".to_owned()
+  } else if let Some(raw) = args.cookie {
     let cookies = browser::parse_cookie_string(&raw);
     if cookies.is_empty() {
       return Err(Error::input(
@@ -110,7 +127,9 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
   };
 
   p.prepare_login().await?;
-  if let Some(c) = missing_cookie(&info, ctx) {
+  if source != "token"
+    && let Some(c) = missing_cookie(&info, ctx)
+  {
     return Err(Error::auth(format!(
       "login incomplete: cookie `{c}` is missing"
     )));
@@ -145,7 +164,11 @@ async fn qr_login<P: Platform>(p: &P) -> Result<()> {
     )));
   }
   let ticket = p.qr_start().await?;
-  let image = qr::show(&ticket.url, p.ctx().store.cache_dir())?;
+  let dir = p.ctx().store.cache_dir();
+  let image = match &ticket.image {
+    Some(bytes) => qr::show_image(bytes, dir)?,
+    None => qr::show(&ticket.url, dir)?,
+  };
   note(&format!(
     "Scan with the {} app and confirm. QR image: {}",
     info.name,

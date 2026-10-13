@@ -20,6 +20,8 @@ use crate::model::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cap {
   QrLogin,
+  /// `login --token`: an access token or API credentials instead of cookies.
+  TokenLogin,
   Search,
   SearchUsers,
   SearchTopics,
@@ -57,6 +59,7 @@ pub enum Cap {
 impl Cap {
   pub const ALL: &[Cap] = &[
     Cap::QrLogin,
+    Cap::TokenLogin,
     Cap::Search,
     Cap::SearchUsers,
     Cap::SearchTopics,
@@ -93,6 +96,7 @@ impl Cap {
   pub fn name(self) -> &'static str {
     match self {
       Cap::QrLogin => "qr-login",
+      Cap::TokenLogin => "token-login",
       Cap::Search => "search",
       Cap::SearchUsers => "search-users",
       Cap::SearchTopics => "search-topics",
@@ -244,12 +248,15 @@ pub struct Reply {
   pub images: Vec<PathBuf>,
 }
 
-/// A started QR login: `url` is encoded into the QR code, `token` identifies it when polling.
+/// A started QR login: `url` is encoded into the QR code, `token` identifies
+/// it when polling. Platforms that hand out a QR image instead put it in
+/// `image` (PNG, JPEG or GIF); it is decoded and shown the same way.
 #[derive(Debug, Clone, Default)]
 pub struct QrTicket {
   pub url: String,
   pub token: String,
   pub extra: BTreeMap<String, String>,
+  pub image: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -300,6 +307,12 @@ pub trait Platform: Sized {
   /// verified and saved. Use it to fetch missing helper cookies.
   async fn prepare_login(&self) -> Result<()> {
     Ok(())
+  }
+
+  /// Keep an access token or API credentials (`login --token`) in the
+  /// session; `whoami` verifies them afterwards.
+  async fn login_token(&self, token: &str) -> Result<()> {
+    unsupported!("login --token")
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {

@@ -26,6 +26,7 @@ pub async fn qr_start(c: &Client) -> Result<QrTicket> {
     url,
     token: qr_id,
     extra: [("code".to_owned(), code)].into(),
+    ..QrTicket::default()
   })
 }
 

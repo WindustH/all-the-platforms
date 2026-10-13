@@ -1,7 +1,5 @@
 //! Login (web QR code), the logged-in account and its mid.
 
-use std::collections::BTreeMap;
-
 use media_core::{Ctx, Error, QrStatus, QrTicket, Result, User, ValueExt};
 
 use crate::{api, parse};
@@ -46,7 +44,7 @@ pub async fn qr_start(ctx: &Ctx) -> Result<QrTicket> {
     (Some(url), Some(token)) => Ok(QrTicket {
       url,
       token,
-      extra: BTreeMap::new(),
+      ..QrTicket::default()
     }),
     _ => Err(Error::upstream("QR login: no qrcode_key in the response")),
   }

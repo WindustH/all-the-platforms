@@ -33,16 +33,27 @@ impl Ctx {
     }
   }
 
-  /// How to log in, for error hints.
+  /// How to log in, for error hints: every way the platform offers.
   pub fn login_hint(&self) -> String {
     let id = self.info.id;
-    let cookie = format!("`media {id} login --cookie '...'`");
-    let browser = format!("`media {id} login --browser`");
-    match (self.info.supports(Cap::QrLogin), cfg!(feature = "browser")) {
-      (true, true) => format!("run `media {id} login` (QR code), {browser} or {cookie}"),
-      (true, false) => format!("run `media {id} login` (QR code) or {cookie}"),
-      (false, true) => format!("run {browser} (a browser where you are logged in) or {cookie}"),
-      (false, false) => format!("run {cookie} with the cookie header of a logged-in browser"),
+    let cookies = !self.info.cookie_domains.is_empty();
+    let mut ways = Vec::new();
+    if self.info.supports(Cap::QrLogin) {
+      ways.push(format!("`media {id} login` (QR code)"));
+    }
+    if self.info.supports(Cap::TokenLogin) {
+      ways.push(format!("`media {id} login --token '...'`"));
+    }
+    if cookies && cfg!(feature = "browser") {
+      ways.push(format!("`media {id} login --browser`"));
+    }
+    if cookies {
+      ways.push(format!("`media {id} login --cookie '...'`"));
+    }
+    match ways.split_last() {
+      None => format!("see `media guide {id}`"),
+      Some((last, [])) => format!("run {last}"),
+      Some((last, rest)) => format!("run {} or {last}", rest.join(", ")),
     }
   }
 

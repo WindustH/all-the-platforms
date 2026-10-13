@@ -102,6 +102,9 @@ pub fn command<P: Platform>() -> clap::Command {
       cmd = cmd.mut_subcommand(&name, |c| c.hide(true));
     }
   }
+  if !info.supports(Cap::TokenLogin) {
+    cmd = cmd.mut_subcommand("login", |c| c.mut_arg("token", |a| a.hide(true)));
+  }
   if !info.supports(Cap::CommentImages) {
     cmd = cmd.mut_subcommand("comment", |c| c.mut_arg("images", |a| a.hide(true)));
   }

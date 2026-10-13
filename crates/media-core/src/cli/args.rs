@@ -114,6 +114,9 @@ pub struct LoginArgs {
   /// Use a cookie header copied from the browser's developer tools (`name=value; ...`)
   #[arg(long, value_name = "COOKIES")]
   pub cookie: Option<String>,
+  /// Use an access token or API credentials (`-` reads it from stdin)
+  #[arg(long, value_name = "TOKEN")]
+  pub token: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
