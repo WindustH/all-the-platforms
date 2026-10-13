@@ -188,3 +188,40 @@ pub fn parse_when(s: &str) -> Result<Timestamp, String> {
     format!("`{s}` is not a time: use 7d / 12h / 30m, 2026-09-01 or an RFC 3339 timestamp")
   })
 }
+
+/// The shortcode (without colons) of common emoji, for chat platforms that
+/// take reactions by name (Slack, Mattermost, Rocket.Chat): `👍` → `+1`.
+/// Anything else comes back as given, minus surrounding colons.
+pub fn emoji_shortcode(emoji: &str) -> String {
+  let e = emoji.trim().trim_end_matches('\u{fe0f}');
+  let name = match e {
+    "👍" => "+1",
+    "👎" => "-1",
+    "❤" => "heart",
+    "😂" => "joy",
+    "😄" => "smile",
+    "😃" => "smiley",
+    "😊" => "blush",
+    "😍" => "heart_eyes",
+    "🤔" => "thinking_face",
+    "😢" => "cry",
+    "😮" => "open_mouth",
+    "😡" => "rage",
+    "🎉" => "tada",
+    "🔥" => "fire",
+    "👀" => "eyes",
+    "🙏" => "pray",
+    "👏" => "clap",
+    "💯" => "100",
+    "✅" => "white_check_mark",
+    "❌" => "x",
+    "🚀" => "rocket",
+    "👋" => "wave",
+    "🙌" => "raised_hands",
+    "💪" => "muscle",
+    "⭐" => "star",
+    "✨" => "sparkles",
+    _ => return emoji.trim().trim_matches(':').to_owned(),
+  };
+  name.to_owned()
+}

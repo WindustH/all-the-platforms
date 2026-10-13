@@ -3938,8 +3938,11 @@ dependencies = [
  "social-core",
  "social-discord",
  "social-douyin",
+ "social-mattermost",
  "social-mp",
  "social-reddit",
+ "social-rocketchat",
+ "social-slack",
  "social-telegram",
  "social-tieba",
  "social-tiktok",
@@ -4020,6 +4023,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "social-mattermost"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "social-mp"
 version = "0.1.0"
 dependencies = [
@@ -4047,6 +4065,37 @@ dependencies = [
  "serde",
  "serde_json",
  "social-core",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-rocketchat"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-slack"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
  "tracing",
  "url",
 ]
