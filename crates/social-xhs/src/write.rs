@@ -79,6 +79,24 @@ pub async fn comment(c: &Client, arg: &str, reply: &Reply) -> Result<Action> {
   Ok(action)
 }
 
+/// Like a comment (or with `undo`, take the like back).
+pub async fn like_comment(c: &Client, arg: &str, comment: &str, undo: bool) -> Result<Action> {
+  let r = prepare_note(c, arg).await?;
+  let path = if undo {
+    "/api/sns/web/v1/comment/dislike"
+  } else {
+    "/api/sns/web/v1/comment/like"
+  };
+  c.post(path, &json!({"note_id": r.id, "comment_id": comment}))
+    .await?;
+  let name = if undo {
+    "unlike-comment"
+  } else {
+    "like-comment"
+  };
+  Ok(Action::done(name, comment).with_url(r.url()))
+}
+
 pub async fn delete_comment(c: &Client, arg: &str, comment: &str) -> Result<Action> {
   let r = prepare_note(c, arg).await?;
   let body = json!({"note_id": r.id, "comment_id": comment});

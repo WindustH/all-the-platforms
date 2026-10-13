@@ -22,6 +22,30 @@ Xiaohongshu is quick to flag automation: requests are spaced at least a
 second apart, and a captcha (`verification_required`) means stop, open the
 site in the browser, pass the check, and wait before retrying.
 
+## Finding notes
+
+- `search` sorts by `general`, `popular`, `latest`, `comments` or
+  `collects`; `--filter` takes one of `video`, `image` (note type) or `day`,
+  `week`, `half-year` (publication time).
+- `suggest KEYWORD` lists the search box's completions; `trending` lists
+  what it offers before you type (猜你想搜, personalized).
+- `feed --type recommend|fashion|food|…|video` reads a home-page channel;
+  `channels` lists them with their names.
+- `history` is your browsing history (浏览记录), with `extra.read_at`;
+  `history-count`, `history-delete NOTE…` and `history-clear --yes` manage it.
+- `search-saved KEYWORD [--likes]` searches your own collected (or liked)
+  notes.
+
+## Lists and messages
+
+- `collections [USER]` lists boards (专辑) and `favorites --folder BOARD`
+  their notes; few accounts still have boards.
+- `following` lists the accounts you follow. Xiaohongshu shows other
+  accounts' follow lists only as counts, and nobody's followers.
+- `chats` lists your private-message conversations (私信) and
+  `messages CHAT` reads one, newest first. Sending is not offered: the web
+  app sends over its message websocket as encrypted protobuf frames.
+
 ## Analytics
 
 `social xhs insights [--days N]`: the creator data center, with 7-day and
@@ -45,6 +69,8 @@ follows; `active-fans` your most engaged fans; `my-notes` your notes.
 
 - `post` needs `--title` and at least one image (`-i`); `--topic` and
   `#tags` in the text become topics.
+- `like-comment NOTE COMMENT [--undo]`; `mark-read [--type mentions|likes|connections]`
+  marks notifications as read.
 - `comment NOTE "text" [--reply-to COMMENT]`, `delete-comment`, `like`,
   `favorite` (collect), `follow`, `delete` (your note). Comments are text
   only: images in comments are an app feature the web API ignores. Read

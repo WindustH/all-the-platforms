@@ -3,13 +3,17 @@
 //! - [`api`]: signed transport and error mapping; [`sign`]: x-s / x-s-common / XYW.
 //! - [`refs`]: note and user references; [`parse`]: JSON → models; [`page`]: note pages.
 //! - Endpoints by domain: [`discover`], [`notes`], [`people`], [`inbox`], [`write`],
-//!   [`creator`], [`insights`] (with [`stats`]), [`login`]; platform-only commands in [`extra`].
+//!   [`history`], [`boards`], [`chat`] (private messages, read-only), [`creator`],
+//!   [`insights`] (with [`stats`]), [`login`]; platform-only commands in [`extra`].
 
 mod api;
+mod boards;
+mod chat;
 mod creator;
 mod discover;
 mod events;
 mod extra;
+mod history;
 mod inbox;
 mod insights;
 mod login;
@@ -59,8 +63,11 @@ impl Platform for Xhs {
       Cap::Replies,
       Cap::User,
       Cap::UserPosts,
+      Cap::Following,
+      Cap::Collections,
       Cap::Favorites,
       Cap::Likes,
+      Cap::History,
       Cap::Notifications,
       Cap::Unread,
       Cap::Like,
@@ -73,12 +80,14 @@ impl Platform for Xhs {
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
+      Cap::Chats,
+      Cap::Messages,
     ],
     choices: Choices {
-      search_sort: &["general", "popular", "latest"],
-      search_filter: &["video", "image"],
+      search_sort: discover::SEARCH_SORTS,
+      search_filter: discover::SEARCH_FILTERS,
       hot_category: discover::HOT_CATEGORIES,
-      feed_kind: &[],
+      feed_kind: discover::FEED_KINDS,
       comment_sort: &[],
       notification_kind: inbox::KINDS,
     },
@@ -162,16 +171,28 @@ impl Platform for Xhs {
     people::user_posts(&self.client, user, page).await
   }
 
+  async fn following(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
+    people::following(&self.client, user, page).await
+  }
+
+  async fn collections(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
+    boards::list(&self.client, user, page).await
+  }
+
   async fn favorites(
     &self,
     user: Option<&str>,
     folder: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Post>> {
-    if folder.is_some() {
-      return Err(social_core::Error::unsupported("favorites --folder"));
+    match folder {
+      Some(board) => boards::notes(&self.client, board, page).await,
+      None => people::favorites(&self.client, user, page).await,
     }
-    people::favorites(&self.client, user, page).await
+  }
+
+  async fn history(&self, page: &PageReq) -> Result<Page<Post>> {
+    history::page(&self.client, page).await
   }
 
   async fn likes(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
@@ -219,6 +240,17 @@ impl Platform for Xhs {
       None => insights::account(&self.client, days).await,
       Some(post) => insights::note(&self.client, post, days).await,
     }
+  }
+
+  async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
+    if parent.is_some() {
+      return Err(social_core::Error::unsupported("chats PARENT"));
+    }
+    chat::chats(&self.client, page).await
+  }
+
+  async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
+    chat::messages(&self.client, chat, page).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

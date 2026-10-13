@@ -6,7 +6,7 @@ use social_core::cli::{PageArgs, check_images, read_text};
 use social_core::{Data, Draft, Result};
 
 use crate::api::Client;
-use crate::{creator, events};
+use crate::{creator, discover, events, history, inbox, people, write};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum XhsCommand {
@@ -61,6 +61,46 @@ pub enum XhsCommand {
     #[arg(long = "topic", value_name = "TOPIC")]
     topics: Vec<String>,
   },
+  /// The home page's channels (`feed --type` / `hot --category` values)
+  Channels,
+  /// What the search box suggests before you type (猜你想搜), personalized
+  Trending,
+  /// Search completions for a keyword
+  Suggest { keyword: String },
+  /// Search your own collected notes (or with --likes, liked notes)
+  SearchSaved {
+    keyword: String,
+    /// Search the liked notes instead
+    #[arg(long)]
+    likes: bool,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Like a comment of a note (or take the like back with --undo)
+  LikeComment {
+    note: String,
+    comment: String,
+    #[arg(long)]
+    undo: bool,
+  },
+  /// Mark notifications as read (all tabs, or one with --type)
+  MarkRead {
+    /// mentions, likes or connections
+    #[arg(short = 't', long = "type")]
+    kind: Option<String>,
+  },
+  /// How many notes the browsing history holds
+  HistoryCount,
+  /// Remove notes from the browsing history
+  HistoryDelete {
+    #[arg(required = true)]
+    notes: Vec<String>,
+  },
+  /// Empty the browsing history of notes
+  HistoryClear {
+    #[arg(short, long)]
+    yes: bool,
+  },
   /// Your fans who interacted most (data center)
   ActiveFans {
     /// Window in days: up to 7 means the last 7, otherwise the last 30
@@ -107,6 +147,43 @@ pub async fn run(c: &Client, command: XhsCommand) -> Result<Data> {
         ..Draft::default()
       };
       Data::Action(events::join(c, &event, &draft).await?)
+    }
+    XhsCommand::Channels => Data::Collections(discover::channels(c).await?),
+    XhsCommand::Trending => Data::Collections(discover::trending(c).await?),
+    XhsCommand::Suggest { keyword } => Data::Collections(discover::suggest(c, &keyword).await?),
+    XhsCommand::SearchSaved {
+      keyword,
+      likes,
+      page,
+    } => Data::Posts(
+      page
+        .collect_dated(async |r| people::search_saved(c, &keyword, likes, &r).await)
+        .await?,
+    ),
+    XhsCommand::LikeComment {
+      note,
+      comment,
+      undo,
+    } => {
+      let note = c.ctx.post_ref(&note)?;
+      Data::Action(write::like_comment(c, &note, &comment, undo).await?)
+    }
+    XhsCommand::MarkRead { kind } => Data::Action(inbox::mark_read(c, kind.as_deref()).await?),
+    XhsCommand::HistoryCount => Data::Value(history::count(c).await?),
+    XhsCommand::HistoryDelete { notes } => {
+      let notes = notes
+        .iter()
+        .map(|n| c.ctx.post_ref(n))
+        .collect::<Result<Vec<_>>>()?;
+      Data::Action(history::delete(c, &notes).await?)
+    }
+    XhsCommand::HistoryClear { yes } => {
+      if !yes {
+        return Err(social_core::Error::input(
+          "refusing to clear the browsing history without --yes",
+        ));
+      }
+      Data::Action(history::clear(c).await?)
     }
     XhsCommand::ActiveFans { days } => Data::Users(creator::active_fans(c, days).await?),
   })
