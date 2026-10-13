@@ -191,3 +191,39 @@ fn bad_user(arg: &str) -> Error {
     "not a Zhihu user: `{arg}` (use a url_token or https://www.zhihu.com/people/<token>)"
   ))
 }
+
+/// A column id, bare or from `https://zhuanlan.zhihu.com/<id>` or
+/// `https://www.zhihu.com/column/<id>`.
+pub fn column_id(arg: &str) -> Result<String> {
+  let arg = arg.trim().trim_end_matches('/');
+  let id = ["zhuanlan.zhihu.com/", "/column/"]
+    .iter()
+    .find_map(|m| arg.split_once(m).map(|(_, rest)| rest))
+    .unwrap_or(arg)
+    .split(['/', '?', '#'])
+    .next()
+    .unwrap_or_default();
+  if !id.is_empty() && !id.contains(':') && id != "p" {
+    Ok(id.to_owned())
+  } else {
+    Err(Error::input(format!("not a Zhihu column: `{arg}`")))
+  }
+}
+
+/// A topic id, bare or from `https://www.zhihu.com/topic/<id>`.
+pub fn topic_id(arg: &str) -> Result<String> {
+  let id = arg
+    .trim()
+    .trim_end_matches('/')
+    .rsplit("/topic/")
+    .next()
+    .unwrap_or_default()
+    .split(['/', '?', '#'])
+    .next()
+    .unwrap_or_default();
+  if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) {
+    Ok(id.to_owned())
+  } else {
+    Err(Error::input(format!("not a Zhihu topic: `{arg}`")))
+  }
+}

@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-use md5::Digest;
 use social_core::http::Method;
 use social_core::{Action, Error, Result, Value, ValueExt, json};
 

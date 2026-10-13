@@ -36,8 +36,6 @@ use social_core::{
   PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
-pub use extra::Extra;
-
 pub struct Zhihu {
   api: Api,
 }
@@ -94,7 +92,7 @@ impl Platform for Zhihu {
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = Extra;
+  type Extra = extra::Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self { api: Api::new(ctx) })
