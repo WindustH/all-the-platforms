@@ -4,14 +4,16 @@
 //! Own videos use the data-center app's per-video endpoints
 //! (`/x/web/data/archive_diagnose/{overview,play_analyze,trend}` and
 //! `/x/web/data/v2/archive/analyze/graph`; bundle `data-center-web.index`,
-//! chunks 5408, 5680, 5865, 7890 of 2026-09, see [`crate::creator`]).
+//! chunks 5408, 5680, 5865, 7890 of 2026-09, see [`super`]).
 
-use social_core::{Breakdown, Ctx, Insights, Result, Share, Value, ValueExt, json};
+use social_core::{Breakdown, Insights, Result, Share, Value, ValueExt, json};
 
-use crate::creator::{data, soft};
+use super::{data, soft};
+use crate::api::Api;
 use crate::parse::insights::{self as pi, AGES, DEVICES, GENDERS, VIEWERS};
 use crate::refs::{DYNAMIC_URL, PostRef, Video};
-use crate::{account, api, dynamic, parse, video};
+use crate::users;
+use crate::{dynamics, parse, videos};
 
 const ONLINE: &str = "https://api.bilibili.com/x/player/online/total";
 
@@ -56,17 +58,17 @@ const TREND: &[(&str, &str)] = &[
   ("share", "shares"),
 ];
 
-pub async fn insights(ctx: &Ctx, post: &PostRef, days: u32) -> Result<Insights> {
+pub async fn post(api: &Api, post: &PostRef, days: u32) -> Result<Insights> {
   match post {
-    PostRef::Video(v) => of_video(ctx, v, days).await,
+    PostRef::Video(v) => of_video(api, v, days).await,
     PostRef::Article(id) => Err(social_core::Error::unsupported(&format!(
       "insights for articles (cv{id}); `read` shows their counters"
     ))),
     PostRef::Dynamic(id) => {
-      let item = dynamic::detail(ctx, id).await?;
+      let item = dynamics::detail(api, id).await?;
       let bvid = item.str("modules.module_dynamic.major.archive.bvid");
       match bvid.as_deref().and_then(Video::from_bvid) {
-        Some(v) => of_video(ctx, &v, days).await,
+        Some(v) => of_video(api, &v, days).await,
         None => Ok(of_dynamic(id, item)),
       }
     }
@@ -76,27 +78,27 @@ pub async fn insights(ctx: &Ctx, post: &PostRef, days: u32) -> Result<Insights> 
 /// Public counters of a dynamic (Bilibili keeps no analytics for them).
 fn of_dynamic(id: &str, item: Value) -> Insights {
   let post = parse::dynamic(&item);
-  let mut i = Insights {
+  let mut insights = Insights {
     kind: "post".into(),
     subject: id.to_owned(),
     title: post.title.or(post.text),
     url: Some(format!("{DYNAMIC_URL}{id}")),
     ..Insights::default()
   };
-  i.total("likes", post.metrics.likes.map(Value::from));
-  i.total("comments", post.metrics.comments.map(Value::from));
-  i.total("shares", post.metrics.shares.map(Value::from));
-  i.extra.insert(
+  insights.total("likes", post.metrics.likes.map(Value::from));
+  insights.total("comments", post.metrics.comments.map(Value::from));
+  insights.total("shares", post.metrics.shares.map(Value::from));
+  insights.extra.insert(
     "note".into(),
     json!("Bilibili keeps no analytics for dynamics: public counters only"),
   );
-  i.raw = Some(item);
-  i
+  insights.raw = Some(item);
+  insights
 }
 
-async fn of_video(ctx: &Ctx, v: &Video, days: u32) -> Result<Insights> {
-  let view = video::view(ctx, v).await?;
-  let mut i = Insights {
+async fn of_video(api: &Api, v: &Video, days: u32) -> Result<Insights> {
+  let view = videos::view(api, v).await?;
+  let mut insights = Insights {
     kind: "post".into(),
     subject: v.bvid.clone(),
     title: parse::plain(&view, &["title"]),
@@ -104,16 +106,16 @@ async fn of_video(ctx: &Ctx, v: &Video, days: u32) -> Result<Insights> {
     ..Insights::default()
   };
   for (key, metric) in PUBLIC {
-    i.total(metric, view.count(&format!("stat.{key}")).map(Value::from));
+    insights.total(metric, view.count(&format!("stat.{key}")).map(Value::from));
   }
-  i.total(
+  insights.total(
     "highest_rank",
     view
       .u64("stat.his_rank")
       .filter(|r| *r > 0)
       .map(Value::from),
   );
-  i.total(
+  insights.total(
     "current_rank",
     view
       .u64("stat.now_rank")
@@ -121,46 +123,47 @@ async fn of_video(ctx: &Ctx, v: &Video, days: u32) -> Result<Insights> {
       .map(Value::from),
   );
   let owner = view.str("owner.mid").unwrap_or_default();
-  let me = match ctx.require_login(api::LOGIN_COOKIES) {
-    Ok(()) => Some(account::my_mid(ctx).await?),
+  let me = match api.require_login() {
+    Ok(()) => Some(users::my_mid(api).await?),
     Err(_) => None,
   };
   let mut raw = serde_json::Map::new();
   if me.as_deref() == Some(owner.as_str()) {
-    own(ctx, v, &view, &owner, days, &mut i, &mut raw).await?;
+    own(api, v, &view, &owner, days, &mut insights, &mut raw).await?;
   } else {
-    online(ctx, v, &view, &mut i).await;
-    i.extra.insert(
+    online(api, v, &view, &mut insights).await;
+    insights.extra.insert(
       "note".into(),
       json!("not a video of the logged-in account: public counters only"),
     );
   }
   raw.insert("view".into(), view);
-  i.raw = Some(Value::Object(raw));
-  Ok(i)
+  insights.raw = Some(Value::Object(raw));
+  Ok(insights)
 }
 
 /// Viewers watching right now (`1000+` style above a thousand).
-async fn online(ctx: &Ctx, v: &Video, view: &Value, i: &mut Insights) {
-  let Ok(cid) = video::cid(view, v.page) else {
+async fn online(api: &Api, v: &Video, view: &Value, insights: &mut Insights) {
+  let Ok(cid) = videos::cid(view, v.page) else {
     return;
   };
-  let call = api::get(ctx, ONLINE)
+  let call = api
+    .get(ONLINE)
     .arg("aid", v.aid)
     .arg("bvid", &v.bvid)
     .arg("cid", cid);
   if let Ok(data) = call.send().await {
-    i.total("watching_now", data.count("total").map(Value::from));
+    insights.total("watching_now", data.count("total").map(Value::from));
     let rounded = |s: &String| !s.bytes().all(|b| b.is_ascii_digit());
     if let Some(label) = data.str("total").filter(rounded) {
-      i.extra.insert("watching_now".into(), json!(label));
+      insights.extra.insert("watching_now".into(), json!(label));
     }
   }
 }
 
 /// The creator center's analysis of one of the account's own videos.
 async fn own(
-  ctx: &Ctx,
+  api: &Api,
   v: &Video,
   view: &Value,
   mid: &str,
@@ -168,104 +171,134 @@ async fn own(
   i: &mut Insights,
   raw: &mut serde_json::Map<String, Value>,
 ) -> Result<()> {
-  let mut errors = Vec::new();
-  let bvid = v.bvid.as_str();
-
-  let mut beats = serde_json::Map::new();
-  let call = data(ctx, "/archive_diagnose/overview", mid).arg("bvid", bvid);
-  if let Some(o) = soft(call, "archive_overview", &mut errors).await? {
-    let stat = o.at("stat");
-    i.total("new_followers", stat.f64("fan").map(pi::num));
-    i.total("lost_followers", stat.f64("unfollow").map(pi::num));
-    // Filled only where Bilibili enabled them: watch-time index, charging (in fen).
-    let positive = |key: &str| stat.f64(key).filter(|n| *n > 0.0);
-    i.total("watch_minutes", positive("vt").map(pi::num));
-    i.total(
-      "charging_yuan",
-      positive("elec").map(|f| pi::num(f / 100.0)),
-    );
-    audience(&o, i);
-    raw.insert("archive_overview".into(), o);
-  }
-
-  let call = data(ctx, "/archive_diagnose/play_analyze", mid).arg("bvid", bvid);
-  if let Some(p) = soft(call, "archive_play_analyze", &mut errors).await? {
-    for (group, key, metric) in RATES {
-      i.total(metric, pi::basis_points(&p, &format!("{group}.{key}_rate")));
-      if let Some(pass) = pi::basis_points(&p, &format!("{group}.{key}_pass_rate")) {
-        beats.insert((*metric).into(), pass);
-      }
-    }
-    // The cover / title click-through rate itself (`tm_rate`) is not taken:
-    // the web app never shows it, and it read 2.2% and 10.5% for the same
-    // video within an hour (the compare table: 0.44%). Its rank is stable.
-    for (key, metric) in CTR_RANKS {
-      let path = format!("guest_interact.{key}_pass_rate");
-      if let Some(pass) = pi::basis_points(&p, &path) {
-        beats.insert((*metric).into(), pass);
-      }
-    }
-    let tips: Vec<String> = [
-      "arc_audience.tip",
-      "guest_interact.tip",
-      "guest_interact.suggestion",
-    ]
-    .iter()
-    .filter_map(|path| p.str(path))
-    .collect();
-    if !tips.is_empty() {
-      i.extra.insert("tips".into(), json!(tips));
-    }
-    raw.insert("archive_play_analyze".into(), p);
-  }
-
-  if let Ok(cid) = video::cid(view, v.page) {
-    let call = data(ctx, "/v2/archive/analyze/graph", mid).arg("cid", cid);
-    if let Some(g) = soft(call, "archive_analyze_graph", &mut errors).await? {
+  let mut got = Report::default();
+  overview(api, v, mid, i, raw, &mut got).await?;
+  play_analysis(api, v, mid, i, raw, &mut got).await?;
+  if let Ok(cid) = videos::cid(view, v.page) {
+    let call = data(api, "/v2/archive/analyze/graph", mid).arg("cid", cid);
+    if let Some(g) = soft(call, "archive_analyze_graph", &mut got.errors).await? {
       retention(&g, i);
       if let Some(pass) = pi::basis_points(&g, "quit_info.pass_peer") {
-        beats.insert("avg_watch_ratio".into(), pass);
+        got.beats.insert("avg_watch_ratio".into(), pass);
       }
       raw.insert("archive_analyze_graph".into(), g);
     }
   }
-  if !beats.is_empty() {
-    i.extra.insert("beats_similar".into(), Value::Object(beats));
+  if !got.beats.is_empty() {
+    i.extra
+      .insert("beats_similar".into(), Value::Object(got.beats));
   }
-
   let keys: Vec<&str> = TREND.iter().map(|(k, _)| *k).collect();
-  let call = data(ctx, "/archive_diagnose/trend", mid)
-    .arg("bvid", bvid)
+  let call = data(api, "/archive_diagnose/trend", mid)
+    .arg("bvid", &v.bvid)
     .arg("type", keys.join(","));
-  if let Some(t) = soft(call, "archive_trend", &mut errors).await? {
+  if let Some(t) = soft(call, "archive_trend", &mut got.errors).await? {
     trend(&t, days, i);
     raw.insert("archive_trend".into(), t);
   }
-  if !errors.is_empty() {
-    i.extra.insert("errors".into(), json!(errors));
+  if !got.errors.is_empty() {
+    i.extra.insert("errors".into(), json!(got.errors));
   }
   Ok(())
 }
 
+/// Shares of similar videos the video beats, and failed side requests.
+#[derive(Default)]
+struct Report {
+  beats: serde_json::Map<String, Value>,
+  errors: Vec<Value>,
+}
+
+/// Followers gained and lost, watch time, charging, and the audience.
+async fn overview(
+  api: &Api,
+  v: &Video,
+  mid: &str,
+  i: &mut Insights,
+  raw: &mut serde_json::Map<String, Value>,
+  got: &mut Report,
+) -> Result<()> {
+  let call = data(api, "/archive_diagnose/overview", mid).arg("bvid", &v.bvid);
+  let Some(o) = soft(call, "archive_overview", &mut got.errors).await? else {
+    return Ok(());
+  };
+  let stat = o.at("stat");
+  i.total("new_followers", stat.f64("fan").map(pi::num));
+  i.total("lost_followers", stat.f64("unfollow").map(pi::num));
+  // Filled only where Bilibili enabled them: watch-time index, charging (in fen).
+  let positive = |key: &str| stat.f64(key).filter(|n| *n > 0.0);
+  i.total("watch_minutes", positive("vt").map(pi::num));
+  i.total(
+    "charging_yuan",
+    positive("elec").map(|f| pi::num(f / 100.0)),
+  );
+  audience(&o, i);
+  raw.insert("archive_overview".into(), o);
+  Ok(())
+}
+
+/// Interaction and audience rates, and the click-through ranks.
+async fn play_analysis(
+  api: &Api,
+  v: &Video,
+  mid: &str,
+  i: &mut Insights,
+  raw: &mut serde_json::Map<String, Value>,
+  got: &mut Report,
+) -> Result<()> {
+  let call = data(api, "/archive_diagnose/play_analyze", mid).arg("bvid", &v.bvid);
+  let Some(p) = soft(call, "archive_play_analyze", &mut got.errors).await? else {
+    return Ok(());
+  };
+  for (group, key, metric) in RATES {
+    i.total(metric, pi::basis_points(&p, &format!("{group}.{key}_rate")));
+    if let Some(pass) = pi::basis_points(&p, &format!("{group}.{key}_pass_rate")) {
+      got.beats.insert((*metric).into(), pass);
+    }
+  }
+  // The cover / title click-through rate itself (`tm_rate`) is not taken:
+  // the web app never shows it, and it read 2.2% and 10.5% for the same
+  // video within an hour (the compare table: 0.44%). Its rank is stable.
+  for (key, metric) in CTR_RANKS {
+    let path = format!("guest_interact.{key}_pass_rate");
+    if let Some(pass) = pi::basis_points(&p, &path) {
+      got.beats.insert((*metric).into(), pass);
+    }
+  }
+  let tips: Vec<String> = [
+    "arc_audience.tip",
+    "guest_interact.tip",
+    "guest_interact.suggestion",
+  ]
+  .iter()
+  .filter_map(|path| p.str(path))
+  .collect();
+  if !tips.is_empty() {
+    i.extra.insert("tips".into(), json!(tips));
+  }
+  raw.insert("archive_play_analyze".into(), p);
+  Ok(())
+}
+
 /// Who watched: age, gender, region, interests, terminal, followers or not.
-fn audience(o: &Value, i: &mut Insights) {
+fn audience(v: &Value, insights: &mut Insights) {
   let mut add = |dim: &str, items: Vec<(String, f64)>, sort: bool| {
-    i.breakdowns.extend(pi::breakdown(dim, items, sort));
+    insights.breakdowns.extend(pi::breakdown(dim, items, sort));
   };
   add(
     "viewer_type",
-    pi::fields(o.at("audience_proportion"), VIEWERS),
+    pi::fields(v.at("audience_proportion"), VIEWERS),
     true,
   );
-  add("device", pi::fields(o.at("play_proportion"), DEVICES), true);
-  add("gender", pi::fields(o.at("gender"), GENDERS), false);
-  add("age", pi::fields(o.at("viewer_age"), AGES), false);
+  add("device", pi::fields(v.at("play_proportion"), DEVICES), true);
+  add("gender", pi::fields(v.at("gender"), GENDERS), false);
+  add("age", pi::fields(v.at("viewer_age"), AGES), false);
   add(
     "region",
-    pi::pairs(o.list("viewer_area"), "location", "count"),
+    pi::pairs(v.list("viewer_area"), "location", "count"),
     true,
   );
-  let mut interest = pi::pairs(o.list("viewer_ty"), "tag_name", "count");
+  let mut interest = pi::pairs(v.list("viewer_ty"), "tag_name", "count");
   interest.sort_by(|a, b| b.1.total_cmp(&a.1));
   interest.truncate(10);
   add("interest", interest, true);
@@ -274,19 +307,19 @@ fn audience(o: &Value, i: &mut Insights) {
 /// Average watch time and share of the video, and the retention curve. (Its
 /// last point, at the very end, is far below the one before it, so no
 /// completion rate is derived from it.)
-fn retention(g: &Value, i: &mut Insights) {
-  let duration = g.f64("quit_info.duration").filter(|d| *d > 0.0);
-  let positive = |path: &str| g.f64(path).filter(|n| *n > 0.0);
+fn retention(v: &Value, insights: &mut Insights) {
+  let duration = v.f64("quit_info.duration").filter(|d| *d > 0.0);
+  let positive = |path: &str| v.f64(path).filter(|n| *n > 0.0);
   // "平均播放进度": seconds, and the same as a share of the duration.
   let seconds =
     positive("quit_info.avg_play_progress").or_else(|| positive("duration_info.avg_play_time_int"));
-  i.total("avg_watch_seconds", seconds.map(pi::num));
+  insights.total("avg_watch_seconds", seconds.map(pi::num));
   let ratio = positive("quit_info.full_play_ratio")
     .map(|bp| bp / 10_000.0)
     .or_else(|| Some(seconds? / duration?));
-  i.total("avg_watch_ratio", ratio.map(|r| json!(pi::round4(r))));
+  insights.total("avg_watch_ratio", ratio.map(|r| json!(pi::round4(r))));
   // Share of viewers still watching at each offset (10000 = everyone).
-  let curve: Vec<(u64, f64)> = g
+  let curve: Vec<(u64, f64)> = v
     .list("viewer_quit")
     .iter()
     .filter_map(|p| Some((p.u64("duration_key")?, p.f64("num")? / 10_000.0)))
@@ -301,7 +334,7 @@ fn retention(g: &Value, i: &mut Insights) {
         ..Default::default()
       })
       .collect();
-    i.breakdowns.push(Breakdown {
+    insights.breakdowns.push(Breakdown {
       dimension: "retention".into(),
       items,
       ..Default::default()
@@ -312,12 +345,12 @@ fn retention(g: &Value, i: &mut Insights) {
 /// Daily trends of the last `days` days (the data center keeps the first 30
 /// days after publication and the last 30 days), and hourly views of the
 /// first 48 hours in `extra.views_hourly`.
-fn trend(t: &Value, days: u32, i: &mut Insights) {
+fn trend(v: &Value, days: u32, insights: &mut Insights) {
   let mut to: Option<String> = None;
   let mut daily = Vec::new();
   for (key, metric) in TREND {
-    let mut list = t.list(&format!("data_tendency.{key}")).to_vec();
-    list.extend_from_slice(t.list(&format!("last_30_day_data_tendency.{key}")));
+    let mut list = v.list(&format!("data_tendency.{key}")).to_vec();
+    list.extend_from_slice(v.list(&format!("last_30_day_data_tendency.{key}")));
     if let Some(s) = pi::series(metric, &list, None) {
       to = to.max(s.points.last().map(|p| p.date.clone()));
       daily.push(s);
@@ -328,11 +361,11 @@ fn trend(t: &Value, days: u32, i: &mut Insights) {
   for mut s in daily {
     s.points.retain(|p| p.date >= from);
     if !s.points.is_empty() {
-      i.series.push(s);
+      insights.series.push(s);
     }
   }
   // Hourly views of the first 48 hours, kept aside so daily tables stay daily.
-  let hourly: Vec<Value> = t
+  let hourly: Vec<Value> = v
     .list("hour_data_tendency.play")
     .iter()
     .filter_map(|p| {
@@ -342,13 +375,13 @@ fn trend(t: &Value, days: u32, i: &mut Insights) {
     })
     .collect();
   if !hourly.is_empty() {
-    i.extra.insert("views_hourly".into(), json!(hourly));
+    insights.extra.insert("views_hourly".into(), json!(hourly));
   }
-  i.from = i
+  insights.from = insights
     .series
     .iter()
     .filter_map(|s| s.points.first())
     .map(|p| p.date.get(..10).unwrap_or(&p.date).to_owned())
     .min();
-  i.to = Some(to);
+  insights.to = Some(to);
 }

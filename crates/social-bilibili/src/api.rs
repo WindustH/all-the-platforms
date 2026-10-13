@@ -1,8 +1,9 @@
 //! Bilibili transport: base headers, device cookies, WBI signing and the
 //! `{code, message, data}` envelope.
 //!
-//! Requests are built with [`get`] / [`post`] and sent with [`Call::send`],
-//! which returns the envelope's `data` or a mapped [`Error`].
+//! [`Api`] owns the context; requests are built with [`Api::get`] /
+//! [`Api::post`] and sent with [`Call::send`], which returns the envelope's
+//! `data` or a mapped [`Error`].
 
 use std::time::Duration;
 
@@ -18,28 +19,67 @@ const WBI_TTL: Duration = Duration::from_secs(12 * 3600);
 /// Session cookies of a logged-in account.
 pub const LOGIN_COOKIES: &[&str] = &["SESSDATA", "bili_jct"];
 
-/// Headers every Bilibili request carries. The referer is the bare origin on
-/// purpose: with a trailing `/` some endpoints (ranking) answer -352.
-pub fn configure(http: &mut Http) {
+/// The transport: the context with Bilibili's base headers.
+pub struct Api {
+  pub ctx: Ctx,
+}
+
+impl Api {
+  /// The referer is the bare origin on purpose: with a trailing `/` some
+  /// endpoints (ranking) answer -352.
+  pub fn new(mut ctx: Ctx) -> Self {
+    configure(&mut ctx.http);
+    Self { ctx }
+  }
+
+  pub fn get(&self, url: &str) -> Call<'_> {
+    Call::new(self, url, false)
+  }
+
+  /// A write: form body with `csrf`, requires a login, paced.
+  pub fn post(&self, url: &str) -> Call<'_> {
+    Call::new(self, url, true)
+  }
+
+  /// Fail with `not_authenticated` unless the session cookies are present.
+  pub fn require_login(&self) -> Result<()> {
+    self.ctx.require_login(LOGIN_COOKIES)
+  }
+
+  pub fn csrf(&self) -> Result<String> {
+    self.require_login()?;
+    self
+      .ctx
+      .http
+      .cookie("bili_jct")
+      .ok_or_else(|| Error::auth("missing cookie `bili_jct`"))
+  }
+
+  /// The WBI mixin key, cached for 12 hours (refreshed from `nav` when stale).
+  pub async fn mixin_key(&self, refresh: bool) -> Result<String> {
+    if !refresh && let Some(key) = self.ctx.store.cache_get::<String>("wbi", WBI_TTL) {
+      return Ok(key);
+    }
+    let nav = self.ctx.http.get(NAV).value().await?;
+    self
+      .remember_wbi(&nav)
+      .ok_or_else(|| Error::new(ErrorCode::SignatureError, "nav did not announce WBI keys"))
+  }
+
+  /// Cache the WBI keys found in a `nav` response.
+  pub fn remember_wbi(&self, nav: &Value) -> Option<String> {
+    let img = nav.str("data.wbi_img.img_url")?;
+    let sub = nav.str("data.wbi_img.sub_url")?;
+    let mixin = sign::mixin_key(sign::key_from_url(&img), sign::key_from_url(&sub));
+    self.ctx.store.cache_put("wbi", &mixin);
+    Some(mixin)
+  }
+}
+
+/// Headers every Bilibili request carries.
+fn configure(http: &mut Http) {
   http.set_header("referer", HOME);
   http.set_header("origin", HOME);
-}
-
-pub fn get<'a>(ctx: &'a Ctx, url: &str) -> Call<'a> {
-  Call::new(ctx, url, false)
-}
-
-/// A write: form body with `csrf`, requires a login, paced.
-pub fn post<'a>(ctx: &'a Ctx, url: &str) -> Call<'a> {
-  Call::new(ctx, url, true)
-}
-
-pub fn csrf(ctx: &Ctx) -> Result<String> {
-  ctx.require_login(LOGIN_COOKIES)?;
-  ctx
-    .http
-    .cookie("bili_jct")
-    .ok_or_else(|| Error::auth("missing cookie `bili_jct`"))
 }
 
 #[derive(Clone)]
@@ -51,7 +91,7 @@ enum Body {
 
 #[derive(Clone)]
 pub struct Call<'a> {
-  ctx: &'a Ctx,
+  api: &'a Api,
   url: String,
   query: Vec<(String, String)>,
   headers: Vec<(&'static str, String)>,
@@ -62,9 +102,9 @@ pub struct Call<'a> {
 }
 
 impl<'a> Call<'a> {
-  fn new(ctx: &'a Ctx, url: &str, write: bool) -> Self {
+  fn new(api: &'a Api, url: &str, write: bool) -> Self {
     Self {
-      ctx,
+      api,
       url: url.to_owned(),
       query: Vec::new(),
       headers: Vec::new(),
@@ -123,11 +163,11 @@ impl<'a> Call<'a> {
   /// Send and return the envelope's `data` (or `result`). A WBI call rejected
   /// as unsigned is retried once with freshly fetched keys.
   pub async fn send(self) -> Result<Value> {
-    let (ctx, wbi) = (self.ctx, self.wbi);
+    let (api, wbi) = (self.api, self.wbi);
     let retry = wbi.then(|| self.clone());
     match (envelope(self.send_raw().await?, wbi), retry) {
       (Err(e), Some(call)) if e.code == ErrorCode::SignatureError => {
-        mixin_key(ctx, true).await?;
+        api.mixin_key(true).await?;
         envelope(call.send_raw().await?, wbi)
       }
       (result, _) => result,
@@ -136,8 +176,9 @@ impl<'a> Call<'a> {
 
   /// Send and return the whole JSON response, whatever its `code`.
   pub async fn send_raw(mut self) -> Result<Value> {
-    let ctx = self.ctx;
-    device::ensure(ctx).await;
+    let api = self.api;
+    let ctx = &api.ctx;
+    device::ensure(api).await;
     if self.write {
       self.add_csrf()?;
       ctx
@@ -170,7 +211,7 @@ impl<'a> Call<'a> {
 
   /// Writes carry the `bili_jct` cookie as `csrf` (in the query for JSON bodies).
   fn add_csrf(&mut self) -> Result<()> {
-    let csrf = csrf(self.ctx)?;
+    let csrf = self.api.csrf()?;
     match &mut self.body {
       Some(Body::Form(form)) => {
         form.push(("csrf".into(), csrf.clone()));
@@ -192,7 +233,7 @@ impl<'a> Call<'a> {
       query.extend(sign::dm_params());
     }
     let query = if self.wbi {
-      let key = mixin_key(self.ctx, false).await?;
+      let key = self.api.mixin_key(false).await?;
       sign::sign(query, &key, jiff::Timestamp::now().as_second())
     } else {
       sign::query_string(&query)
@@ -241,23 +282,4 @@ fn envelope(v: Value, wbi: bool) -> Result<Value> {
     -400 | -405 => Error::input(text),
     _ => Error::upstream(text),
   })
-}
-
-/// The WBI mixin key, cached for 12 hours (refreshed from `nav` when stale).
-pub async fn mixin_key(ctx: &Ctx, refresh: bool) -> Result<String> {
-  if !refresh && let Some(key) = ctx.store.cache_get::<String>("wbi", WBI_TTL) {
-    return Ok(key);
-  }
-  let nav = ctx.http.get(NAV).value().await?;
-  remember_wbi(ctx, &nav)
-    .ok_or_else(|| Error::new(ErrorCode::SignatureError, "nav did not announce WBI keys"))
-}
-
-/// Cache the WBI keys found in a `nav` response.
-pub fn remember_wbi(ctx: &Ctx, nav: &Value) -> Option<String> {
-  let img = nav.str("data.wbi_img.img_url")?;
-  let sub = nav.str("data.wbi_img.sub_url")?;
-  let mixin = sign::mixin_key(sign::key_from_url(&img), sign::key_from_url(&sub));
-  ctx.store.cache_put("wbi", &mixin);
-  Some(mixin)
 }

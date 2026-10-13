@@ -2,12 +2,35 @@
 //! and a user's collections / articles.
 
 use social_core::cli::PageArgs;
-use social_core::{Ctx, Data, Result};
+use social_core::{Data, Result};
 
-use crate::{discover, live, pgc, space};
+use crate::api::Api;
+use crate::{articles, bangumi, discover, lists, rooms, videos};
 
 #[derive(Debug, clap::Subcommand)]
-pub enum Explore {
+pub enum ExploreCommand {
+  #[command(flatten)]
+  Discovery(DiscoveryCommand),
+  #[command(flatten)]
+  Pgc(PgcCommand),
+  #[command(flatten)]
+  Rooms(RoomCommand),
+  #[command(flatten)]
+  Spaces(SpaceCommand),
+}
+
+pub async fn run(api: &Api, command: ExploreCommand) -> Result<Data> {
+  match command {
+    ExploreCommand::Discovery(c) => run_discovery(api, c).await,
+    ExploreCommand::Pgc(c) => run_pgc(api, c).await,
+    ExploreCommand::Rooms(c) => run_rooms(api, c).await,
+    ExploreCommand::Spaces(c) => run_spaces(api, c).await,
+  }
+}
+
+/// Trending searches, weekly and all-time picks, topic feeds.
+#[derive(Debug, clap::Subcommand)]
+pub enum DiscoveryCommand {
   /// Trending searches (热搜)
   Trending {
     #[arg(short = 'n', long, default_value_t = 20)]
@@ -32,6 +55,36 @@ pub enum Explore {
     #[command(flatten)]
     page: PageArgs,
   },
+}
+
+async fn run_discovery(api: &Api, command: DiscoveryCommand) -> Result<Data> {
+  use DiscoveryCommand as E;
+  Ok(match command {
+    E::Trending { limit } => Data::Collections(discover::trending(api, limit).await?),
+    E::Weekly { number, page } => Data::Posts(
+      page
+        .collect_dated(async |_| discover::weekly(api, number).await)
+        .await?,
+    ),
+    E::Precious { page } => Data::Posts(
+      page
+        .collect_dated(async |_| discover::precious(api).await)
+        .await?,
+    ),
+    E::Topic { topic, sort, page } => {
+      let topic = api.ctx.collection_ref(&topic)?;
+      Data::Posts(
+        page
+          .collect_dated(async |r| discover::topic(api, &topic, sort.as_deref(), &r).await)
+          .await?,
+      )
+    }
+  })
+}
+
+/// Bangumi, films and documentaries: seasons, following, the timeline.
+#[derive(Debug, clap::Subcommand)]
+pub enum PgcCommand {
   /// Episodes of a bangumi / film / documentary (ss…, ep…, md… or link)
   Bangumi {
     season: String,
@@ -68,6 +121,53 @@ pub enum Explore {
     #[command(flatten)]
     page: PageArgs,
   },
+}
+
+async fn run_pgc(api: &Api, command: PgcCommand) -> Result<Data> {
+  use PgcCommand as E;
+  Ok(match command {
+    E::Bangumi { season, info, page } => {
+      let season = api.ctx.collection_ref(&season)?;
+      let v = bangumi::season(api, &season).await?;
+      if info {
+        Data::Collections(social_core::Page::last(vec![bangumi::info(&v)]))
+      } else {
+        let episodes = bangumi::episodes(&v);
+        Data::Posts(
+          page
+            .collect(async |_| Ok(social_core::Page::last(episodes.clone())))
+            .await?,
+        )
+      }
+    }
+    E::BangumiFollow { season, undo } => {
+      let season = api.ctx.collection_ref(&season)?;
+      Data::Action(bangumi::follow(api, &season, undo).await?)
+    }
+    E::MyBangumi { user, drama, page } => {
+      let user = user.map(|u| api.ctx.user_ref(&u)).transpose()?;
+      Data::Collections(
+        page
+          .collect(async |r| bangumi::followed(api, user.as_deref(), drama, &r).await)
+          .await?,
+      )
+    }
+    E::Timeline {
+      drama,
+      before,
+      after,
+      page,
+    } => Data::Posts(
+      page
+        .collect_dated(async |_| bangumi::timeline(api, drama, before, after).await)
+        .await?,
+    ),
+  })
+}
+
+/// Live rooms.
+#[derive(Debug, clap::Subcommand)]
+pub enum RoomCommand {
   /// A live room: title, streamer, live state, audience (room id or link, or uid:MID / @name)
   Live { room: String },
   /// Live rooms of the people you follow
@@ -75,6 +175,23 @@ pub enum Explore {
     #[command(flatten)]
     page: PageArgs,
   },
+}
+
+async fn run_rooms(api: &Api, command: RoomCommand) -> Result<Data> {
+  use RoomCommand as E;
+  Ok(match command {
+    E::Live { room } => Data::Post(Box::new(rooms::read(api, &room).await?)),
+    E::LiveFollowing { page } => Data::Posts(
+      page
+        .collect(async |r| rooms::following(api, &r).await)
+        .await?,
+    ),
+  })
+}
+
+/// What users keep in their space: lists, articles, coined and liked videos.
+#[derive(Debug, clap::Subcommand)]
+pub enum SpaceCommand {
   /// Collections (合集) and series (系列) of a user
   Lists {
     user: String,
@@ -99,95 +216,34 @@ pub enum Explore {
   Liked { user: String },
 }
 
-pub async fn run(ctx: &Ctx, command: Explore) -> Result<Data> {
-  use Explore as E;
+async fn run_spaces(api: &Api, command: SpaceCommand) -> Result<Data> {
+  use SpaceCommand as E;
   Ok(match command {
-    E::Trending { limit } => Data::Collections(discover::trending(ctx, limit).await?),
-    E::Weekly { number, page } => Data::Posts(
-      page
-        .collect_dated(async |_| discover::weekly(ctx, number).await)
-        .await?,
-    ),
-    E::Precious { page } => Data::Posts(
-      page
-        .collect_dated(async |_| discover::precious(ctx).await)
-        .await?,
-    ),
-    E::Topic { topic, sort, page } => {
-      let topic = ctx.collection_ref(&topic)?;
-      Data::Posts(
-        page
-          .collect_dated(async |r| discover::topic(ctx, &topic, sort.as_deref(), &r).await)
-          .await?,
-      )
-    }
-    E::Bangumi { season, info, page } => {
-      let season = ctx.collection_ref(&season)?;
-      let v = pgc::season(ctx, &season).await?;
-      if info {
-        Data::Collections(social_core::Page::last(vec![pgc::info(&v)]))
-      } else {
-        let episodes = pgc::episodes(&v);
-        Data::Posts(
-          page
-            .collect(async |_| Ok(social_core::Page::last(episodes.clone())))
-            .await?,
-        )
-      }
-    }
-    E::BangumiFollow { season, undo } => {
-      let season = ctx.collection_ref(&season)?;
-      Data::Action(pgc::follow(ctx, &season, undo).await?)
-    }
-    E::MyBangumi { user, drama, page } => {
-      let user = user.map(|u| ctx.user_ref(&u)).transpose()?;
-      Data::Collections(
-        page
-          .collect(async |r| pgc::followed(ctx, user.as_deref(), drama, &r).await)
-          .await?,
-      )
-    }
-    E::Timeline {
-      drama,
-      before,
-      after,
-      page,
-    } => Data::Posts(
-      page
-        .collect_dated(async |_| pgc::timeline(ctx, drama, before, after).await)
-        .await?,
-    ),
-    E::Live { room } => Data::Post(Box::new(live::read(ctx, &room).await?)),
-    E::LiveFollowing { page } => Data::Posts(
-      page
-        .collect(async |r| live::following(ctx, &r).await)
-        .await?,
-    ),
     E::Lists { user, page } => {
-      let user = ctx.user_ref(&user)?;
+      let user = api.ctx.user_ref(&user)?;
       Data::Collections(
         page
-          .collect(async |r| space::lists(ctx, &user, &r).await)
+          .collect(async |r| lists::lists(api, &user, &r).await)
           .await?,
       )
     }
     E::List { list, page } => {
-      let list = ctx.collection_ref(&list)?;
+      let list = api.ctx.collection_ref(&list)?;
       Data::Posts(
         page
-          .collect_dated(async |r| space::videos(ctx, &list, &r).await)
+          .collect_dated(async |r| lists::videos(api, &list, &r).await)
           .await?,
       )
     }
     E::Articles { user, page } => {
-      let user = ctx.user_ref(&user)?;
+      let user = api.ctx.user_ref(&user)?;
       Data::Posts(
         page
-          .collect_dated(async |r| space::articles(ctx, &user, &r).await)
+          .collect_dated(async |r| articles::by_user(api, &user, &r).await)
           .await?,
       )
     }
-    E::Coined { user } => Data::Posts(space::recent(ctx, &ctx.user_ref(&user)?, false).await?),
-    E::Liked { user } => Data::Posts(space::recent(ctx, &ctx.user_ref(&user)?, true).await?),
+    E::Coined { user } => Data::Posts(videos::recent(api, &api.ctx.user_ref(&user)?, false).await?),
+    E::Liked { user } => Data::Posts(videos::recent(api, &api.ctx.user_ref(&user)?, true).await?),
   })
 }

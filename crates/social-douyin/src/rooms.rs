@@ -2,16 +2,40 @@
 //! the pull stream addresses.
 
 use social_core::text::from_secs;
-use social_core::{Ctx, Error, Extra, Post, Result, Value, ValueExt};
+use social_core::{Error, Extra, Post, Result, Value, ValueExt};
 
-use crate::{api, parse, refs};
+use crate::api::Api;
+use crate::{parse, refs};
 
 const ENTER: &str = "/webcast/room/web/enter/";
 
-pub async fn room(ctx: &Ctx, arg: &str) -> Result<Post> {
+pub async fn room(api: &Api, arg: &str) -> Result<Post> {
   let web_rid = refs::live(arg)?;
+  let v = enter(api, &web_rid).await?;
+  let data = v.at("data");
+  let room = data.at("data.0");
+  if !room.is_object() {
+    return Err(Error::not_found(format!("no Douyin live room {web_rid}")));
+  }
+  let anchor = data.at("user");
+  Ok(Post {
+    id: room.str("id_str").unwrap_or_else(|| web_rid.clone()),
+    kind: "live".into(),
+    title: room.str("title"),
+    url: Some(format!("https://live.douyin.com/{web_rid}")),
+    author: anchor.as_object().and(parse::user(anchor)),
+    created_at: room.i64("create_time").and_then(from_secs),
+    extra: room_extra(room, &web_rid),
+    raw: Some(v.clone()),
+    ..Post::default()
+  })
+}
+
+/// The room as the live site loads it (its own parameters, not the web app's).
+async fn enter(api: &Api, web_rid: &str) -> Result<Value> {
   let chrome = format!("{}.0.0.0", social_core::http::CHROME_VERSION);
-  let v = api::get(ctx, ENTER)
+  api
+    .get(ENTER)
     .bare()
     .arg("aid", "6383")
     .arg("app_name", "douyin_web")
@@ -26,21 +50,18 @@ pub async fn room(ctx: &Ctx, arg: &str) -> Result<Post> {
     .arg("browser_platform", "MacIntel")
     .arg("browser_name", "Chrome")
     .arg("browser_version", &chrome)
-    .arg("web_rid", &web_rid)
+    .arg("web_rid", web_rid)
     .arg("enter_source", "")
     .arg("is_need_double_stream", "false")
     .send()
-    .await?;
-  let data = v.at("data");
-  let room = data.at("data.0");
-  if !room.is_object() {
-    return Err(Error::not_found(format!("no Douyin live room {web_rid}")));
-  }
-  let anchor = data.at("user");
-  let live = room.i64("status") == Some(2);
+    .await
+}
+
+/// Live state, ids, audience counters and the pull stream addresses.
+fn room_extra(room: &Value, web_rid: &str) -> Extra {
   let mut extra = Extra::new();
-  extra.insert("live".into(), live.into());
-  extra.insert("web_rid".into(), web_rid.clone().into());
+  extra.insert("live".into(), (room.i64("status") == Some(2)).into());
+  extra.insert("web_rid".into(), web_rid.into());
   for (key, path) in [
     ("room_id", "id_str"),
     ("viewers", "room_view_stats.display_value"),
@@ -61,15 +82,5 @@ pub async fn room(ctx: &Ctx, arg: &str) -> Result<Post> {
   if !streams.is_empty() {
     extra.insert("streams".into(), Value::Object(streams));
   }
-  Ok(Post {
-    id: room.str("id_str").unwrap_or_else(|| web_rid.clone()),
-    kind: "live".into(),
-    title: room.str("title"),
-    url: Some(format!("https://live.douyin.com/{web_rid}")),
-    author: anchor.as_object().and(parse::user(anchor)),
-    created_at: room.i64("create_time").and_then(from_secs),
-    extra,
-    raw: Some(v.clone()),
-    ..Post::default()
-  })
+  extra
 }

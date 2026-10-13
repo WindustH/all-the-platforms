@@ -3,11 +3,12 @@
 //! only: downloads stay limited to ordinary videos.
 
 use social_core::text::from_secs;
-use social_core::{Action, Collection, Ctx, Page, PageReq, Post, Result, Value, ValueExt, json};
+use social_core::{Action, Collection, Page, PageReq, Post, Result, Value, ValueExt, json};
 
-use crate::page::Pn;
+use crate::api::Api;
+use crate::paging::Pn;
 use crate::refs::{self, PgcRef, season_url};
-use crate::{account, api, parse, user};
+use crate::{parse, users};
 
 const SEASON: &str = "https://api.bilibili.com/pgc/view/web/season";
 const FOLLOW: &str = "https://api.bilibili.com/pgc/web/follow/add";
@@ -29,13 +30,13 @@ pub fn kind(season_type: Option<u64>) -> &'static str {
 }
 
 /// Raw season data from a season, episode or media (review page) id.
-pub async fn season(ctx: &Ctx, input: &str) -> Result<Value> {
-  let call = api::get(ctx, SEASON);
+pub async fn season(api: &Api, input: &str) -> Result<Value> {
+  let call = api.get(SEASON);
   let call = match refs::season(input)? {
     PgcRef::Season(id) => call.arg("season_id", id),
     PgcRef::Episode(id) => call.arg("ep_id", id),
     PgcRef::Media(id) => {
-      let review = api::get(ctx, REVIEW).arg("media_id", id).send().await?;
+      let review = api.get(REVIEW).arg("media_id", id).send().await?;
       let sid = review.u64("media.season_id").unwrap_or(0);
       call.arg("season_id", sid)
     }
@@ -144,10 +145,11 @@ pub fn episodes(v: &Value) -> Vec<Post> {
     .collect()
 }
 
-pub async fn follow(ctx: &Ctx, input: &str, undo: bool) -> Result<Action> {
-  let v = season(ctx, input).await?;
+pub async fn follow(api: &Api, input: &str, undo: bool) -> Result<Action> {
+  let v = season(api, input).await?;
   let id = v.str("season_id").unwrap_or_default();
-  api::post(ctx, if undo { UNFOLLOW } else { FOLLOW })
+  api
+    .post(if undo { UNFOLLOW } else { FOLLOW })
     .arg("season_id", &id)
     .send()
     .await?;
@@ -161,17 +163,18 @@ pub async fn follow(ctx: &Ctx, input: &str, undo: bool) -> Result<Action> {
 
 /// Bangumi (`anime`) or films and series (`drama`) a user follows.
 pub async fn followed(
-  ctx: &Ctx,
+  api: &Api,
   input: Option<&str>,
   drama: bool,
   page: &PageReq,
 ) -> Result<Page<Collection>> {
   let mid = match input {
-    Some(u) => user::mid(ctx, u).await?,
-    None => account::my_mid(ctx).await?,
+    Some(u) => users::mid(api, u).await?,
+    None => users::my_mid(api).await?,
   };
   let pn = Pn::of(page, 30);
-  let data = api::get(ctx, FOLLOWED)
+  let data = api
+    .get(FOLLOWED)
     .arg("vmid", &mid)
     .arg("type", if drama { 2 } else { 1 })
     .arg("follow_status", 0)
@@ -204,8 +207,9 @@ pub async fn followed(
 }
 
 /// Episodes airing from `before` days ago to `after` days ahead.
-pub async fn timeline(ctx: &Ctx, drama: bool, before: u8, after: u8) -> Result<Page<Post>> {
-  let data = api::get(ctx, TIMELINE)
+pub async fn timeline(api: &Api, drama: bool, before: u8, after: u8) -> Result<Page<Post>> {
+  let data = api
+    .get(TIMELINE)
     .arg("types", if drama { 4 } else { 1 })
     .arg("before", before)
     .arg("after", after)

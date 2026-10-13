@@ -3,11 +3,12 @@
 //! Every commentable resource has an `(oid, type)` pair: a video is
 //! `(aid, 1)`, a dynamic tells its own pair in `basic.comment_id_str/_type`.
 
-use social_core::{Action, Comment, Ctx, Error, Page, PageReq, Result, Value, ValueExt, json};
+use social_core::{Action, Comment, Error, Page, PageReq, Result, Value, ValueExt, json};
 
-use crate::page::Pn;
+use crate::api::Api;
+use crate::paging::Pn;
 use crate::refs::{self, PostRef};
-use crate::{api, article, dynamic, parse};
+use crate::{articles, dynamics, parse};
 
 const LIST: &str = "https://api.bilibili.com/x/v2/reply";
 const MAIN: &str = "https://api.bilibili.com/x/v2/reply/wbi/main";
@@ -23,7 +24,7 @@ pub struct Section {
   pub post: String,
 }
 
-pub async fn section(ctx: &Ctx, post: &PostRef) -> Result<Section> {
+pub async fn section(api: &Api, post: &PostRef) -> Result<Section> {
   match post {
     PostRef::Video(v) => Ok(Section {
       oid: v.aid.to_string(),
@@ -32,11 +33,11 @@ pub async fn section(ctx: &Ctx, post: &PostRef) -> Result<Section> {
     }),
     PostRef::Article(id) => Ok(Section {
       oid: id.to_string(),
-      kind: article::COMMENT_TYPE,
+      kind: articles::COMMENT_TYPE,
       post: format!("cv{id}"),
     }),
     PostRef::Dynamic(id) => {
-      let item = dynamic::detail(ctx, id).await?;
+      let item = dynamics::detail(api, id).await?;
       match (
         item.str("basic.comment_id_str"),
         item.u64("basic.comment_type"),
@@ -57,16 +58,17 @@ pub async fn section(ctx: &Ctx, post: &PostRef) -> Result<Section> {
 /// Main replies: `hot` (default, by likes, paged by number) or `time` (newest
 /// first, offset cursor; anonymous visitors only get the first few).
 pub async fn list(
-  ctx: &Ctx,
+  api: &Api,
   s: &Section,
   sort: Option<&str>,
   page: &PageReq,
 ) -> Result<Page<Comment>> {
   if sort == Some("time") {
-    return latest(ctx, s, page).await;
+    return latest(api, s, page).await;
   }
   let pn = Pn::of(page, 20);
-  let data = api::get(ctx, LIST)
+  let data = api
+    .get(LIST)
     .arg("oid", &s.oid)
     .arg("type", s.kind)
     .arg("pn", pn.pn)
@@ -79,11 +81,12 @@ pub async fn list(
   Ok(pn.page(comments, pn.before(data.u64("page.count"))))
 }
 
-async fn latest(ctx: &Ctx, s: &Section, page: &PageReq) -> Result<Page<Comment>> {
+async fn latest(api: &Api, section: &Section, page: &PageReq) -> Result<Page<Comment>> {
   let offset = page.cursor.as_deref().unwrap_or_default();
-  let data = api::get(ctx, MAIN)
-    .arg("oid", &s.oid)
-    .arg("type", s.kind)
+  let data = api
+    .get(MAIN)
+    .arg("oid", &section.oid)
+    .arg("type", section.kind)
     .arg("mode", 2)
     .arg("pagination_str", json!({ "offset": offset }).to_string())
     .arg("plat", 1)
@@ -116,11 +119,17 @@ fn with_pinned(pinned: Option<&Value>, replies: &[Value]) -> Vec<Comment> {
 }
 
 /// Replies inside the thread of root comment `root`.
-pub async fn thread(ctx: &Ctx, s: &Section, root: &str, page: &PageReq) -> Result<Page<Comment>> {
+pub async fn thread(
+  api: &Api,
+  section: &Section,
+  root: &str,
+  page: &PageReq,
+) -> Result<Page<Comment>> {
   let pn = Pn::of(page, 20);
-  let data = api::get(ctx, THREAD)
-    .arg("oid", &s.oid)
-    .arg("type", s.kind)
+  let data = api
+    .get(THREAD)
+    .arg("oid", &section.oid)
+    .arg("type", section.kind)
     .arg("root", root)
     .arg("pn", pn.pn)
     .arg("ps", pn.ps)
@@ -131,10 +140,16 @@ pub async fn thread(ctx: &Ctx, s: &Section, root: &str, page: &PageReq) -> Resul
 }
 
 /// Comment on the post, or reply to `ROOT` / `ROOT:PARENT`.
-pub async fn add(ctx: &Ctx, s: &Section, text: &str, reply_to: Option<&str>) -> Result<Action> {
-  let mut call = api::post(ctx, ADD)
-    .arg("oid", &s.oid)
-    .arg("type", s.kind)
+pub async fn add(
+  api: &Api,
+  section: &Section,
+  text: &str,
+  reply_to: Option<&str>,
+) -> Result<Action> {
+  let mut call = api
+    .post(ADD)
+    .arg("oid", &section.oid)
+    .arg("type", section.kind)
     .arg("message", text)
     .arg("plat", 1)
     .arg("statistics", r#"{"appId":100,"platform":5}"#)
@@ -149,26 +164,27 @@ pub async fn add(ctx: &Ctx, s: &Section, text: &str, reply_to: Option<&str>) -> 
   } else {
     "comment"
   };
-  let action = Action::done(verb, &s.post);
+  let action = Action::done(verb, &section.post);
   Ok(match data.first_str(&["rpid_str", "rpid"]) {
     Some(id) => action.with_id(id),
     None => action,
   })
 }
 
-pub async fn delete(ctx: &Ctx, s: &Section, rpid: &str) -> Result<Action> {
-  api::post(ctx, DEL)
-    .arg("oid", &s.oid)
-    .arg("type", s.kind)
+pub async fn delete(api: &Api, section: &Section, rpid: &str) -> Result<Action> {
+  api
+    .post(DEL)
+    .arg("oid", &section.oid)
+    .arg("type", section.kind)
     .arg("rpid", rpid)
     .send()
     .await?;
-  Ok(Action::done("delete-comment", &s.post).with_id(rpid))
+  Ok(Action::done("delete-comment", &section.post).with_id(rpid))
 }
 
 /// Like a comment, or with `dislike` mark it down (踩); `undo` removes either.
 pub async fn react(
-  ctx: &Ctx,
+  api: &Api,
   s: &Section,
   rpid: &str,
   dislike: bool,
@@ -179,7 +195,8 @@ pub async fn react(
   } else {
     "https://api.bilibili.com/x/v2/reply/action"
   };
-  api::post(ctx, url)
+  api
+    .post(url)
     .arg("oid", &s.oid)
     .arg("type", s.kind)
     .arg("rpid", rpid)
@@ -196,14 +213,15 @@ pub async fn react(
 }
 
 /// Pin (or with `undo` unpin) a comment under your own post.
-pub async fn pin(ctx: &Ctx, s: &Section, rpid: &str, undo: bool) -> Result<Action> {
-  api::post(ctx, "https://api.bilibili.com/x/v2/reply/top")
-    .arg("oid", &s.oid)
-    .arg("type", s.kind)
+pub async fn pin(api: &Api, section: &Section, rpid: &str, undo: bool) -> Result<Action> {
+  api
+    .post("https://api.bilibili.com/x/v2/reply/top")
+    .arg("oid", &section.oid)
+    .arg("type", section.kind)
     .arg("rpid", rpid)
     .arg("action", u8::from(!undo))
     .send()
     .await?;
   let verb = if undo { "comment-unpin" } else { "comment-pin" };
-  Ok(Action::done(verb, &s.post).with_id(rpid))
+  Ok(Action::done(verb, &section.post).with_id(rpid))
 }

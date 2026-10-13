@@ -1,9 +1,10 @@
 //! The logged-in account's saved posts (收藏) and folders, viewing history,
 //! and the post lists of a mix (合集) or a music.
 
-use social_core::{Collection, Ctx, Error, Page, PageReq, Post, Result, Value, ValueExt};
+use social_core::{Collection, Error, Page, PageReq, Post, Result, Value, ValueExt};
 
-use crate::{api, parse, refs};
+use crate::api::Api;
+use crate::{parse, refs};
 
 const SAVED: &str = "/aweme/v1/web/aweme/listcollection/";
 const FOLDERS: &str = "/aweme/v1/web/collects/list/";
@@ -27,13 +28,14 @@ fn awemes(v: &Value, cursor_key: &str) -> Page<Post> {
 }
 
 /// Saved posts, all or those of one folder.
-pub async fn favorites(ctx: &Ctx, folder: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-  api::require_login(ctx)?;
+pub async fn favorites(api: &Api, folder: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
   let cursor = page.number_or(0);
   let count = page.size_within(18);
   let v = match folder {
     Some(id) => {
-      api::get(ctx, FOLDER)
+      api
+        .get(FOLDER)
         .arg("collects_id", id.trim())
         .arg("cursor", cursor)
         .arg("count", count)
@@ -43,7 +45,8 @@ pub async fn favorites(ctx: &Ctx, folder: Option<&str>, page: &PageReq) -> Resul
         .await?
     }
     None => {
-      api::post(ctx, SAVED)
+      api
+        .post(SAVED)
         .arg("publish_video_strategy_type", "2")
         .arg("version_code", "170400")
         .arg("version_name", "17.4.0")
@@ -57,9 +60,10 @@ pub async fn favorites(ctx: &Ctx, folder: Option<&str>, page: &PageReq) -> Resul
 }
 
 /// Folders of saved posts.
-pub async fn folders(ctx: &Ctx, page: &PageReq) -> Result<Page<Collection>> {
-  api::require_login(ctx)?;
-  let v = api::get(ctx, FOLDERS)
+pub async fn folders(api: &Api, page: &PageReq) -> Result<Page<Collection>> {
+  api.require_login()?;
+  let v = api
+    .get(FOLDERS)
     .arg("cursor", page.number_or(0))
     .arg("count", page.size_within(20))
     .arg("version_code", "170400")
@@ -86,9 +90,10 @@ pub async fn folders(ctx: &Ctx, page: &PageReq) -> Result<Page<Collection>> {
   Ok(Page::new(items, next))
 }
 
-pub async fn history(ctx: &Ctx, page: &PageReq) -> Result<Page<Post>> {
-  api::require_login(ctx)?;
-  let v = api::get(ctx, HISTORY)
+pub async fn history(api: &Api, page: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
+  let v = api
+    .get(HISTORY)
     .arg("max_cursor", page.number_or(0))
     .arg("count", page.size_within(20))
     .send()
@@ -96,9 +101,10 @@ pub async fn history(ctx: &Ctx, page: &PageReq) -> Result<Page<Post>> {
   Ok(awemes(&v, "max_cursor"))
 }
 
-pub async fn mix(ctx: &Ctx, arg: &str, page: &PageReq) -> Result<Page<Post>> {
+pub async fn mix(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
   let id = refs::mix(arg)?;
-  let v = api::get(ctx, MIX)
+  let v = api
+    .get(MIX)
     .arg("mix_id", &id)
     .arg("cursor", page.number_or(0))
     .arg("count", page.size_within(20))
@@ -112,9 +118,10 @@ pub async fn mix(ctx: &Ctx, arg: &str, page: &PageReq) -> Result<Page<Post>> {
   Ok(awemes(&v, "cursor"))
 }
 
-pub async fn music(ctx: &Ctx, arg: &str, page: &PageReq) -> Result<Page<Post>> {
+pub async fn music(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
   let id = refs::music(arg)?;
-  let v = api::get(ctx, MUSIC)
+  let v = api
+    .get(MUSIC)
     .arg("music_id", &id)
     .arg("cursor", page.number_or(0))
     .arg("count", page.size_within(20))

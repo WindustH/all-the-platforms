@@ -11,18 +11,24 @@ mod commands;
 
 pub use commands::{Command, run};
 
+use social_core::credentials::env;
 use social_core::{Error, ErrorCode, Result, User, Value, ValueExt, json};
 
 use crate::api::Api;
 
 const BASE: &str = "https://business-api.tiktok.com/open_api/v1.3";
-pub const TOKEN_KEY: &str = "ads_token";
+const TOKEN_KEY: &str = "ads_token";
 const ADVERTISER_KEY: &str = "ads_advertiser";
 const TOKEN_HINT: &str = "set TIKTOK_ADS_ACCESS_TOKEN or run `social tiktok login --token <access token>` \
    (a long-term token of a Marketing API app from https://business-api.tiktok.com)";
 
-fn env(name: &str) -> Option<String> {
-  std::env::var(name).ok().filter(|v| !v.trim().is_empty())
+/// Keep a Marketing API access token (`login --token`) with the session.
+pub fn login_token(api: &Api, token: &str) -> Result<()> {
+  if token.chars().any(char::is_whitespace) {
+    return Err(Error::input("an access token has no spaces"));
+  }
+  social_core::credentials::save(&api.ctx, &[(TOKEN_KEY, token)]);
+  Ok(())
 }
 
 /// Whether an access token is configured.

@@ -1,12 +1,14 @@
 //! Users: profiles, name lookup, followers / following and (un)follow.
 
 use social_core::text::from_secs;
-use social_core::{Action, Ctx, Error, Page, PageReq, Query, Result, User, ValueExt, json};
+use social_core::{Action, Error, Page, PageReq, Query, Result, User, ValueExt, json};
 
-use crate::api;
-use crate::page::Pn;
+use crate::api::Api;
+use crate::paging::Pn;
 use crate::refs::{self, UserRef};
-use crate::{parse, video};
+use crate::{parse, videos};
+
+const NAV: &str = "https://api.bilibili.com/x/web-interface/nav";
 
 const CARD: &str = "https://api.bilibili.com/x/web-interface/card";
 const FOLLOWERS: &str = "https://api.bilibili.com/x/relation/followers";
@@ -15,7 +17,7 @@ const MODIFY: &str = "https://api.bilibili.com/x/relation/modify";
 const UPSTAT: &str = "https://api.bilibili.com/x/space/upstat";
 
 /// A user argument as a mid; names are looked up with user search (best match).
-pub async fn mid(ctx: &Ctx, input: &str) -> Result<String> {
+pub async fn mid(api: &Api, input: &str) -> Result<String> {
   let name = match refs::user(input) {
     UserRef::Mid(mid) => return Ok(mid.to_string()),
     UserRef::Name(name) => name,
@@ -28,7 +30,7 @@ pub async fn mid(ctx: &Ctx, input: &str) -> Result<String> {
     cursor: None,
     size: 20,
   };
-  let found = video::search_users(ctx, &query, &first).await?;
+  let found = videos::search_users(api, &query, &first).await?;
   let best = found
     .items
     .iter()
@@ -39,9 +41,10 @@ pub async fn mid(ctx: &Ctx, input: &str) -> Result<String> {
     .ok_or_else(|| Error::not_found(format!("no user named {name}")))
 }
 
-pub async fn profile(ctx: &Ctx, input: &str) -> Result<User> {
-  let mid = mid(ctx, input).await?;
-  let data = api::get(ctx, CARD)
+pub async fn profile(api: &Api, input: &str) -> Result<User> {
+  let mid = mid(api, input).await?;
+  let data = api
+    .get(CARD)
     .arg("mid", &mid)
     .arg("photo", "false")
     .send()
@@ -53,11 +56,11 @@ pub async fn profile(ctx: &Ctx, input: &str) -> Result<User> {
     user.stats.other.insert("articles".into(), n);
   }
   user.stats.likes = data.count("like_num");
-  if ctx.http.has_cookie("SESSDATA") {
+  if api.ctx.http.has_cookie("SESSDATA") {
     user.followed = data.bool("following");
   }
   // Lifetime plays of the uploads and reads of the articles.
-  if let Ok(up) = api::get(ctx, UPSTAT).arg("mid", &mid).send().await {
+  if let Ok(up) = api.get(UPSTAT).arg("mid", &mid).send().await {
     for (key, path) in [("views", "archive.view"), ("article_views", "article.view")] {
       if let Some(n) = up.count(path).filter(|n| *n > 0) {
         user.stats.other.insert(key.into(), n);
@@ -69,11 +72,12 @@ pub async fn profile(ctx: &Ctx, input: &str) -> Result<User> {
 }
 
 /// Relation lists; Bilibili answers -101 / -352 to anonymous visitors.
-async fn relations(ctx: &Ctx, url: &str, input: &str, page: &PageReq) -> Result<Page<User>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
-  let mid = mid(ctx, input).await?;
+async fn relations(api: &Api, url: &str, input: &str, page: &PageReq) -> Result<Page<User>> {
+  api.require_login()?;
+  let mid = mid(api, input).await?;
   let pn = Pn::of(page, 50);
-  let data = api::get(ctx, url)
+  let data = api
+    .get(url)
     .arg("vmid", mid)
     .arg("pn", pn.pn)
     .arg("ps", pn.ps)
@@ -96,17 +100,18 @@ async fn relations(ctx: &Ctx, url: &str, input: &str, page: &PageReq) -> Result<
 }
 
 /// Followers (others' lists are capped by Bilibili at 5 pages).
-pub async fn followers(ctx: &Ctx, input: &str, page: &PageReq) -> Result<Page<User>> {
-  relations(ctx, FOLLOWERS, input, page).await
+pub async fn followers(api: &Api, input: &str, page: &PageReq) -> Result<Page<User>> {
+  relations(api, FOLLOWERS, input, page).await
 }
 
-pub async fn following(ctx: &Ctx, input: &str, page: &PageReq) -> Result<Page<User>> {
-  relations(ctx, FOLLOWINGS, input, page).await
+pub async fn following(api: &Api, input: &str, page: &PageReq) -> Result<Page<User>> {
+  relations(api, FOLLOWINGS, input, page).await
 }
 
-pub async fn follow(ctx: &Ctx, input: &str, undo: bool) -> Result<Action> {
-  let mid = mid(ctx, input).await?;
-  api::post(ctx, MODIFY)
+pub async fn follow(api: &Api, input: &str, undo: bool) -> Result<Action> {
+  let mid = mid(api, input).await?;
+  api
+    .post(MODIFY)
     .arg("fid", &mid)
     .arg("act", if undo { 2 } else { 1 })
     .arg("re_src", 11)
@@ -114,4 +119,31 @@ pub async fn follow(ctx: &Ctx, input: &str, undo: bool) -> Result<Action> {
     .await?;
   let action = if undo { "unfollow" } else { "follow" };
   Ok(Action::done(action, &mid).with_url(refs::space_url(&mid)))
+}
+
+/// The logged-in account (from `nav`, which also refreshes the WBI keys).
+pub async fn whoami(api: &Api) -> Result<User> {
+  api.require_login()?;
+  let nav = api.get(NAV).send_raw().await?;
+  api.remember_wbi(&nav);
+  let data = nav.at("data");
+  if nav.i64("code") != Some(0) || data.bool("isLogin") != Some(true) {
+    return Err(Error::auth(
+      "the session is not logged in (nav returned -101)",
+    ));
+  }
+  let mut user = parse::user(data);
+  if let Some(coins) = data.count("money") {
+    user.stats.other.insert("coins".into(), coins);
+  }
+  Ok(user)
+}
+
+/// The logged-in account's mid: from the `DedeUserID` cookie, else from `nav`.
+pub async fn my_mid(api: &Api) -> Result<String> {
+  api.require_login()?;
+  match api.ctx.http.cookie("DedeUserID") {
+    Some(mid) => Ok(mid),
+    None => Ok(whoami(api).await?.id),
+  }
 }

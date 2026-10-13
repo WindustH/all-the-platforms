@@ -2,25 +2,27 @@
 
 use std::collections::BTreeMap;
 
-use social_core::{Ctx, Notification, Page, PageReq, Result, Value, ValueExt};
+use social_core::{Notification, Page, PageReq, Result, Value, ValueExt};
 
-use crate::{api, parse};
+use crate::api::Api;
+use crate::parse;
 
 const UNREAD: &str = "https://api.bilibili.com/x/msgfeed/unread";
 
 /// `kind`: `reply` (default), `at` or `like`. The cursor is `id:time` of the last item.
 pub async fn notifications(
-  ctx: &Ctx,
+  api: &Api,
   kind: Option<&str>,
   page: &PageReq,
 ) -> Result<Page<Notification>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
+  api.require_login()?;
   let (path, time_key, label, list) = match kind.unwrap_or("reply") {
     "at" => ("at", "at_time", "mention", "items"),
     "like" => ("like", "like_time", "like", "total.items"),
     _ => ("reply", "reply_time", "reply", "items"),
   };
-  let mut call = api::get(ctx, &format!("https://api.bilibili.com/x/msgfeed/{path}"))
+  let mut call = api
+    .get(&format!("https://api.bilibili.com/x/msgfeed/{path}"))
     .arg("platform", "web")
     .arg("build", 0)
     .arg("mobi_app", "web");
@@ -49,9 +51,9 @@ fn next(cursor: &Value) -> Option<String> {
 }
 
 /// Counters of unread replies, mentions, likes, system and chat messages.
-pub async fn unread(ctx: &Ctx) -> Result<BTreeMap<String, u64>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
-  let data = api::get(ctx, UNREAD).send().await?;
+pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
+  api.require_login()?;
+  let data = api.get(UNREAD).send().await?;
   Ok(
     data
       .as_object()

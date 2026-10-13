@@ -91,9 +91,15 @@ pub fn video(v: &Value) -> Post {
     p.extra.insert("bvid".into(), json!(ids.bvid));
     p.extra.insert("aid".into(), json!(ids.aid));
   }
+  video_extra(v, &mut p);
+  p
+}
+
+/// The video's cid, duration, category, ranking places and page count.
+fn video_extra(v: &Value, p: &mut Post) {
   if let Some(cid) = ["cid", "history.cid"]
     .iter()
-    .find_map(|p| v.u64(p))
+    .find_map(|path| v.u64(path))
     .filter(|c| *c > 0)
   {
     p.extra.insert("cid".into(), json!(cid));
@@ -114,5 +120,4 @@ pub fn video(v: &Value) -> Post {
   if pages > 1 {
     p.extra.insert("pages".into(), json!(pages));
   }
-  p
 }

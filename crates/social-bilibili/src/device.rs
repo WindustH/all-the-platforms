@@ -4,14 +4,15 @@
 //! fail with -352 / -412. They are fetched once from `/x/frontend/finger/spi`
 //! and then live in the session's cookie jar.
 
-use social_core::{Ctx, ValueExt};
+use crate::api::Api;
+use social_core::ValueExt;
 
 const SPI: &str = "https://api.bilibili.com/x/frontend/finger/spi";
 
 /// Make sure the jar holds device cookies. Best effort: without them the
 /// request is still sent and may just be refused.
-pub async fn ensure(ctx: &Ctx) {
-  let http = &ctx.http;
+pub async fn ensure(api: &Api) {
+  let http = &api.ctx.http;
   if http.has_cookie("buvid3") && http.has_cookie("buvid4") {
     return;
   }

@@ -5,13 +5,14 @@ mod interact;
 mod library;
 
 use social_core::cli::PageArgs;
-use social_core::{Ctx, Data, Error, Result};
+use social_core::{Data, Error, Result};
 
+use crate::api::Api;
 use crate::refs::{self, Video};
-use crate::{account, creator, discover, dynamic, play, user, video};
+use crate::{discover, dynamics, insights, media, users, videos};
 
 #[derive(Debug, clap::Subcommand)]
-pub enum Extra {
+pub enum Command {
   /// Give coins to a video
   Coin {
     video: String,
@@ -43,7 +44,7 @@ pub enum Extra {
   },
   /// Ranking board: the whole site, or one region (see `hot --category`)
   Rank {
-    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(video::HOT_CATEGORIES))]
+    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(videos::HOT_CATEGORIES))]
     region: Option<String>,
     #[command(flatten)]
     page: PageArgs,
@@ -61,11 +62,11 @@ pub enum Extra {
     limit: u16,
   },
   #[command(flatten)]
-  Explore(explore::Explore),
+  Explore(explore::ExploreCommand),
   #[command(flatten)]
-  Library(library::Library),
+  Library(library::LibraryCommand),
   #[command(flatten)]
-  Interact(interact::Interact),
+  Interact(interact::InteractCommand),
   /// Dynamics of a user (yours when USER is omitted)
   #[command(visible_alias = "my-dynamics")]
   Dynamics {
@@ -75,8 +76,8 @@ pub enum Extra {
   },
 }
 
-async fn video_ref(ctx: &Ctx, arg: &str) -> Result<Video> {
-  refs::video(ctx, &ctx.post_ref(arg)?).await
+async fn video_ref(api: &Api, arg: &str) -> Result<Video> {
+  refs::video(api, &api.ctx.post_ref(arg)?).await
 }
 
 /// Destructive commands need `--yes`.
@@ -90,54 +91,54 @@ fn confirm(yes: bool, what: &str) -> Result<()> {
   }
 }
 
-pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
-  use Extra as E;
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
+  use Command as E;
   Ok(match command {
     E::Coin { video, count, like } => {
-      let v = video_ref(ctx, &video).await?;
-      Data::Action(video::coin(ctx, &v, count, like).await?)
+      let v = video_ref(api, &video).await?;
+      Data::Action(videos::coin(api, &v, count, like).await?)
     }
-    E::Triple { video } => Data::Action(video::triple(ctx, &video_ref(ctx, &video).await?).await?),
+    E::Triple { video } => Data::Action(videos::triple(api, &video_ref(api, &video).await?).await?),
     E::Subtitle { video, lang } => {
-      let v = video_ref(ctx, &video).await?;
-      Data::Transcript(play::subtitle(ctx, &v, lang.as_deref()).await?)
+      let v = video_ref(api, &video).await?;
+      Data::Transcript(media::subtitle(api, &v, lang.as_deref()).await?)
     }
-    E::Summary { video } => Data::Value(play::summary(ctx, &video_ref(ctx, &video).await?).await?),
+    E::Summary { video } => Data::Value(media::summary(api, &video_ref(api, &video).await?).await?),
     E::Danmaku { video } => {
-      Data::Transcript(play::danmaku(ctx, &video_ref(ctx, &video).await?).await?)
+      Data::Transcript(media::danmaku(api, &video_ref(api, &video).await?).await?)
     }
     E::Related { video, page } => {
-      let v = video_ref(ctx, &video).await?;
+      let v = video_ref(api, &video).await?;
       Data::Posts(
         page
-          .collect_dated(async |_| video::related(ctx, &v).await)
+          .collect_dated(async |_| videos::related(api, &v).await)
           .await?,
       )
     }
     E::Rank { region, page } => Data::Posts(
       page
-        .collect_dated(async |_| discover::rank(ctx, region.as_deref()).await)
+        .collect_dated(async |_| discover::rank(api, region.as_deref()).await)
         .await?,
     ),
-    E::Explore(c) => explore::run(ctx, c).await?,
-    E::Library(c) => library::run(ctx, c).await?,
-    E::Interact(c) => interact::run(ctx, c).await?,
-    E::WatchLater => Data::Posts(video::watch_later(ctx).await?),
+    E::Explore(c) => explore::run(api, c).await?,
+    E::Library(c) => library::run(api, c).await?,
+    E::Interact(c) => interact::run(api, c).await?,
+    E::WatchLater => Data::Posts(videos::watch_later(api).await?),
     E::VideoStats { videos, limit } => {
       let mut refs = Vec::new();
       for v in &videos {
-        refs.push(video_ref(ctx, v).await?);
+        refs.push(video_ref(api, v).await?);
       }
-      Data::Posts(creator::compare(ctx, &refs, limit.into()).await?)
+      Data::Posts(insights::compare(api, &refs, limit.into()).await?)
     }
     E::Dynamics { user, page } => {
       let mid = match user {
-        Some(u) => user::mid(ctx, &ctx.user_ref(&u)?).await?,
-        None => account::my_mid(ctx).await?,
+        Some(u) => users::mid(api, &api.ctx.user_ref(&u)?).await?,
+        None => users::my_mid(api).await?,
       };
       Data::Posts(
         page
-          .collect_dated(async |r| dynamic::of_user(ctx, &mid, &r).await)
+          .collect_dated(async |r| dynamics::of_user(api, &mid, &r).await)
           .await?,
       )
     }

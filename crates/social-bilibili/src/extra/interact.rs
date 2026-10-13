@@ -1,13 +1,14 @@
 //! Smaller interactions: comment likes and pins, video danmaku, pinned dynamics.
 
-use social_core::{Ctx, Data, Error, Result};
+use social_core::{Data, Error, Result};
 
 use super::video_ref;
+use crate::api::Api;
 use crate::refs::{self, PostRef};
-use crate::{comment, dynamic, play};
+use crate::{comments, dynamics, media};
 
 #[derive(Debug, clap::Subcommand)]
-pub enum Interact {
+pub enum InteractCommand {
   /// Like a comment (--dislike to mark it down instead; --undo removes either)
   CommentLike {
     post: String,
@@ -45,8 +46,8 @@ pub enum Interact {
   },
 }
 
-pub async fn run(ctx: &Ctx, command: Interact) -> Result<Data> {
-  use Interact as I;
+pub async fn run(api: &Api, command: InteractCommand) -> Result<Data> {
+  use InteractCommand as I;
   Ok(match command {
     I::CommentLike {
       post,
@@ -54,18 +55,18 @@ pub async fn run(ctx: &Ctx, command: Interact) -> Result<Data> {
       dislike,
       undo,
     } => {
-      let section = section(ctx, &post).await?;
+      let section = section(api, &post).await?;
       let (_, rpid) = refs::reply_target(&comment)?;
-      Data::Action(comment::react(ctx, &section, &rpid, dislike, undo).await?)
+      Data::Action(comments::react(api, &section, &rpid, dislike, undo).await?)
     }
     I::CommentPin {
       post,
       comment,
       undo,
     } => {
-      let section = section(ctx, &post).await?;
+      let section = section(api, &post).await?;
       let (_, rpid) = refs::reply_target(&comment)?;
-      Data::Action(comment::pin(ctx, &section, &rpid, undo).await?)
+      Data::Action(comments::pin(api, &section, &rpid, undo).await?)
     }
     I::DanmakuSend {
       video,
@@ -74,7 +75,7 @@ pub async fn run(ctx: &Ctx, command: Interact) -> Result<Data> {
       color,
       mode,
     } => {
-      let v = video_ref(ctx, &video).await?;
+      let v = video_ref(api, &video).await?;
       let color = u32::from_str_radix(color.trim_start_matches('#'), 16)
         .map_err(|_| Error::input(format!("bad color: {color} (hex, e.g. ff0000)")))?;
       let mode = match mode.as_str() {
@@ -82,16 +83,16 @@ pub async fn run(ctx: &Ctx, command: Interact) -> Result<Data> {
         "top" => 5,
         _ => 1,
       };
-      Data::Action(play::send_danmaku(ctx, &v, &text, at, color, mode).await?)
+      Data::Action(media::send_danmaku(api, &v, &text, at, color, mode).await?)
     }
-    I::Pin { dynamic, undo } => match refs::post(ctx, &ctx.post_ref(&dynamic)?).await? {
-      PostRef::Dynamic(id) => Data::Action(dynamic::pin(ctx, &id, undo).await?),
+    I::Pin { dynamic, undo } => match refs::post(api, &api.ctx.post_ref(&dynamic)?).await? {
+      PostRef::Dynamic(id) => Data::Action(dynamics::pin(api, &id, undo).await?),
       _ => return Err(Error::input("pin takes a dynamic")),
     },
   })
 }
 
-async fn section(ctx: &Ctx, post: &str) -> Result<comment::Section> {
-  let post = refs::post(ctx, &ctx.post_ref(post)?).await?;
-  comment::section(ctx, &post).await
+async fn section(api: &Api, post: &str) -> Result<comments::Section> {
+  let post = refs::post(api, &api.ctx.post_ref(post)?).await?;
+  comments::section(api, &post).await
 }

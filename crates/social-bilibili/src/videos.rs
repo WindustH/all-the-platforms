@@ -1,12 +1,12 @@
 //! Video endpoints: details, search, popular / ranking, related, uploads of a
 //! user, watch later, and the video-only writes (like, coin, triple).
 
-use social_core::{Action, Ctx, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt};
+use social_core::{Action, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt};
 
-use crate::api;
-use crate::page::Pn;
-use crate::parse;
+use crate::api::Api;
+use crate::paging::Pn;
 use crate::refs::Video;
+use crate::{parse, users};
 
 const VIEW: &str = "https://api.bilibili.com/x/web-interface/view";
 const SEARCH: &str = "https://api.bilibili.com/x/web-interface/wbi/search/type";
@@ -61,6 +61,8 @@ const REGIONS: &[(&str, u32, &str)] = &[
   ("origin", 0, "origin"),
   ("rookie", 0, "rookie"),
 ];
+const COINED: &str = "https://api.bilibili.com/x/space/coin/video";
+const LIKED: &str = "https://api.bilibili.com/x/space/like/video";
 
 fn videos(list: &[Value]) -> Vec<Post> {
   list
@@ -71,14 +73,15 @@ fn videos(list: &[Value]) -> Vec<Post> {
 }
 
 /// Raw `view` data (title, owner, stat, pages ...).
-pub async fn view(ctx: &Ctx, v: &Video) -> Result<Value> {
-  api::get(ctx, VIEW).arg("bvid", &v.bvid).send().await
+pub async fn view(api: &Api, v: &Video) -> Result<Value> {
+  api.get(VIEW).arg("bvid", &v.bvid).send().await
 }
 
-pub async fn read(ctx: &Ctx, v: &Video) -> Result<Post> {
-  let mut post = parse::video(&view(ctx, v).await?);
-  if ctx.http.has_cookie("SESSDATA")
-    && let Ok(r) = api::get(ctx, RELATION)
+pub async fn read(api: &Api, v: &Video) -> Result<Post> {
+  let mut post = parse::video(&view(api, v).await?);
+  if api.ctx.http.has_cookie("SESSDATA")
+    && let Ok(r) = api
+      .get(RELATION)
       .arg("aid", v.aid)
       .arg("bvid", &v.bvid)
       .send()
@@ -110,14 +113,15 @@ pub fn cid(view: &Value, page: usize) -> Result<u64> {
 
 /// One page of `search/type`; `order` only applies to videos.
 async fn search_type(
-  ctx: &Ctx,
+  api: &Api,
   kind: &str,
   keyword: &str,
   order: Option<&str>,
   page: &PageReq,
 ) -> Result<(Value, Pn)> {
   let pn = Pn::of(page, 50);
-  let mut call = api::get(ctx, SEARCH)
+  let mut call = api
+    .get(SEARCH)
     .arg("search_type", kind)
     .arg("keyword", keyword)
     .arg("page", pn.pn)
@@ -128,25 +132,26 @@ async fn search_type(
   Ok((call.wbi().send().await?, pn))
 }
 
-pub async fn search(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<Post>> {
-  let (data, pn) = search_type(ctx, "video", &q.keyword, q.sort.as_deref(), page).await?;
+pub async fn search(api: &Api, query: &Query, page: &PageReq) -> Result<Page<Post>> {
+  let (data, pn) = search_type(api, "video", &query.keyword, query.sort.as_deref(), page).await?;
   let more = pn.pn < data.u64("numPages").unwrap_or(0);
   Ok(pn.page(videos(data.list("result")), more))
 }
 
-pub async fn search_users(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<User>> {
-  let (data, pn) = search_type(ctx, "bili_user", &q.keyword, None, page).await?;
+pub async fn search_users(api: &Api, query: &Query, page: &PageReq) -> Result<Page<User>> {
+  let (data, pn) = search_type(api, "bili_user", &query.keyword, None, page).await?;
   let more = pn.pn < data.u64("numPages").unwrap_or(0);
   let users = data.list("result").iter().map(parse::user).collect();
   Ok(pn.page(users, more))
 }
 
 /// `popular` (paged) or one ranking region (single page).
-pub async fn hot(ctx: &Ctx, category: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+pub async fn hot(api: &Api, category: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
   let category = category.unwrap_or("popular");
   if category == "popular" {
     let pn = Pn::of(page, 50);
-    let data = api::get(ctx, POPULAR)
+    let data = api
+      .get(POPULAR)
       .arg("pn", pn.pn)
       .arg("ps", pn.ps)
       .arg("web_location", "333.934")
@@ -160,12 +165,13 @@ pub async fn hot(ctx: &Ctx, category: Option<&str>, page: &PageReq) -> Result<Pa
     .iter()
     .find(|(name, ..)| *name == category)
     .ok_or_else(|| Error::input(format!("unknown category: {category}")))?;
-  ranking(ctx, *rid, kind).await
+  ranking(api, *rid, kind).await
 }
 
 /// One ranking board (`rid` 0 = whole site).
-pub async fn ranking(ctx: &Ctx, rid: u32, kind: &str) -> Result<Page<Post>> {
-  let data = api::get(ctx, RANKING)
+pub async fn ranking(api: &Api, rid: u32, kind: &str) -> Result<Page<Post>> {
+  let data = api
+    .get(RANKING)
     .arg("rid", rid)
     .arg("type", kind)
     .arg("web_location", "333.934")
@@ -175,15 +181,16 @@ pub async fn ranking(ctx: &Ctx, rid: u32, kind: &str) -> Result<Page<Post>> {
   Ok(Page::last(videos(data.list("list"))))
 }
 
-pub async fn related(ctx: &Ctx, v: &Video) -> Result<Page<Post>> {
-  let data = api::get(ctx, RELATED).arg("bvid", &v.bvid).send().await?;
+pub async fn related(api: &Api, v: &Video) -> Result<Page<Post>> {
+  let data = api.get(RELATED).arg("bvid", &v.bvid).send().await?;
   Ok(Page::last(videos(data.list(""))))
 }
 
 /// Videos uploaded by `mid`, newest first.
-pub async fn uploads(ctx: &Ctx, mid: &str, page: &PageReq) -> Result<Page<Post>> {
+pub async fn uploads(api: &Api, mid: &str, page: &PageReq) -> Result<Page<Post>> {
   let pn = Pn::of(page, 50);
-  let data = api::get(ctx, UPLOADS)
+  let data = api
+    .get(UPLOADS)
     .arg("mid", mid)
     .arg("pn", pn.pn)
     .arg("ps", pn.ps)
@@ -198,16 +205,17 @@ pub async fn uploads(ctx: &Ctx, mid: &str, page: &PageReq) -> Result<Page<Post>>
   Ok(pn.page(videos(data.list("list.vlist")), more))
 }
 
-pub async fn watch_later(ctx: &Ctx) -> Result<Page<Post>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
-  let data = api::get(ctx, TOVIEW).send().await?;
+pub async fn watch_later(api: &Api) -> Result<Page<Post>> {
+  api.require_login()?;
+  let data = api.get(TOVIEW).send().await?;
   Ok(Page::last(videos(data.list("list"))))
 }
 
 // ── writes ───────────────────────────────────────────────────────────────
 
-pub async fn like(ctx: &Ctx, v: &Video, undo: bool) -> Result<Action> {
-  api::post(ctx, "https://api.bilibili.com/x/web-interface/archive/like")
+pub async fn like(api: &Api, v: &Video, undo: bool) -> Result<Action> {
+  api
+    .post("https://api.bilibili.com/x/web-interface/archive/like")
     .arg("aid", v.aid)
     .arg("like", if undo { 2 } else { 1 })
     .send()
@@ -216,8 +224,9 @@ pub async fn like(ctx: &Ctx, v: &Video, undo: bool) -> Result<Action> {
   Ok(Action::done(action, &v.bvid).with_url(v.url()))
 }
 
-pub async fn coin(ctx: &Ctx, v: &Video, count: u8, like: bool) -> Result<Action> {
-  api::post(ctx, "https://api.bilibili.com/x/web-interface/coin/add")
+pub async fn coin(api: &Api, v: &Video, count: u8, like: bool) -> Result<Action> {
+  api
+    .post("https://api.bilibili.com/x/web-interface/coin/add")
     .arg("aid", v.aid)
     .arg("multiply", count)
     .arg("select_like", u8::from(like))
@@ -234,14 +243,12 @@ pub async fn coin(ctx: &Ctx, v: &Video, count: u8, like: bool) -> Result<Action>
 }
 
 /// Like + coin + favorite in one request.
-pub async fn triple(ctx: &Ctx, v: &Video) -> Result<Action> {
-  let data = api::post(
-    ctx,
-    "https://api.bilibili.com/x/web-interface/archive/like/triple",
-  )
-  .arg("aid", v.aid)
-  .send()
-  .await?;
+pub async fn triple(api: &Api, v: &Video) -> Result<Action> {
+  let data = api
+    .post("https://api.bilibili.com/x/web-interface/archive/like/triple")
+    .arg("aid", v.aid)
+    .send()
+    .await?;
   let done: Vec<&str> = [("like", "like"), ("coin", "coin"), ("fav", "favorite")]
     .into_iter()
     .filter(|(k, _)| data.bool(k) == Some(true))
@@ -252,4 +259,26 @@ pub async fn triple(ctx: &Ctx, v: &Video) -> Result<Action> {
       .with_url(v.url())
       .with_message(format!("done: {}", done.join(", "))),
   )
+}
+
+/// Videos a user recently coined (`coined`) or liked (`liked`); many users
+/// keep these private.
+pub async fn recent(api: &Api, input: &str, liked: bool) -> Result<Page<Post>> {
+  let mid = users::mid(api, input).await?;
+  let data = api
+    .get(if liked { LIKED } else { COINED })
+    .arg("vmid", &mid)
+    .send()
+    .await?;
+  let list = match &data {
+    Value::Array(a) => a.clone(),
+    _ => data.list("list").to_vec(),
+  };
+  Ok(Page::last(
+    list
+      .iter()
+      .map(parse::video)
+      .filter(|p| !p.id.is_empty())
+      .collect(),
+  ))
 }

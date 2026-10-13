@@ -1,12 +1,11 @@
 //! What the player loads: streams (playurl), subtitles, danmaku and the AI summary.
 
-use social_core::{
-  Ctx, Cue, Error, Media, MediaKind, Post, Result, Transcript, Value, ValueExt, json,
-};
+use social_core::{Cue, Error, Media, MediaKind, Post, Result, Transcript, Value, ValueExt, json};
 
+use crate::api::Api;
 use crate::proto::{self, Wire};
 use crate::refs::Video;
-use crate::{api, dynamic, parse, video};
+use crate::{dynamics, parse, videos};
 
 const PLAYURL: &str = "https://api.bilibili.com/x/player/wbi/playurl";
 const PLAYER: &str = "https://api.bilibili.com/x/player/wbi/v2";
@@ -20,9 +19,9 @@ struct Part {
   view: Value,
 }
 
-async fn part(ctx: &Ctx, v: &Video) -> Result<Part> {
-  let view = video::view(ctx, v).await?;
-  let cid = video::cid(&view, v.page)?;
+async fn part(api: &Api, v: &Video) -> Result<Part> {
+  let view = videos::view(api, v).await?;
+  let cid = videos::cid(&view, v.page)?;
   let mut post = parse::video(&view);
   if view.list("pages").len() > 1 {
     let name = view
@@ -39,9 +38,10 @@ async fn part(ctx: &Ctx, v: &Video) -> Result<Part> {
 }
 
 /// Best DASH video + audio as one [`Media`] (or audio alone); `durl` MP4/FLV as fallback.
-pub async fn media(ctx: &Ctx, v: &Video, audio_only: bool) -> Result<(Post, Vec<Media>)> {
-  let Part { post, cid, .. } = part(ctx, v).await?;
-  let data = api::get(ctx, PLAYURL)
+pub async fn media(api: &Api, v: &Video, audio_only: bool) -> Result<(Post, Vec<Media>)> {
+  let Part { post, cid, .. } = part(api, v).await?;
+  let data = api
+    .get(PLAYURL)
     .arg("avid", v.aid)
     .arg("bvid", &v.bvid)
     .arg("cid", cid)
@@ -60,15 +60,15 @@ pub async fn media(ctx: &Ctx, v: &Video, audio_only: bool) -> Result<(Post, Vec<
 }
 
 /// A dynamic's media: the video it announces, else its images.
-pub async fn dynamic_media(ctx: &Ctx, id: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
-  let post = dynamic::read(ctx, id).await?;
+pub async fn dynamic_media(api: &Api, id: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
+  let post = dynamics::read(api, id).await?;
   let video = post
     .extra
     .get("bvid")
     .and_then(|b| b.as_str())
     .and_then(Video::from_bvid);
   match video {
-    Some(v) => media(ctx, &v, audio_only).await,
+    Some(v) => media(api, &v, audio_only).await,
     None => {
       let images = post.media.clone();
       Ok((post, images))
@@ -76,8 +76,8 @@ pub async fn dynamic_media(ctx: &Ctx, id: &str, audio_only: bool) -> Result<(Pos
   }
 }
 
-fn stream_url(s: &Value) -> Option<String> {
-  s.first_str(&["baseUrl", "base_url", "url"])
+fn stream_url(v: &Value) -> Option<String> {
+  v.first_str(&["baseUrl", "base_url", "url"])
 }
 
 fn streams(data: &Value, audio_only: bool) -> Result<Vec<Media>> {
@@ -128,9 +128,10 @@ fn streams(data: &Value, audio_only: bool) -> Result<Vec<Media>> {
 }
 
 /// A subtitle track; `lang` picks by code (`zh-CN`, `ai-zh`, `en` ...), Chinese first by default.
-pub async fn subtitle(ctx: &Ctx, v: &Video, lang: Option<&str>) -> Result<Transcript> {
-  let cid = part(ctx, v).await?.cid;
-  let data = api::get(ctx, PLAYER)
+pub async fn subtitle(api: &Api, v: &Video, lang: Option<&str>) -> Result<Transcript> {
+  let cid = part(api, v).await?.cid;
+  let data = api
+    .get(PLAYER)
     .arg("aid", v.aid)
     .arg("cid", cid)
     .arg("isGaiaAvoided", "false")
@@ -161,14 +162,14 @@ pub async fn subtitle(ctx: &Ctx, v: &Video, lang: Option<&str>) -> Result<Transc
         available.join(", ")
       )
     });
-    if !ctx.http.has_cookie("SESSDATA") {
+    if !api.ctx.http.has_cookie("SESSDATA") {
       err =
         err.with_hint("most subtitles are only served to logged-in accounts: `social bili login`");
     }
     return Err(err);
   };
   let url = parse::https(track.str("subtitle_url").unwrap_or_default());
-  let body = ctx.http.get(url).no_cookies().value().await?;
+  let body = api.ctx.http.get(url).no_cookies().value().await?;
   let cues = body
     .list("body")
     .iter()
@@ -188,8 +189,8 @@ pub async fn subtitle(ctx: &Ctx, v: &Video, lang: Option<&str>) -> Result<Transc
 /// as protobuf in 6-minute segments (`DmSegMobileReply.elems`): every segment
 /// up to the part's duration (whole seconds, so one more for the rest), or
 /// until an empty one when the duration is unknown.
-pub async fn danmaku(ctx: &Ctx, v: &Video) -> Result<Transcript> {
-  let Part { cid, view, .. } = part(ctx, v).await?;
+pub async fn danmaku(api: &Api, v: &Video) -> Result<Transcript> {
+  let Part { cid, view, .. } = part(api, v).await?;
   let secs = view
     .u64(&format!("pages.{}.duration", v.page - 1))
     .or_else(|| view.u64("duration"))
@@ -198,7 +199,8 @@ pub async fn danmaku(ctx: &Ctx, v: &Video) -> Result<Transcript> {
   let mut cues = Vec::new();
   for segment in 1..=segments {
     let before = cues.len();
-    let resp = ctx
+    let resp = api
+      .ctx
       .http
       .get(format!(
         "{DANMAKU}?type=1&oid={cid}&pid={}&segment_index={segment}",
@@ -244,9 +246,10 @@ fn cue(elem: &[u8]) -> Cue {
 }
 
 /// The AI summary and outline, when Bilibili has generated one.
-pub async fn summary(ctx: &Ctx, v: &Video) -> Result<Value> {
-  let Part { post, cid, view } = part(ctx, v).await?;
-  let data = api::get(ctx, SUMMARY)
+pub async fn summary(api: &Api, v: &Video) -> Result<Value> {
+  let Part { post, cid, view } = part(api, v).await?;
+  let data = api
+    .get(SUMMARY)
     .arg("aid", v.aid)
     .arg("bvid", &v.bvid)
     .arg("cid", cid)
@@ -283,16 +286,17 @@ pub async fn summary(ctx: &Ctx, v: &Video) -> Result<Value> {
 
 /// Send danmaku to a video at `at` seconds into the part.
 pub async fn send_danmaku(
-  ctx: &Ctx,
+  api: &Api,
   v: &Video,
   text: &str,
   at: f64,
   color: u32,
   mode: u8,
 ) -> Result<social_core::Action> {
-  let Part { cid, .. } = part(ctx, v).await?;
+  let Part { cid, .. } = part(api, v).await?;
   let rnd = jiff::Timestamp::now().as_microsecond();
-  let data = api::post(ctx, "https://api.bilibili.com/x/v2/dm/post")
+  let data = api
+    .post("https://api.bilibili.com/x/v2/dm/post")
     .arg("type", 1)
     .arg("oid", cid)
     .arg("msg", text)

@@ -2,12 +2,11 @@
 //! --filter`) and topics (`search -t topic`).
 
 use social_core::text::from_secs;
-use social_core::{
-  Collection, Ctx, Error, Page, PageReq, Post, Query, Result, Value, ValueExt, json,
-};
+use social_core::{Collection, Error, Page, PageReq, Post, Query, Result, Value, ValueExt, json};
 
-use crate::page::Pn;
-use crate::{api, article, live, parse, refs, video};
+use crate::api::Api;
+use crate::paging::Pn;
+use crate::{articles, parse, refs, rooms, videos};
 
 const SEARCH: &str = "https://api.bilibili.com/x/web-interface/wbi/search/type";
 const TOPICS: &str = "https://app.bilibili.com/x/topic/pub/search";
@@ -15,9 +14,9 @@ const TOPICS: &str = "https://app.bilibili.com/x/topic/pub/search";
 /// `search --filter`: what to search for (`video` when omitted).
 pub const FILTERS: &[&str] = &["video", "article", "bangumi", "film", "live"];
 
-pub async fn posts(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<Post>> {
-  let kind = match q.filter.as_deref().unwrap_or("video") {
-    "video" => return video::search(ctx, q, page).await,
+pub async fn posts(api: &Api, query: &Query, page: &PageReq) -> Result<Page<Post>> {
+  let kind = match query.filter.as_deref().unwrap_or("video") {
+    "video" => return videos::search(api, query, page).await,
     "article" => "article",
     "bangumi" => "media_bangumi",
     "film" => "media_ft",
@@ -25,13 +24,14 @@ pub async fn posts(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<Post>> {
     other => return Err(Error::input(format!("unknown search filter: {other}"))),
   };
   let pn = Pn::of(page, 50);
-  let mut call = api::get(ctx, SEARCH)
+  let mut call = api
+    .get(SEARCH)
     .arg("search_type", kind)
-    .arg("keyword", &q.keyword)
+    .arg("keyword", &query.keyword)
     .arg("page", pn.pn)
     .arg("page_size", pn.ps);
   if kind == "article"
-    && let Some(order) = q.sort.as_deref()
+    && let Some(order) = query.sort.as_deref()
   {
     // Article search orders: totalrank, pubdate, click, attention, scores.
     call = call.arg("order", order);
@@ -43,7 +43,7 @@ pub async fn posts(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<Post>> {
     .iter()
     .map(|v| match kind {
       "article" => article_result(v),
-      "live_room" => live::room_post(v),
+      "live_room" => rooms::room_post(v),
       _ => season_result(v),
     })
     .collect();
@@ -52,7 +52,7 @@ pub async fn posts(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<Post>> {
 
 fn article_result(v: &Value) -> Post {
   let id = v.u64("id").unwrap_or(0);
-  let mut post = article::post(id, v.clone());
+  let mut post = articles::post(id, v.clone());
   if post.author.is_none() {
     post.author = parse::author(v, &["mid"], &["author"], &[]);
   }
@@ -65,7 +65,7 @@ pub fn season_result(v: &Value) -> Post {
   let season = v.str("season_id").unwrap_or_default();
   let mut post = Post {
     id: format!("ss{season}"),
-    kind: crate::pgc::kind(v.u64("season_type")).into(),
+    kind: crate::bangumi::kind(v.u64("season_type")).into(),
     title: parse::plain(v, &["title"]),
     text: parse::plain(v, &["desc"]),
     url: Some(refs::season_url(&season)),
@@ -90,10 +90,11 @@ pub fn season_result(v: &Value) -> Post {
 }
 
 /// Topics (话题) whose name matches; ids work with `topic`.
-pub async fn topics(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<Collection>> {
+pub async fn topics(api: &Api, query: &Query, page: &PageReq) -> Result<Page<Collection>> {
   let offset = page.number_or(0);
-  let data = api::get(ctx, TOPICS)
-    .arg("keywords", &q.keyword)
+  let data = api
+    .get(TOPICS)
+    .arg("keywords", &query.keyword)
     .arg("page_size", page.size_within(20))
     .arg("offset", offset)
     .send()

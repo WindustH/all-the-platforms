@@ -6,18 +6,18 @@
 //! with ticket-guard headers bound to keys the browser created at login.
 
 mod api;
-mod aweme;
-mod comment;
+mod comments;
 mod device;
 mod discover;
 mod extra;
 mod library;
-mod live;
-mod notice;
+mod notifications;
 mod parse;
+mod posts;
 mod refs;
+mod rooms;
 mod sign;
-mod user;
+mod users;
 
 use std::time::Duration;
 
@@ -26,10 +26,10 @@ use social_core::{
   PlatformInfo, Post, Query, Result, User,
 };
 
-pub use extra::Extra;
+use crate::api::Api;
 
 pub struct Douyin {
-  ctx: Ctx,
+  api: Api,
 }
 
 impl Platform for Douyin {
@@ -66,50 +66,49 @@ impl Platform for Douyin {
       hot_category: discover::HOT_CATEGORIES,
       feed_kind: discover::FEED_KINDS,
       comment_sort: &[],
-      notification_kind: notice::KINDS,
+      notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_millis(800),
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = Extra;
+  type Extra = extra::Command;
 
-  fn new(mut ctx: Ctx) -> Result<Self> {
-    api::configure(&mut ctx.http);
-    Ok(Self { ctx })
+  fn new(ctx: Ctx) -> Result<Self> {
+    Ok(Self { api: Api::new(ctx) })
   }
 
   fn ctx(&self) -> &Ctx {
-    &self.ctx
+    &self.api.ctx
   }
 
   async fn whoami(&self) -> Result<User> {
-    user::whoami(&self.ctx).await
+    users::whoami(&self.api).await
   }
 
   async fn prepare_login(&self) -> Result<()> {
-    device::ensure(&self.ctx).await;
+    device::ensure(&self.api).await;
     Ok(())
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    discover::search(&self.ctx, query, page).await
+    discover::search(&self.api, query, page).await
   }
 
   async fn search_users(&self, query: &Query, page: &PageReq) -> Result<Page<User>> {
-    discover::search_users(&self.ctx, query, page).await
+    discover::search_users(&self.api, query, page).await
   }
 
   async fn hot(&self, category: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    discover::hot(&self.ctx, category, page).await
+    discover::hot(&self.api, category, page).await
   }
 
   async fn feed(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    discover::feed(&self.ctx, kind, page).await
+    discover::feed(&self.api, kind, page).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    aweme::read(&self.ctx, post).await
+    posts::read(&self.api, post).await
   }
 
   async fn comments(
@@ -118,27 +117,27 @@ impl Platform for Douyin {
     _sort: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Comment>> {
-    comment::list(&self.ctx, post, page).await
+    comments::list(&self.api, post, page).await
   }
 
   async fn replies(&self, post: &str, comment: &str, page: &PageReq) -> Result<Page<Comment>> {
-    comment::replies(&self.ctx, post, comment, page).await
+    comments::replies(&self.api, post, comment, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    user::profile(&self.ctx, user).await
+    users::profile(&self.api, user).await
   }
 
   async fn user_posts(&self, user: &str, page: &PageReq) -> Result<Page<Post>> {
-    user::posts(&self.ctx, user, page).await
+    users::posts(&self.api, user, page).await
   }
 
   async fn followers(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    user::followers(&self.ctx, user, page).await
+    users::followers(&self.api, user, page).await
   }
 
   async fn following(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    user::following(&self.ctx, user, page).await
+    users::following(&self.api, user, page).await
   }
 
   async fn collections(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
@@ -147,7 +146,7 @@ impl Platform for Douyin {
         "collections of other users",
       ));
     }
-    library::folders(&self.ctx, page).await
+    library::folders(&self.api, page).await
   }
 
   async fn favorites(
@@ -159,26 +158,26 @@ impl Platform for Douyin {
     if user.is_some() {
       return Err(social_core::Error::unsupported("favorites of other users"));
     }
-    library::favorites(&self.ctx, folder, page).await
+    library::favorites(&self.api, folder, page).await
   }
 
   async fn likes(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    user::likes(&self.ctx, user, page).await
+    users::likes(&self.api, user, page).await
   }
 
   async fn history(&self, page: &PageReq) -> Result<Page<Post>> {
-    library::history(&self.ctx, page).await
+    library::history(&self.api, page).await
   }
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    notice::list(&self.ctx, kind, page).await
+    notifications::list(&self.api, kind, page).await
   }
 
   async fn media(&self, post: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
-    aweme::media(&self.ctx, post, audio_only).await
+    posts::media(&self.api, post, audio_only).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {
-    extra::run(&self.ctx, command).await
+    extra::run(&self.api, command).await
   }
 }

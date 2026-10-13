@@ -135,12 +135,12 @@ async fn search_raw(api: &Api, kind: &str, keyword: &str, req: &PageReq) -> Resu
 }
 
 /// Videos for a keyword: the "Top" tab (`general`, default) or `video`.
-pub async fn search(api: &Api, q: &Query, req: &PageReq) -> Result<Page<Post>> {
-  let video_only = q.filter.as_deref() == Some("video");
+pub async fn search(api: &Api, query: &Query, req: &PageReq) -> Result<Page<Post>> {
+  let video_only = query.filter.as_deref() == Some("video");
   let v = search_raw(
     api,
     if video_only { "item" } else { "general" },
-    &q.keyword,
+    &query.keyword,
     req,
   )
   .await?;
@@ -155,16 +155,20 @@ pub async fn search(api: &Api, q: &Query, req: &PageReq) -> Result<Page<Post>> {
   Ok(Page::new(items, search_next(&v)))
 }
 
-pub async fn search_users(api: &Api, q: &Query, req: &PageReq) -> Result<Page<User>> {
-  let v = search_raw(api, "user", &q.keyword, req).await?;
+pub async fn search_users(api: &Api, query: &Query, req: &PageReq) -> Result<Page<User>> {
+  let v = search_raw(api, "user", &query.keyword, req).await?;
   let items = v.list("user_list").iter().map(parse::listed_user).collect();
   Ok(Page::new(items, search_next(&v)))
 }
 
 /// Hashtags for a keyword: the exact hashtag (TikTok's web search has no
 /// hashtag tab), with its video and view counts.
-pub async fn search_hashtags(api: &Api, q: &Query, _req: &PageReq) -> Result<Page<Collection>> {
-  let name = q.keyword.trim().trim_start_matches('#').replace(' ', "");
+pub async fn search_hashtags(api: &Api, query: &Query, _req: &PageReq) -> Result<Page<Collection>> {
+  let name = query
+    .keyword
+    .trim()
+    .trim_start_matches('#')
+    .replace(' ', "");
   match hashtag(api, &name).await {
     Ok(tag) => Ok(Page::last(vec![tag])),
     Err(e) if e.code == social_core::ErrorCode::NotFound => Ok(Page::last(Vec::new())),

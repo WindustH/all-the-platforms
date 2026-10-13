@@ -1,10 +1,11 @@
 //! Managing the watch history and the watch-later list.
 
-use social_core::{Action, Ctx, Page, PageReq, Post, Result, ValueExt, json};
+use social_core::{Action, Page, PageReq, Post, Result, ValueExt, json};
 
-use crate::page::Pn;
+use crate::api::Api;
+use crate::paging::Pn;
+use crate::parse;
 use crate::refs::Video;
-use crate::{api, parse};
 
 const DELETE: &str = "https://api.bilibili.com/x/v2/history/delete";
 const CLEAR: &str = "https://api.bilibili.com/x/v2/history/clear";
@@ -15,8 +16,9 @@ const LATER_DEL: &str = "https://api.bilibili.com/x/v2/history/toview/v2/dels";
 const LATER_CLEAR: &str = "https://api.bilibili.com/x/v2/history/toview/clear";
 
 /// Remove one video from the history.
-pub async fn delete(ctx: &Ctx, v: &Video) -> Result<Action> {
-  api::post(ctx, DELETE)
+pub async fn delete(api: &Api, v: &Video) -> Result<Action> {
+  api
+    .post(DELETE)
     .arg("kid", format!("archive_{}", v.aid))
     .arg("jsonp", "jsonp")
     .send()
@@ -24,14 +26,15 @@ pub async fn delete(ctx: &Ctx, v: &Video) -> Result<Action> {
   Ok(Action::done("history-delete", &v.bvid).with_url(v.url()))
 }
 
-pub async fn clear(ctx: &Ctx) -> Result<Action> {
-  api::post(ctx, CLEAR).arg("jsonp", "jsonp").send().await?;
+pub async fn clear(api: &Api) -> Result<Action> {
+  api.post(CLEAR).arg("jsonp", "jsonp").send().await?;
   Ok(Action::done("history-clear", "history"))
 }
 
 /// Stop (or with `undo` resume) recording the watch history.
-pub async fn pause(ctx: &Ctx, undo: bool) -> Result<Action> {
-  api::post(ctx, PAUSE)
+pub async fn pause(api: &Api, undo: bool) -> Result<Action> {
+  api
+    .post(PAUSE)
     .arg("switch", !undo)
     .arg("jsonp", "jsonp")
     .send()
@@ -45,10 +48,11 @@ pub async fn pause(ctx: &Ctx, undo: bool) -> Result<Action> {
 }
 
 /// History entries whose title matches `keyword`.
-pub async fn search(ctx: &Ctx, keyword: &str, page: &PageReq) -> Result<Page<Post>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
+pub async fn search(api: &Api, keyword: &str, page: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
   let pn = Pn::of(page, 20);
-  let data = api::get(ctx, SEARCH)
+  let data = api
+    .get(SEARCH)
     .arg("pn", pn.pn)
     .arg("keyword", keyword)
     .arg("business", "all")
@@ -70,22 +74,19 @@ pub async fn search(ctx: &Ctx, keyword: &str, page: &PageReq) -> Result<Page<Pos
   Ok(pn.page(posts, more))
 }
 
-pub async fn later_add(ctx: &Ctx, v: &Video) -> Result<Action> {
-  api::post(ctx, LATER_ADD).arg("aid", v.aid).send().await?;
+pub async fn later_add(api: &Api, v: &Video) -> Result<Action> {
+  api.post(LATER_ADD).arg("aid", v.aid).send().await?;
   Ok(Action::done("watch-later", &v.bvid).with_url(v.url()))
 }
 
-pub async fn later_remove(ctx: &Ctx, v: &Video) -> Result<Action> {
-  api::post(ctx, LATER_DEL)
-    .arg("resources", v.aid)
-    .send()
-    .await?;
+pub async fn later_remove(api: &Api, v: &Video) -> Result<Action> {
+  api.post(LATER_DEL).arg("resources", v.aid).send().await?;
   Ok(Action::done("watch-later-remove", &v.bvid).with_url(v.url()))
 }
 
 /// Empty the list, or with `watched` only drop the videos already watched.
-pub async fn later_clear(ctx: &Ctx, watched: bool) -> Result<Action> {
-  let mut call = api::post(ctx, LATER_CLEAR);
+pub async fn later_clear(api: &Api, watched: bool) -> Result<Action> {
+  let mut call = api.post(LATER_CLEAR);
   if watched {
     call = call.arg("clean_type", 2);
   }

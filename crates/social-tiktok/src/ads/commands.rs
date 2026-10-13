@@ -2,6 +2,7 @@
 //! pixels and performance reports. Lists come as rows (one per object) for
 //! JSON Lines / CSV; report rows merge their dimensions and metrics.
 
+use social_core::credentials::env;
 use social_core::{Data, Error, Result, Value, ValueExt, json};
 
 use super::Ads;
@@ -59,38 +60,7 @@ pub enum Command {
   },
   /// Performance report (synchronous `report/integrated/get`)
   #[command(after_long_help = EX_REPORT)]
-  Report {
-    #[command(flatten)]
-    scope: Scope,
-    /// advertiser, campaign, adgroup or ad
-    #[arg(long, default_value = "campaign")]
-    level: String,
-    /// BASIC, AUDIENCE, PLAYABLE_MATERIAL or CATALOG
-    #[arg(long = "type", default_value = "BASIC")]
-    report_type: String,
-    /// Comma-separated dimensions (default: <level>_id,stat_time_day)
-    #[arg(long, value_delimiter = ',')]
-    dimensions: Vec<String>,
-    /// Comma-separated metrics
-    #[arg(
-      long,
-      value_delimiter = ',',
-      default_value = "spend,impressions,clicks,ctr,cpc,cpm,reach,conversion,cost_per_conversion"
-    )]
-    metrics: Vec<String>,
-    /// First day, YYYY-MM-DD (default: --days ago)
-    #[arg(long)]
-    from: Option<String>,
-    /// Last day, YYYY-MM-DD (default: yesterday)
-    #[arg(long)]
-    to: Option<String>,
-    /// Days back when --from is not given
-    #[arg(long, default_value_t = 7)]
-    days: u32,
-    /// Filtering as the API's JSON (e.g. '[{"field_name":"campaign_ids","filter_type":"IN","filter_value":"[\"1\"]"}]')
-    #[arg(long, value_name = "JSON")]
-    filter: Option<String>,
-  },
+  Report(ReportArgs),
   /// Any Marketing API endpoint: `ads raw /campaign/get/ advertiser_id=1 page_size=10`
   Raw {
     /// Path after /open_api/v1.3, e.g. /campaign/get/
@@ -101,6 +71,40 @@ pub enum Command {
     #[arg(long)]
     post: bool,
   },
+}
+
+#[derive(Debug, clap::Args)]
+pub struct ReportArgs {
+  #[command(flatten)]
+  scope: Scope,
+  /// advertiser, campaign, adgroup or ad
+  #[arg(long, default_value = "campaign")]
+  level: String,
+  /// BASIC, AUDIENCE, PLAYABLE_MATERIAL or CATALOG
+  #[arg(long = "type", default_value = "BASIC")]
+  report_type: String,
+  /// Comma-separated dimensions (default: <level>_id,stat_time_day)
+  #[arg(long, value_delimiter = ',')]
+  dimensions: Vec<String>,
+  /// Comma-separated metrics
+  #[arg(
+    long,
+    value_delimiter = ',',
+    default_value = "spend,impressions,clicks,ctr,cpc,cpm,reach,conversion,cost_per_conversion"
+  )]
+  metrics: Vec<String>,
+  /// First day, YYYY-MM-DD (default: --days ago)
+  #[arg(long)]
+  from: Option<String>,
+  /// Last day, YYYY-MM-DD (default: yesterday)
+  #[arg(long)]
+  to: Option<String>,
+  /// Days back when --from is not given
+  #[arg(long, default_value_t = 7)]
+  days: u32,
+  /// Filtering as the API's JSON (e.g. '[{"field_name":"campaign_ids","filter_type":"IN","filter_value":"[\"1\"]"}]')
+  #[arg(long, value_name = "JSON")]
+  filter: Option<String>,
 }
 
 #[derive(Debug, clap::Args)]
@@ -118,38 +122,10 @@ pub struct Scope {
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ads = Ads::new(api)?;
-  let rows = |v: Vec<Value>| Data::Value(Value::Array(v));
   Ok(match command {
     Command::Me => Data::User(Box::new(ads.me().await?)),
-    Command::Advertisers => {
-      let (Some(app), Some(secret)) = (env("TIKTOK_ADS_APP_ID"), env("TIKTOK_ADS_SECRET")) else {
-        return Err(Error::input(
-          "listing ad accounts needs TIKTOK_ADS_APP_ID and TIKTOK_ADS_SECRET",
-        ));
-      };
-      let v = ads
-        .get(
-          "/oauth2/advertiser/get/",
-          &[
-            ("app_id", app.into()),
-            ("secret", secret.into()),
-            ("access_token", ads.token.clone().into()),
-          ],
-        )
-        .await?;
-      rows(v.list("list").to_vec())
-    }
-    Command::Advertiser { ids } => {
-      let ids = if ids.is_empty() {
-        vec![ads.advertiser(None)?]
-      } else {
-        ids
-      };
-      let v = ads
-        .get("/advertiser/info/", &[("advertiser_ids", json!(ids))])
-        .await?;
-      rows(v.list("list").to_vec())
-    }
+    Command::Advertisers => rows(advertisers(&ads).await?),
+    Command::Advertiser { ids } => rows(advertiser(&ads, ids).await?),
     Command::Use { advertiser } => {
       ads.remember_advertiser(advertiser.trim());
       Data::Action(
@@ -159,114 +135,144 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
     }
     Command::Campaigns { scope } => rows(objects(&ads, "/campaign/get/", &scope, json!({})).await?),
     Command::Adgroups { scope, campaigns } => {
-      let f = with_ids(json!({}), "campaign_ids", &campaigns);
-      rows(objects(&ads, "/adgroup/get/", &scope, f).await?)
+      let filtering = with_ids(json!({}), "campaign_ids", &campaigns);
+      rows(objects(&ads, "/adgroup/get/", &scope, filtering).await?)
     }
     Command::Ads {
       scope,
       campaigns,
       adgroups,
     } => {
-      let f = with_ids(
+      let filtering = with_ids(
         with_ids(json!({}), "campaign_ids", &campaigns),
         "adgroup_ids",
         &adgroups,
       );
-      rows(objects(&ads, "/ad/get/", &scope, f).await?)
+      rows(objects(&ads, "/ad/get/", &scope, filtering).await?)
     }
-    Command::Audiences { scope } => {
-      let id = ads.advertiser(scope.advertiser.as_deref())?;
-      rows(
-        ads
-          .list(
-            "/dmp/custom_audience/list/",
-            &[("advertiser_id", id.into())],
-            scope.limit,
-          )
-          .await?,
-      )
-    }
-    Command::Pixels { scope } => {
-      let id = ads.advertiser(scope.advertiser.as_deref())?;
-      let v = ads
-        .get(
-          "/pixel/list/",
-          &[("advertiser_id", id.into()), ("page_size", json!(20))],
-        )
-        .await?;
-      rows(v.list("pixels").to_vec())
-    }
-    Command::Report {
-      scope,
-      level,
-      report_type,
-      dimensions,
-      metrics,
-      from,
-      to,
-      days,
-      filter,
-    } => {
-      let id = ads.advertiser(scope.advertiser.as_deref())?;
-      let (data_level, key) = match level.as_str() {
-        "advertiser" => ("AUCTION_ADVERTISER", "advertiser_id"),
-        "campaign" => ("AUCTION_CAMPAIGN", "campaign_id"),
-        "adgroup" => ("AUCTION_ADGROUP", "adgroup_id"),
-        "ad" => ("AUCTION_AD", "ad_id"),
-        other => {
-          return Err(Error::input(format!(
-            "unknown level `{other}`: advertiser, campaign, adgroup or ad"
-          )));
-        }
-      };
-      let dimensions = if dimensions.is_empty() {
-        vec![key.to_owned(), "stat_time_day".to_owned()]
-      } else {
-        dimensions
-      };
-      let (from, to) = dates(from, to, days)?;
-      let mut params = vec![
-        ("advertiser_id", Value::from(id)),
-        ("report_type", report_type.into()),
-        ("data_level", data_level.into()),
-        ("dimensions", json!(dimensions)),
-        ("metrics", json!(metrics)),
-        ("start_date", from.into()),
-        ("end_date", to.into()),
-      ];
-      if let Some(f) = filter {
-        let parsed: Value = serde_json::from_str(&f)
-          .map_err(|e| Error::input(format!("--filter is not JSON: {e}")))?;
-        params.push(("filtering", parsed));
-      }
-      let list = ads
-        .list("/report/integrated/get/", &params, scope.limit)
-        .await?;
-      rows(list.iter().map(report_row).collect())
-    }
-    Command::Raw { path, params, post } => {
-      let mut body = serde_json::Map::new();
-      for p in &params {
-        let (k, v) = p
-          .split_once('=')
-          .ok_or_else(|| Error::input(format!("`{p}` is not key=value")))?;
-        let value = serde_json::from_str(v).unwrap_or_else(|_| Value::from(v));
-        body.insert(k.to_owned(), value);
-      }
-      let path = format!("/{}", path.trim_start_matches('/'));
-      let v = if post {
-        ads.post(&path, &Value::Object(body)).await?
-      } else {
-        let pairs: Vec<(&str, Value)> = body.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
-        ads.get(&path, &pairs).await?
-      };
-      Data::Value(v)
-    }
+    Command::Audiences { scope } => rows(audiences(&ads, &scope).await?),
+    Command::Pixels { scope } => rows(pixels(&ads, &scope).await?),
+    Command::Report(args) => rows(report(&ads, args).await?),
+    Command::Raw { path, params, post } => Data::Value(raw(&ads, &path, &params, post).await?),
   })
 }
 
-fn env(name: &str) -> Option<String> {
-  std::env::var(name).ok().filter(|v| !v.trim().is_empty())
+fn rows(items: Vec<Value>) -> Data {
+  Data::Value(Value::Array(items))
+}
+
+/// Ad accounts the token manages; this listing needs the app's id and secret.
+async fn advertisers(ads: &Ads<'_>) -> Result<Vec<Value>> {
+  let (Some(app), Some(secret)) = (env("TIKTOK_ADS_APP_ID"), env("TIKTOK_ADS_SECRET")) else {
+    return Err(Error::input(
+      "listing ad accounts needs TIKTOK_ADS_APP_ID and TIKTOK_ADS_SECRET",
+    ));
+  };
+  let v = ads
+    .get(
+      "/oauth2/advertiser/get/",
+      &[
+        ("app_id", app.into()),
+        ("secret", secret.into()),
+        ("access_token", ads.token.clone().into()),
+      ],
+    )
+    .await?;
+  Ok(v.list("list").to_vec())
+}
+
+/// Details of the given ad accounts, or of the current one.
+async fn advertiser(ads: &Ads<'_>, ids: Vec<String>) -> Result<Vec<Value>> {
+  let ids = if ids.is_empty() {
+    vec![ads.advertiser(None)?]
+  } else {
+    ids
+  };
+  let v = ads
+    .get("/advertiser/info/", &[("advertiser_ids", json!(ids))])
+    .await?;
+  Ok(v.list("list").to_vec())
+}
+
+async fn audiences(ads: &Ads<'_>, scope: &Scope) -> Result<Vec<Value>> {
+  let id = ads.advertiser(scope.advertiser.as_deref())?;
+  ads
+    .list(
+      "/dmp/custom_audience/list/",
+      &[("advertiser_id", id.into())],
+      scope.limit,
+    )
+    .await
+}
+
+async fn pixels(ads: &Ads<'_>, scope: &Scope) -> Result<Vec<Value>> {
+  let id = ads.advertiser(scope.advertiser.as_deref())?;
+  let v = ads
+    .get(
+      "/pixel/list/",
+      &[("advertiser_id", id.into()), ("page_size", json!(20))],
+    )
+    .await?;
+  Ok(v.list("pixels").to_vec())
+}
+
+/// Report rows: one per dimension combination, dimensions then metrics.
+async fn report(ads: &Ads<'_>, args: ReportArgs) -> Result<Vec<Value>> {
+  let id = ads.advertiser(args.scope.advertiser.as_deref())?;
+  let (data_level, key) = match args.level.as_str() {
+    "advertiser" => ("AUCTION_ADVERTISER", "advertiser_id"),
+    "campaign" => ("AUCTION_CAMPAIGN", "campaign_id"),
+    "adgroup" => ("AUCTION_ADGROUP", "adgroup_id"),
+    "ad" => ("AUCTION_AD", "ad_id"),
+    other => {
+      return Err(Error::input(format!(
+        "unknown level `{other}`: advertiser, campaign, adgroup or ad"
+      )));
+    }
+  };
+  let dimensions = if args.dimensions.is_empty() {
+    vec![key.to_owned(), "stat_time_day".to_owned()]
+  } else {
+    args.dimensions
+  };
+  let (from, to) = dates(args.from, args.to, args.days)?;
+  let mut params = vec![
+    ("advertiser_id", Value::from(id)),
+    ("report_type", args.report_type.into()),
+    ("data_level", data_level.into()),
+    ("dimensions", json!(dimensions)),
+    ("metrics", json!(args.metrics)),
+    ("start_date", from.into()),
+    ("end_date", to.into()),
+  ];
+  if let Some(filter) = args.filter {
+    let parsed: Value = serde_json::from_str(&filter)
+      .map_err(|e| Error::input(format!("--filter is not JSON: {e}")))?;
+    params.push(("filtering", parsed));
+  }
+  let list = ads
+    .list("/report/integrated/get/", &params, args.scope.limit)
+    .await?;
+  Ok(list.iter().map(report_row).collect())
+}
+
+/// Any endpoint, with `key=value` parameters (JSON values sent as JSON).
+async fn raw(ads: &Ads<'_>, path: &str, params: &[String], post: bool) -> Result<Value> {
+  let mut body = serde_json::Map::new();
+  for param in params {
+    let (k, v) = param
+      .split_once('=')
+      .ok_or_else(|| Error::input(format!("`{param}` is not key=value")))?;
+    let value = serde_json::from_str(v).unwrap_or_else(|_| Value::from(v));
+    body.insert(k.to_owned(), value);
+  }
+  let path = format!("/{}", path.trim_start_matches('/'));
+  if post {
+    ads.post(&path, &Value::Object(body)).await
+  } else {
+    let pairs: Vec<(&str, Value)> = body.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+    ads.get(&path, &pairs).await
+  }
 }
 
 /// `campaign/get`-style listings with a `filtering` object.
