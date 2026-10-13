@@ -18,5 +18,6 @@ fn main() -> ExitCode {
   .platform::<social_douyin::Douyin>()
   .platform::<social_discord::Discord>()
   .platform::<social_tieba::Tieba>()
+  .platform::<social_tiktok::TikTok>()
   .run()
 }

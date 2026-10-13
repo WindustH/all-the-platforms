@@ -157,6 +157,7 @@ struct Source<'a> {
   url: &'a str,
   size: Option<u64>,
   range_param: Option<&'a str>,
+  headers: &'a [(String, String)],
 }
 
 impl<'a> Source<'a> {
@@ -165,6 +166,7 @@ impl<'a> Source<'a> {
       url: &m.url,
       size: m.size,
       range_param: m.range_param.as_deref(),
+      headers: &m.headers,
     }
   }
 
@@ -174,6 +176,7 @@ impl<'a> Source<'a> {
       url,
       size: m.audio_size,
       range_param: m.range_param.as_deref(),
+      headers: &m.headers,
     })
   }
 }
@@ -192,13 +195,22 @@ async fn fetch(ctx: &Ctx, referer: &str, src: Source<'_>, path: &Path) -> Result
   );
   bar.set_message(label);
   let result = match (src.range_param, src.size) {
-    (Some(param), Some(size)) => {
-      fetch_by_param(ctx, referer, src.url, param, size, path, &bar).await
-    }
-    _ => fetch_ranged(ctx, referer, src.url, path, &bar).await,
+    (Some(param), Some(size)) => fetch_by_param(ctx, referer, &src, param, size, path, &bar).await,
+    _ => fetch_ranged(ctx, referer, &src, path, &bar).await,
   };
   bar.finish_and_clear();
   result
+}
+
+/// The media's own headers on a download request.
+fn with_headers<'a>(
+  mut req: crate::http::Req<'a>,
+  headers: &[(String, String)],
+) -> crate::http::Req<'a> {
+  for (name, value) in headers {
+    req = req.header(name, value);
+  }
+  req
 }
 
 /// Chunks as `url&param=a-b`, for hosts (googlevideo) that take ranges in the
@@ -206,29 +218,31 @@ async fn fetch(ctx: &Ctx, referer: &str, src: Source<'_>, path: &Path) -> Result
 async fn fetch_by_param(
   ctx: &Ctx,
   referer: &str,
-  url: &str,
+  src: &Source<'_>,
   param: &str,
   size: u64,
   path: &Path,
   bar: &ProgressBar,
 ) -> Result<u64> {
   bar.set_length(size);
+  let url = src.url;
   let sep = if url.contains('?') { '&' } else { '?' };
   let mut file = tokio::fs::File::create(path).await?;
   let mut done = 0;
   while done < size {
     let to = (done + CHUNK).min(size) - 1;
-    let got = ctx
-      .http
-      .get(format!("{url}{sep}{param}={done}-{to}"))
-      .header("referer", referer)
-      .header("accept", "*/*")
-      .no_cookies()
-      .no_throttle()
-      .retries(2)
-      .timeout(CHUNK_TIMEOUT)
-      .append_to(&mut file, |n| bar.inc(n))
-      .await?;
+    let got = with_headers(
+      ctx.http.get(format!("{url}{sep}{param}={done}-{to}")),
+      src.headers,
+    )
+    .header("referer", referer)
+    .header("accept", "*/*")
+    .no_cookies()
+    .no_throttle()
+    .retries(2)
+    .timeout(CHUNK_TIMEOUT)
+    .append_to(&mut file, |n| bar.inc(n))
+    .await?;
     if got.bytes == 0 {
       return Err(Error::network(format!(
         "the server sent nothing for bytes {done}-{to}"
@@ -245,14 +259,13 @@ async fn fetch_by_param(
 async fn fetch_ranged(
   ctx: &Ctx,
   referer: &str,
-  url: &str,
+  src: &Source<'_>,
   path: &Path,
   bar: &ProgressBar,
 ) -> Result<u64> {
+  let url = src.url;
   let chunk = |from: u64, to: u64| {
-    ctx
-      .http
-      .get(url)
+    with_headers(ctx.http.get(url), src.headers)
       .header("referer", referer)
       .header("accept", "*/*")
       .header("range", format!("bytes={from}-{to}"))

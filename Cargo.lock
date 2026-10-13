@@ -3942,6 +3942,7 @@ dependencies = [
  "social-reddit",
  "social-telegram",
  "social-tieba",
+ "social-tiktok",
  "social-twitter",
  "social-weibo",
  "social-xhs",
@@ -4082,6 +4083,22 @@ dependencies = [
  "serde_json",
  "social-core",
  "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-tiktok"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde_json",
+ "sha2 0.10.9",
+ "social-core",
  "tracing",
  "url",
 ]
