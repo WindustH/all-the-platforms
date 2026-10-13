@@ -37,6 +37,9 @@ social-wechat = { path = "crates/social-wechat" }
 social-feishu = { path = "crates/social-feishu" }
 social-dingtalk = { path = "crates/social-dingtalk" }
 social-wecom = { path = "crates/social-wecom" }
+social-slack = { path = "crates/social-slack" }
+social-mattermost = { path = "crates/social-mattermost" }
+social-rocketchat = { path = "crates/social-rocketchat" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -78,6 +81,9 @@ social-wechat.workspace = true
 social-feishu.workspace = true
 social-dingtalk.workspace = true
 social-wecom.workspace = true
+social-slack.workspace = true
+social-mattermost.workspace = true
+social-rocketchat.workspace = true
 
 [profile.release]
 lto = "thin"

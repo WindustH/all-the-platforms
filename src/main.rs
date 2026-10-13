@@ -23,5 +23,8 @@ fn main() -> ExitCode {
   .platform::<social_feishu::Feishu>()
   .platform::<social_dingtalk::DingTalk>()
   .platform::<social_wecom::WeCom>()
+  .platform::<social_slack::Slack>()
+  .platform::<social_mattermost::Mattermost>()
+  .platform::<social_rocketchat::RocketChat>()
   .run()
 }
