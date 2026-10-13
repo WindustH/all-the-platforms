@@ -38,11 +38,13 @@ impl Link {
     backend: Arc<FileBackend>,
     archive: Archive,
     pair_code: Option<PairCodeOptions>,
+    proxy: Option<&str>,
   ) -> Result<Self> {
     let (tx, events) = mpsc::unbounded_channel();
     let mut builder = Bot::builder()
       .with_backend_arc(backend.clone())
-      .with_transport_factory(Dialer::from_env())
+      .with_transport_factory(Dialer::new(proxy))
+      .with_http_client(crate::proxy::http_client(proxy))
       .on_event(move |event, _client| {
         let _ = tx.send(event);
         async {}
@@ -67,8 +69,12 @@ impl Link {
   }
 
   /// Connect a paired device and catch up on what queued up meanwhile.
-  pub async fn connect(backend: Arc<FileBackend>, archive: Archive) -> Result<Self> {
-    let mut link = Self::start(backend, archive, None).await?;
+  pub async fn connect(
+    backend: Arc<FileBackend>,
+    archive: Archive,
+    proxy: Option<&str>,
+  ) -> Result<Self> {
+    let mut link = Self::start(backend, archive, None, proxy).await?;
     let deadline = Instant::now() + Duration::from_secs(45);
     loop {
       let wait = deadline.saturating_duration_since(Instant::now());

@@ -63,6 +63,9 @@ original quality. Bots fetch files up to 20 MB (a Bot API limit).
 
 ## Limits
 
+- Where Telegram is blocked, the account connection goes through `--proxy`
+  or the proxy variables (`SOCIAL_PROXY`, `ALL_PROXY`, `HTTPS_PROXY`). SOCKS5
+  proxies are used directly; HTTP proxies through a local bridge.
 Telegram answers floods with waits (`rate_limited`); short waits are
 slept through. Bots cannot read history; the web preview shows the last
 posts of public channels only.

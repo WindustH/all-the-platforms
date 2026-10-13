@@ -23,7 +23,7 @@ use crate::prompt;
 
 /// Start a QR login on a fresh connection.
 pub async fn qr_start(ctx: &Ctx, mt: &Mt) -> Result<QrTicket> {
-  let conn = mt.fresh()?;
+  let conn = mt.fresh(ctx)?;
   match export(&conn).await? {
     Exported::Token(url, expires) => {
       *mt.qr.borrow_mut() = (url.clone(), expires);
@@ -199,7 +199,7 @@ pub async fn phone(ctx: &Ctx, mt: &Mt, number: Option<String>) -> Result<User> {
     Some(n) => n,
     None => prompt::line("Phone number (international format, e.g. +44…): ")?,
   };
-  let conn = mt.fresh()?;
+  let conn = mt.fresh(ctx)?;
   let token = conn
     .client
     .request_login_code(number.trim(), &conn.app.hash)

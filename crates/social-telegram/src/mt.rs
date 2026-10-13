@@ -6,6 +6,9 @@
 //! into the session extras (`mtproto`, private like cookies) and its peer
 //! cache into the private cache, so later runs can address chats by id.
 //!
+//! Connections go through `--proxy` / the proxy environment variables when
+//! set ([`crate::proxy`]).
+//!
 //! The app identity comes from `TELEGRAM_API_ID` / `TELEGRAM_API_HASH`
 //! (<https://my.telegram.org>); without them it is Telegram Desktop's public
 //! pair, as tg-cli does.
@@ -82,6 +85,8 @@ impl Conn {
 #[derive(Default)]
 pub struct Mt {
   conn: RefCell<Option<Rc<Conn>>>,
+  /// The SOCKS5 URL for grammers, once worked out (`None` inside: direct).
+  proxy: RefCell<Option<Option<String>>>,
   /// The QR login code on screen and when it expires (unix seconds).
   pub qr: RefCell<(String, i64)>,
 }
@@ -103,19 +108,29 @@ impl Mt {
       .filter(|k| !k.is_empty())
       .and_then(|k| serde_json::from_str::<Keys>(&k).ok());
     let peers: Vec<PeerInfo> = ctx.store.cache_get(PEERS, PEERS_TTL).unwrap_or_default();
-    self.open(Arc::new(MtSession::new(keys, peers)))
+    self.open(ctx, Arc::new(MtSession::new(keys, peers)))
   }
 
   /// A fresh connection with no keys, replacing any open one (logins).
-  pub fn fresh(&self) -> Result<Rc<Conn>> {
-    self.open(Arc::new(MtSession::new(None, Vec::new())))
+  pub fn fresh(&self, ctx: &Ctx) -> Result<Rc<Conn>> {
+    self.open(ctx, Arc::new(MtSession::new(None, Vec::new())))
   }
 
-  fn open(&self, session: Arc<MtSession>) -> Result<Rc<Conn>> {
+  fn proxy_url(&self, ctx: &Ctx) -> Result<Option<String>> {
+    if let Some(url) = self.proxy.borrow().as_ref() {
+      return Ok(url.clone());
+    }
+    let url = crate::proxy::socks_url(ctx.http.proxy())?;
+    *self.proxy.borrow_mut() = Some(url.clone());
+    Ok(url)
+  }
+
+  fn open(&self, ctx: &Ctx, session: Arc<MtSession>) -> Result<Rc<Conn>> {
     let app = app()?;
     let params = ConnectionParams {
       device_model: "social-cli".into(),
       app_version: env!("CARGO_PKG_VERSION").into(),
+      proxy_url: self.proxy_url(ctx)?,
       ..ConnectionParams::default()
     };
     let SenderPool {

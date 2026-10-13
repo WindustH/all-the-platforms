@@ -1,11 +1,12 @@
 //! The linked device's WebSocket through a proxy.
 //!
 //! whatsapp-rust dials `web.whatsapp.com` directly; where that is blocked the
-//! connection goes through the proxy named by `SOCIAL_PROXY`, `ALL_PROXY` or
-//! `HTTPS_PROXY` (upper or lower case): an HTTP `CONNECT` tunnel for
+//! connection goes through the proxy of `--proxy`, `SOCIAL_PROXY`, `ALL_PROXY`
+//! or `HTTPS_PROXY` (upper or lower case): an HTTP `CONNECT` tunnel for
 //! `http://` proxies, SOCKS5 for `socks5://` (`socks5h://`). TLS and the
-//! WebSocket handshake then run over the tunnel as without a proxy. Media
-//! downloads (ureq) read the same variables themselves.
+//! WebSocket handshake then run over the tunnel as without a proxy. The
+//! library's HTTP requests (version check, media) get the same proxy through
+//! [`http_client`].
 
 use std::sync::Arc;
 
@@ -31,27 +32,19 @@ pub struct Dialer {
 }
 
 impl Dialer {
-  pub fn from_env() -> Self {
+  /// `proxy` as `Http::proxy` gives it (`--proxy` or the environment).
+  pub fn new(proxy: Option<&str>) -> Self {
     Self {
-      proxy: proxy_from_env(),
+      proxy: proxy.and_then(parse),
       direct: TokioWebSocketTransportFactory::new(),
     }
   }
 }
 
-/// The proxy from the environment, if one is set.
-fn proxy_from_env() -> Option<Url> {
-  let var = |name: &str| {
-    std::env::var(name)
-      .or_else(|_| std::env::var(name.to_ascii_lowercase()))
-      .ok()
-      .filter(|v| !v.trim().is_empty())
-  };
-  let raw = var("SOCIAL_PROXY")
-    .or_else(|| var("ALL_PROXY"))
-    .or_else(|| var("HTTPS_PROXY"))?;
+fn parse(raw: &str) -> Option<Url> {
+  let raw = raw.trim();
   let raw = if raw.contains("://") {
-    raw
+    raw.to_owned()
   } else {
     format!("http://{raw}")
   };
@@ -131,5 +124,23 @@ impl TransportFactory for Dialer {
     )?;
     let (ws, _) = builder.connect_on(tls).await?;
     Ok(from_websocket(ws))
+  }
+}
+
+/// whatsapp-rust's HTTP client (version check, media), through the proxy
+/// when one is set; without one ureq reads the proxy variables itself.
+pub fn http_client(proxy: Option<&str>) -> whatsapp_rust::http::UreqHttpClient {
+  use whatsapp_rust::http::UreqHttpClient;
+  match proxy
+    .and_then(parse)
+    .and_then(|p| ureq::Proxy::new(p.as_str()).ok())
+  {
+    Some(p) => UreqHttpClient::with_agent(
+      ureq::config::Config::builder()
+        .proxy(Some(p))
+        .build()
+        .into(),
+    ),
+    None => UreqHttpClient::new(),
   }
 }

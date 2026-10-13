@@ -40,6 +40,7 @@ pub struct Personal {
   cache_dir: PathBuf,
   link: Mutex<Option<Link>>,
   pending: Mutex<Option<Link>>,
+  proxy: Option<String>,
 }
 
 impl Personal {
@@ -51,6 +52,7 @@ impl Personal {
       cache_dir: ctx.store.cache_dir().to_owned(),
       link: Mutex::new(None),
       pending: Mutex::new(None),
+      proxy: ctx.http.proxy(),
     }
   }
 
@@ -67,7 +69,8 @@ impl Personal {
     let mut guard = self.link.lock().await;
     if guard.is_none() {
       let backend = Arc::new(FileBackend::open(&self.device)?);
-      *guard = Some(Link::connect(backend, Archive::open(&self.archive_dir)).await?);
+      let archive = Archive::open(&self.archive_dir);
+      *guard = Some(Link::connect(backend, archive, self.proxy.as_deref()).await?);
     }
     let link = guard.as_mut().expect("connected above");
     let out = f(link).await;
@@ -194,7 +197,8 @@ impl Personal {
     }
     let _ = std::fs::remove_file(&self.device);
     let backend = Arc::new(FileBackend::open(&self.device)?);
-    Link::start(backend, Archive::open(&self.archive_dir), pair_code).await
+    let archive = Archive::open(&self.archive_dir);
+    Link::start(backend, archive, pair_code, self.proxy.as_deref()).await
   }
 
   /// After pairing: take in the phone's history, remember the device.
@@ -270,7 +274,7 @@ impl Personal {
       kind,
     );
     let downloader = MediaDownloader::with_default_hosts(
-      Arc::new(whatsapp_rust::http::UreqHttpClient::new()),
+      Arc::new(crate::proxy::http_client(self.proxy.as_deref())),
       Arc::new(TokioRuntime),
     );
     let data = downloader.download(&params).await.map_err(|e| {

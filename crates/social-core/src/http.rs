@@ -53,6 +53,7 @@ pub struct Http {
   dirty: Cell<bool>,
   last: Cell<Option<Instant>>,
   min_interval: Duration,
+  proxy: Option<String>,
 }
 
 impl Http {
@@ -94,6 +95,7 @@ impl Http {
       dirty: Cell::new(false),
       last: Cell::new(None),
       min_interval: cfg.min_interval,
+      proxy: cfg.proxy.clone(),
     })
   }
 
@@ -184,6 +186,24 @@ impl Http {
   }
 
   /// `a=1; b=2` for the current jar.
+  /// The proxy for connections this client cannot carry itself (MTProto,
+  /// third-party websockets): `--proxy`, then `SOCIAL_PROXY`, `ALL_PROXY`,
+  /// `HTTPS_PROXY` (either case).
+  pub fn proxy(&self) -> Option<String> {
+    let var = |name: &str| {
+      std::env::var(name)
+        .or_else(|_| std::env::var(name.to_ascii_lowercase()))
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    };
+    self
+      .proxy
+      .clone()
+      .or_else(|| var("SOCIAL_PROXY"))
+      .or_else(|| var("ALL_PROXY"))
+      .or_else(|| var("HTTPS_PROXY"))
+  }
+
   pub(crate) fn client(&self) -> &wreq::Client {
     &self.client
   }

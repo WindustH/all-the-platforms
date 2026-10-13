@@ -63,4 +63,6 @@ it is online.
 - One linked-device connection at a time: a running `listen` and another
   command take turns.
 - Media of old messages expire on WhatsApp's servers.
-- `--proxy` does not apply to the personal account's connection.
+- Where WhatsApp is blocked, the linked device connects through `--proxy`
+  or the proxy variables (`SOCIAL_PROXY`, `ALL_PROXY`, `HTTPS_PROXY`):
+  HTTP proxies by `CONNECT`, or SOCKS5.

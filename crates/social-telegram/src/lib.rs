@@ -18,6 +18,7 @@ mod live;
 mod login;
 mod mt;
 mod prompt;
+mod proxy;
 mod refs;
 mod session;
 mod stats;
