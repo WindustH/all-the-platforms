@@ -15,6 +15,7 @@ const RANKING: &str = "https://api.bilibili.com/x/web-interface/ranking/v2";
 const RELATED: &str = "https://api.bilibili.com/x/web-interface/archive/related";
 const UPLOADS: &str = "https://api.bilibili.com/x/space/wbi/arc/search";
 const TOVIEW: &str = "https://api.bilibili.com/x/v2/history/toview";
+const RELATION: &str = "https://api.bilibili.com/x/web-interface/archive/relation";
 
 /// `hot --category`: `popular` (default) and the ranking regions below.
 pub const HOT_CATEGORIES: &[&str] = &[
@@ -75,7 +76,26 @@ pub async fn view(ctx: &Ctx, v: &Video) -> Result<Value> {
 }
 
 pub async fn read(ctx: &Ctx, v: &Video) -> Result<Post> {
-  Ok(parse::video(&view(ctx, v).await?))
+  let mut post = parse::video(&view(ctx, v).await?);
+  if ctx.http.has_cookie("SESSDATA")
+    && let Ok(r) = api::get(ctx, RELATION)
+      .arg("aid", v.aid)
+      .arg("bvid", &v.bvid)
+      .send()
+      .await
+  {
+    // Your own relation to the video: liked, coins given, favorited ...
+    let mine: serde_json::Map<String, Value> =
+      ["like", "dislike", "favorite", "attention", "season_fav"]
+        .into_iter()
+        .filter_map(|k| Some((k.to_owned(), Value::Bool(r.bool(k)?))))
+        .chain(r.u64("coin").map(|n| ("coins".to_owned(), Value::from(n))))
+        .collect();
+    if !mine.is_empty() {
+      post.extra.insert("mine".into(), Value::Object(mine));
+    }
+  }
+  Ok(post)
 }
 
 /// `cid` of part `page` (1-based) from `view` data.

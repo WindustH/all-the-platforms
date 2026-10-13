@@ -280,3 +280,34 @@ pub async fn summary(ctx: &Ctx, v: &Video) -> Result<Value> {
     "outline": outline,
   }))
 }
+
+/// Send danmaku to a video at `at` seconds into the part.
+pub async fn send_danmaku(
+  ctx: &Ctx,
+  v: &Video,
+  text: &str,
+  at: f64,
+  color: u32,
+  mode: u8,
+) -> Result<social_core::Action> {
+  let Part { cid, .. } = part(ctx, v).await?;
+  let rnd = jiff::Timestamp::now().as_microsecond();
+  let data = api::post(ctx, "https://api.bilibili.com/x/v2/dm/post")
+    .arg("type", 1)
+    .arg("oid", cid)
+    .arg("msg", text)
+    .arg("bvid", &v.bvid)
+    .arg("progress", (at * 1000.0).round() as u64)
+    .arg("color", color)
+    .arg("fontsize", 25)
+    .arg("pool", 0)
+    .arg("mode", mode)
+    .arg("rnd", rnd)
+    .send()
+    .await?;
+  let action = social_core::Action::done("danmaku", &v.bvid).with_url(v.url());
+  Ok(match data.str("dmid_str") {
+    Some(id) => action.with_id(id),
+    None => action,
+  })
+}

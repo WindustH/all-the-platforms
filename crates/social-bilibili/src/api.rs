@@ -85,6 +85,12 @@ impl<'a> Call<'a> {
     self
   }
 
+  /// Query parameter even on a POST (signed with the rest under [`Call::wbi`]).
+  pub fn query(mut self, key: &str, value: impl ToString) -> Self {
+    self.query.push((key.to_owned(), value.to_string()));
+    self
+  }
+
   /// Per-request header (e.g. the referer of another Bilibili site).
   pub fn header(mut self, name: &'static str, value: impl Into<String>) -> Self {
     self.headers.push((name, value.into()));
@@ -230,7 +236,7 @@ fn envelope(v: Value, wbi: bool) -> Result<Value> {
       .with_hint("Bilibili asked for a captcha; retry later or log in"),
     -412 | -509 | -799 | 34004 | 12051 | 12052 => Error::new(ErrorCode::RateLimited, text),
     -403 if wbi => Error::new(ErrorCode::SignatureError, text),
-    -403 | -10403 | 12002 | 62012 | 53013 => Error::new(ErrorCode::PermissionDenied, text),
+    -403 | -10403 | 12002 | 62012 | 53013 | 22115 => Error::new(ErrorCode::PermissionDenied, text),
     -404 | 62002 | 62004 | 12022 | 4101131 | 4128002 => Error::not_found(text),
     -400 | -405 => Error::input(text),
     _ => Error::upstream(text),

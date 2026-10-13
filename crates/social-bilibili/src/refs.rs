@@ -1,6 +1,7 @@
 //! Parse the ids and links users pass in: videos (BV / av / URL / b23.tv),
-//! dynamics (`t.bilibili.com`, `/opus/`), users (mid / space URL / name),
-//! comment threads and favorites folders.
+//! dynamics (`t.bilibili.com`, `/opus/`), articles (`cv…`), users (mid /
+//! space URL / name), comment threads, favorites folders, bangumi seasons,
+//! live rooms and a user's collections (合集 / 系列).
 
 use std::sync::LazyLock;
 
@@ -17,6 +18,18 @@ static AID: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r"(?i)(?:^|/)av(\d+)\b").expect("valid regex"));
 static DYNAMIC: LazyLock<Regex> = LazyLock::new(|| {
   Regex::new(r"(?:t\.bilibili\.com/|/opus/|/dynamic/)(\d+)").expect("valid regex")
+});
+static ARTICLE: LazyLock<Regex> = LazyLock::new(|| {
+  Regex::new(r"(?i)(?:^|/|\b)cv(\d+)\b|/read/mobile[/?](?:id=)?(\d+)").expect("valid regex")
+});
+static SEASON: LazyLock<Regex> =
+  LazyLock::new(|| Regex::new(r"(?i)\b(ss|ep|md)(\d+)\b").expect("valid regex"));
+static ROOM: LazyLock<Regex> = LazyLock::new(|| {
+  Regex::new(r"(?i)(?:live\.bilibili\.com/(?:h5/|blanc/)?|^live:)(\d+)").expect("valid regex")
+});
+static LIST: LazyLock<Regex> = LazyLock::new(|| {
+  Regex::new(r"space\.bilibili\.com/(\d+)/(?:lists/(\d+)\?type=(season|series)|channel/(collection|series)detail\?sid=(\d+))")
+    .expect("valid regex")
 });
 static SPACE: LazyLock<Regex> = LazyLock::new(|| {
   Regex::new(r"(?:space\.bilibili\.com/|m\.bilibili\.com/space/)(\d+)").expect("valid regex")
@@ -60,6 +73,8 @@ pub enum PostRef {
   Video(Video),
   /// Dynamic / opus id.
   Dynamic(String),
+  /// Column article (专栏) `cv` id.
+  Article(u64),
 }
 
 /// Parse a post argument; b23.tv short links are resolved over HTTP.
@@ -86,7 +101,7 @@ pub async fn post(ctx: &Ctx, input: &str) -> Result<PostRef> {
 pub async fn video(ctx: &Ctx, input: &str) -> Result<Video> {
   match post(ctx, input).await? {
     PostRef::Video(v) => Ok(v),
-    PostRef::Dynamic(_) => Err(Error::input(format!("not a video: {input}"))),
+    _ => Err(Error::input(format!("not a video: {input}"))),
   }
 }
 
@@ -114,6 +129,13 @@ pub fn parse_post(input: &str) -> Option<PostRef> {
   }
   if let Some(c) = DYNAMIC.captures(input) {
     return Some(PostRef::Dynamic(c[1].to_owned()));
+  }
+  if let Some(id) = ARTICLE
+    .captures(input)
+    .and_then(|c| c.get(1).or(c.get(2)))
+    .and_then(|m| m.as_str().parse().ok())
+  {
+    return Some(PostRef::Article(id));
   }
   // Bare numbers: dynamic ids are 17+ digits, anything shorter is an aid.
   if !input.is_empty() && input.bytes().all(|b| b.is_ascii_digit()) {
@@ -149,6 +171,86 @@ pub fn user(input: &str) -> UserRef {
 
 pub fn space_url(mid: impl std::fmt::Display) -> String {
   format!("{SPACE_URL}{mid}")
+}
+
+pub fn article_url(id: u64) -> String {
+  format!("https://www.bilibili.com/read/cv{id}")
+}
+
+/// A bangumi / film / documentary: season, episode or media (review) id.
+#[derive(Debug, Clone, Copy)]
+pub enum PgcRef {
+  Season(u64),
+  Episode(u64),
+  Media(u64),
+}
+
+pub fn season(input: &str) -> Result<PgcRef> {
+  let c = SEASON.captures(input.trim()).ok_or_else(|| {
+    Error::input(format!(
+      "not a bangumi: {input} (expected ss…, ep…, md… or a /bangumi/ link)"
+    ))
+  })?;
+  let id: u64 = c[2]
+    .parse()
+    .map_err(|_| Error::input(format!("bad id in {input}")))?;
+  Ok(match c[1].to_ascii_lowercase().as_str() {
+    "ep" => PgcRef::Episode(id),
+    "md" => PgcRef::Media(id),
+    _ => PgcRef::Season(id),
+  })
+}
+
+pub fn season_url(season_id: impl std::fmt::Display) -> String {
+  format!("https://www.bilibili.com/bangumi/play/ss{season_id}")
+}
+
+/// A live room: `live.bilibili.com/<id>`, `live:<id>`; `None` for anything else.
+pub fn room(input: &str) -> Option<u64> {
+  ROOM.captures(input.trim()).and_then(|c| c[1].parse().ok())
+}
+
+pub fn room_url(id: impl std::fmt::Display) -> String {
+  format!("https://live.bilibili.com/{id}")
+}
+
+/// A user's collection: `(mid, id, kind)` with kind `season` (合集) or
+/// `series` (系列), from its space link or `MID/ID` (a season).
+pub fn list(input: &str) -> Result<(String, String, &'static str)> {
+  let input = input.trim();
+  if let Some(c) = LIST.captures(input) {
+    let mid = c[1].to_owned();
+    if let (Some(id), Some(kind)) = (c.get(2), c.get(3)) {
+      let kind = if kind.as_str() == "series" {
+        "series"
+      } else {
+        "season"
+      };
+      return Ok((mid, id.as_str().to_owned(), kind));
+    }
+    if let (Some(kind), Some(id)) = (c.get(4), c.get(5)) {
+      let kind = if kind.as_str() == "series" {
+        "series"
+      } else {
+        "season"
+      };
+      return Ok((mid, id.as_str().to_owned(), kind));
+    }
+  }
+  let parts: Vec<&str> = input.split('/').collect();
+  if let [mid, id] = parts[..]
+    && mid.bytes().all(|b| b.is_ascii_digit())
+    && id.bytes().all(|b| b.is_ascii_digit())
+  {
+    return Ok((mid.to_owned(), id.to_owned(), "season"));
+  }
+  if let [mid, kind @ ("season" | "series"), id] = parts[..] {
+    let kind = if kind == "series" { "series" } else { "season" };
+    return Ok((mid.to_owned(), id.to_owned(), kind));
+  }
+  Err(Error::input(format!(
+    "not a collection: {input} (expected its space link, MID/ID or MID/series/ID)"
+  )))
 }
 
 /// `ROOT` or `ROOT:PARENT` (reply to a reply inside a thread).
