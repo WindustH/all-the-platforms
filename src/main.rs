@@ -36,5 +36,6 @@ fn main() -> ExitCode {
   .platform::<social_line::Line>()
   .platform::<social_facebook::Facebook>()
   .platform::<social_instagram::Instagram>()
+  .platform::<social_whatsapp::WhatsApp>()
   .run()
 }

@@ -1,0 +1,21 @@
+[package]
+name = "social-whatsapp"
+description = "WhatsApp support for social-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+clap.workspace = true
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+social-core.workspace = true
+tokio = { workspace = true, features = ["io-util", "net", "signal", "sync"] }
+http = "1"
+tokio-socks = "0.5"
+tokio-websockets = { version = "0.13", default-features = false, features = ["client", "rand", "ring", "rustls-bring-your-own-connector"] }
+tracing.workspace = true
+url.workspace = true
+whatsapp-rust = { version = "0.7", default-features = false, features = ["tokio-transport", "tokio-runtime", "ureq-client"] }

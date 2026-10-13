@@ -51,6 +51,7 @@ social-line = { path = "crates/social-line" }
 social-meta = { path = "crates/social-meta" }
 social-facebook = { path = "crates/social-facebook" }
 social-instagram = { path = "crates/social-instagram" }
+social-whatsapp = { path = "crates/social-whatsapp" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -105,6 +106,7 @@ social-vocechat.workspace = true
 social-line.workspace = true
 social-facebook.workspace = true
 social-instagram.workspace = true
+social-whatsapp.workspace = true
 
 [profile.release]
 lto = "thin"
