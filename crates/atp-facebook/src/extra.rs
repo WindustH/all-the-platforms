@@ -3,8 +3,8 @@
 use atp_core::cli::PageArgs;
 use atp_core::{Data, Page, Result};
 
-use crate::client::Client;
-use crate::{pages, read};
+use crate::api::Api;
+use crate::{groups, pages, users};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -34,34 +34,34 @@ pub enum Command {
   Ads(atp_meta::ads::Command),
 }
 
-pub async fn run(c: &Client, command: Command) -> Result<Data> {
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
-    Command::Pages => Data::Collections(Page::last(pages::pages(c).await?)),
-    Command::UsePage { page } => Data::Action(pages::use_page(c, &page).await?),
+    Command::Pages => Data::Collections(Page::last(pages::pages(api).await?)),
+    Command::UsePage { page } => Data::Action(pages::use_page(api, &page).await?),
     Command::PagePosts { page, page_args } => {
       let page = page.as_deref();
       Data::Posts(
         page_args
-          .collect_dated(async |r| pages::page_posts(c, page, &r).await)
+          .collect_dated(async |req| pages::page_posts(api, page, &req).await)
           .await?,
       )
     }
     Command::Group { group } => {
-      let group = c.ctx.collection_ref(&group)?;
-      Data::Collections(Page::last(vec![read::group(c, &group).await?]))
+      let group = api.ctx.collection_ref(&group)?;
+      Data::Collections(Page::last(vec![groups::group(api, &group).await?]))
     }
     Command::GroupPosts { group, page } => {
-      let group = c.ctx.collection_ref(&group)?;
+      let group = api.ctx.collection_ref(&group)?;
       Data::Posts(
         page
-          .collect_dated(async |r| read::group_posts(c, &group, &r).await)
+          .collect_dated(async |req| groups::group_posts(api, &group, &req).await)
           .await?,
       )
     }
     Command::Friends { user } => {
-      let user = user.map(|u| c.ctx.user_ref(&u)).transpose()?;
-      Data::Users(read::friends(c, user.as_deref()).await?)
+      let user = user.map(|u| api.ctx.user_ref(&u)).transpose()?;
+      Data::Users(users::friends(api, user.as_deref()).await?)
     }
-    Command::Ads(cmd) => atp_meta::ads::run(&c.ctx, &c.graph()?, cmd).await?,
+    Command::Ads(command) => atp_meta::ads::run(&api.ctx, &api.graph()?, command).await?,
   })
 }

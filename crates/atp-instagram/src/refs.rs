@@ -11,11 +11,11 @@ const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01
 
 /// The numeric media id of a post argument.
 pub fn media_id(arg: &str) -> Result<String> {
-  let a = arg.trim();
+  let trimmed = arg.trim();
   // `MEDIAID_USERID` as the API writes ids.
-  let a = a.split('_').next().unwrap_or(a);
-  if !a.is_empty() && a.bytes().all(|b| b.is_ascii_digit()) {
-    return Ok(a.to_owned());
+  let id = trimmed.split('_').next().unwrap_or(trimmed);
+  if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) {
+    return Ok(id.to_owned());
   }
   let code = shortcode(arg)?;
   decode(&code).ok_or_else(|| Error::input(format!("not an Instagram post: {arg}")))
@@ -23,34 +23,36 @@ pub fn media_id(arg: &str) -> Result<String> {
 
 /// The shortcode of a post link or a bare shortcode.
 pub fn shortcode(arg: &str) -> Result<String> {
-  let a = arg.trim();
-  if let Ok(u) = Url::parse(a) {
-    let mut seg = u.path_segments().into_iter().flatten();
-    while let Some(s) = seg.next() {
-      if matches!(s, "p" | "reel" | "reels" | "tv")
-        && let Some(code) = seg.next().filter(|c| !c.is_empty())
+  let arg = arg.trim();
+  if let Ok(url) = Url::parse(arg) {
+    let mut segments = url.path_segments().into_iter().flatten();
+    while let Some(segment) = segments.next() {
+      if matches!(segment, "p" | "reel" | "reels" | "tv")
+        && let Some(code) = segments.next().filter(|c| !c.is_empty())
       {
         return Ok(code.to_owned());
       }
     }
-    return Err(Error::input(format!("not an Instagram post link: {a}")));
+    return Err(Error::input(format!("not an Instagram post link: {arg}")));
   }
-  if !a.is_empty() && a.bytes().all(|b| ALPHABET.contains(&b)) {
-    return Ok(a.to_owned());
+  if !arg.is_empty() && arg.bytes().all(|b| ALPHABET.contains(&b)) {
+    return Ok(arg.to_owned());
   }
-  Err(Error::input(format!("not an Instagram post: {a}")))
+  Err(Error::input(format!("not an Instagram post: {arg}")))
 }
 
+/// The media id a shortcode encodes.
 pub fn decode(code: &str) -> Option<String> {
   // Private posts append more characters after the first 11.
   let code = if code.len() > 11 { &code[..11] } else { code };
   let mut n: u128 = 0;
   for b in code.bytes() {
-    n = n.checked_mul(64)? + ALPHABET.iter().position(|&a| a == b)? as u128;
+    n = n.checked_mul(64)? + ALPHABET.iter().position(|&c| c == b)? as u128;
   }
   Some(n.to_string())
 }
 
+/// The shortcode of a media id.
 pub fn encode(id: &str) -> Option<String> {
   let mut n: u128 = id.split('_').next()?.parse().ok()?;
   let mut out = Vec::new();
@@ -68,38 +70,36 @@ pub fn post_url(code: &str) -> String {
 
 /// A username (`name`, `@name`, a profile link) or `None` for a numeric id.
 pub fn username(arg: &str) -> Option<String> {
-  let a = arg.trim();
-  if let Ok(u) = Url::parse(a) {
-    return u
+  let arg = arg.trim();
+  if let Ok(url) = Url::parse(arg) {
+    return url
       .path_segments()
-      .and_then(|mut s| s.next())
-      .filter(|s| !s.is_empty())
+      .and_then(|mut segments| segments.next())
+      .filter(|name| !name.is_empty())
       .map(str::to_owned);
   }
-  let a = a.trim_start_matches('@');
-  (!a.bytes().all(|b| b.is_ascii_digit())).then(|| a.to_owned())
+  let name = arg.trim_start_matches('@');
+  (!name.bytes().all(|b| b.is_ascii_digit())).then(|| name.to_owned())
 }
 
+/// A hashtag (`tag`, `#tag`, an /explore/tags/ link).
 pub fn tag(arg: &str) -> String {
-  let a = arg.trim();
-  if let Ok(u) = Url::parse(a)
-    && let Some(t) = u
-      .path_segments()
-      .and_then(|s| s.skip_while(|x| *x != "tags").nth(1))
-  {
-    return t.to_owned();
-  }
-  a.trim_start_matches('#').to_owned()
+  let arg = arg.trim();
+  after(arg, "tags").unwrap_or_else(|| arg.trim_start_matches('#').to_owned())
 }
 
+/// A place id (the id, an /explore/locations/ link).
 pub fn location(arg: &str) -> String {
-  let a = arg.trim();
-  if let Ok(u) = Url::parse(a)
-    && let Some(id) = u
-      .path_segments()
-      .and_then(|s| s.skip_while(|x| *x != "locations").nth(1))
-  {
-    return id.to_owned();
-  }
-  a.to_owned()
+  let arg = arg.trim();
+  after(arg, "locations").unwrap_or_else(|| arg.to_owned())
+}
+
+/// The path segment after `segment` of a link.
+fn after(arg: &str, segment: &str) -> Option<String> {
+  Url::parse(arg)
+    .ok()?
+    .path_segments()?
+    .skip_while(|s| *s != segment)
+    .nth(1)
+    .map(str::to_owned)
 }

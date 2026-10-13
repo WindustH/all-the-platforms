@@ -1,10 +1,12 @@
 //! Instagram commands beyond the shared set.
 
 use atp_core::cli::PageArgs;
-use atp_core::{Data, Result};
+use atp_core::{Data, Error, Result};
+use atp_meta::Graph;
+use atp_meta::graph::FACEBOOK;
 
-use crate::client::Client;
-use crate::read;
+use crate::api::Api;
+use crate::{stories, topics};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -36,11 +38,11 @@ pub enum Command {
   Ads(atp_meta::ads::Command),
 }
 
-pub async fn run(c: &Client, command: Command) -> Result<Data> {
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
     Command::Tag { tag, recent, page } => Data::Posts(
       page
-        .collect_dated(async |r| read::tag(c, &tag, recent, &r).await)
+        .collect_dated(async |req| topics::tag(api, &tag, recent, &req).await)
         .await?,
     ),
     Command::Location {
@@ -48,34 +50,32 @@ pub async fn run(c: &Client, command: Command) -> Result<Data> {
       recent,
       page,
     } => {
-      let location = c.ctx.collection_ref(&location)?;
+      let location = api.ctx.collection_ref(&location)?;
       Data::Posts(
         page
-          .collect_dated(async |r| read::location(c, &location, recent, &r).await)
+          .collect_dated(async |req| topics::location(api, &location, recent, &req).await)
           .await?,
       )
     }
-    Command::Stories { user } => Data::Posts(read::stories(c, &c.ctx.user_ref(&user)?).await?),
+    Command::Stories { user } => {
+      Data::Posts(stories::stories(api, &api.ctx.user_ref(&user)?).await?)
+    }
     Command::Highlights { user } => {
-      Data::Collections(read::highlights(c, &c.ctx.user_ref(&user)?).await?)
+      Data::Collections(stories::highlights(api, &api.ctx.user_ref(&user)?).await?)
     }
     Command::Highlight { highlight } => {
-      let h = c.ctx.collection_ref(&highlight)?;
-      let id = if h.starts_with("highlight:") {
-        h
-      } else {
-        format!("highlight:{h}")
-      };
-      c.require_session("highlights")?;
-      Data::Posts(read::reel(c, &id).await?)
+      let highlight = api.ctx.collection_ref(&highlight)?;
+      Data::Posts(stories::highlight(api, &highlight).await?)
     }
-    Command::Ads(cmd) => {
-      let token = c.token().ok_or_else(|| {
-        atp_core::Error::auth("no Graph API access token")
-          .with_hint("set META_ACCESS_TOKEN or run `atp instagram login --token <token>`")
-      })?;
-      let g = atp_meta::Graph::new(&c.ctx, atp_meta::graph::FACEBOOK, token);
-      atp_meta::ads::run(&c.ctx, &g, cmd).await?
-    }
+    Command::Ads(command) => atp_meta::ads::run(&api.ctx, &ads_graph(api)?, command).await?,
   })
+}
+
+/// The Marketing API: always graph.facebook.com.
+fn ads_graph(api: &Api) -> Result<Graph<'_>> {
+  let token = api.token().ok_or_else(|| {
+    Error::auth("no Graph API access token")
+      .with_hint("set META_ACCESS_TOKEN or run `atp instagram login --token <token>`")
+  })?;
+  Ok(Graph::new(&api.ctx, FACEBOOK, token))
 }
