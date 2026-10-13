@@ -1,0 +1,15 @@
+[package]
+name = "social-line"
+description = "LINE Messaging API support for social-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+jiff.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+social-core.workspace = true
+tokio.workspace = true
+tracing.workspace = true

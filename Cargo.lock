@@ -3938,12 +3938,16 @@ dependencies = [
  "social-core",
  "social-discord",
  "social-douyin",
+ "social-line",
+ "social-matrix",
+ "social-misskey",
  "social-mp",
  "social-reddit",
  "social-telegram",
  "social-tieba",
  "social-tiktok",
  "social-twitter",
+ "social-vocechat",
  "social-weibo",
  "social-xhs",
  "social-youtube",
@@ -4013,6 +4017,48 @@ dependencies = [
  "serde",
  "serde_json",
  "sm3",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-line"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "social-matrix"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-misskey"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde_json",
  "social-core",
  "tokio",
  "tracing",
@@ -4115,6 +4161,19 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "social-core",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-vocechat"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jiff",
+ "serde_json",
+ "social-core",
+ "tokio",
  "tracing",
  "url",
 ]

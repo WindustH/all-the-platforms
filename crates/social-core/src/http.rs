@@ -522,6 +522,30 @@ impl<'a> Req<'a> {
     self.send().await?.check()?.value()
   }
 
+  /// Read a response as it arrives, handing each chunk to `f`, until the
+  /// server ends it or `f` returns `false` (server-sent events and other
+  /// long-lived feeds; give the request a long `timeout`).
+  pub async fn each_chunk(self, mut f: impl FnMut(&[u8]) -> bool) -> Result<()> {
+    let resp = self.execute().await?;
+    let status = resp.status();
+    if !status.is_success() {
+      let body = resp
+        .bytes()
+        .await
+        .map(|b| String::from_utf8_lossy(&b).into_owned())
+        .unwrap_or_default();
+      return Err(status_error(status, &body));
+    }
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+      let chunk = chunk.map_err(|e| Error::network(e.to_string()))?;
+      if !f(&chunk) {
+        break;
+      }
+    }
+    Ok(())
+  }
+
   /// Stream a successful response's body onto the end of `file`, calling
   /// `progress(bytes)` per chunk; the status and headers come back with the count.
   pub async fn append_to(
