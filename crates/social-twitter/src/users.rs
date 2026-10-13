@@ -128,7 +128,8 @@ pub async fn likers(api: &Api, arg: &str, req: &PageReq) -> Result<Page<User>> {
     let tweet = tweets::read(api, &id).await?;
     let own = user_id_or_self(api, None).await?;
     if tweet.author.as_ref().is_some_and(|a| a.id != own) {
-      let hint = "likes are private on X since June 2024; `social x read POST` shows the like count";
+      let hint =
+        "likes are private on X since June 2024; `social x read POST` shows the like count";
       return Err(
         Error::new(
           ErrorCode::PermissionDenied,

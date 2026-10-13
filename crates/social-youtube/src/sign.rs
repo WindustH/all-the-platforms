@@ -7,8 +7,8 @@
 //! `__Secure-3PAPISID`. Some exports lack `SAPISID` itself; the
 //! `__Secure-3PAPISID` value (the same secret) stands in for it then.
 
-use social_core::Http;
 use sha1::{Digest, Sha1};
+use social_core::Http;
 
 /// Cookies that can sign a request; either marks a logged-in session.
 pub const SIGNING_COOKIES: &[&str] = &["SAPISID", "__Secure-3PAPISID"];

@@ -14,6 +14,7 @@ use crate::error::{Error, Result};
 use crate::model::{
   Action, Collection, Comment, Data, Insights, Media, Notification, Page, Post, User,
 };
+use crate::output::Stream;
 
 /// Shared operations a platform can provide. Drives `--help` (unsupported
 /// commands are hidden) and the `social platforms` matrix.
@@ -54,6 +55,14 @@ pub enum Cap {
   Download,
   AccountInsights,
   PostInsights,
+  /// Chat platforms: conversations, their messages and live events.
+  Chats,
+  Messages,
+  Send,
+  Members,
+  React,
+  Edit,
+  Listen,
 }
 
 impl Cap {
@@ -91,6 +100,13 @@ impl Cap {
     Cap::Download,
     Cap::AccountInsights,
     Cap::PostInsights,
+    Cap::Chats,
+    Cap::Messages,
+    Cap::Send,
+    Cap::Members,
+    Cap::React,
+    Cap::Edit,
+    Cap::Listen,
   ];
 
   pub fn name(self) -> &'static str {
@@ -128,6 +144,13 @@ impl Cap {
       Cap::Download => "download",
       Cap::AccountInsights => "insights",
       Cap::PostInsights => "post-insights",
+      Cap::Chats => "chats",
+      Cap::Messages => "messages",
+      Cap::Send => "send",
+      Cap::Members => "members",
+      Cap::React => "react",
+      Cap::Edit => "edit",
+      Cap::Listen => "listen",
     }
   }
 }
@@ -246,6 +269,16 @@ pub struct Reply {
   /// Comment of the post this one answers.
   pub reply_to: Option<String>,
   pub images: Vec<PathBuf>,
+}
+
+/// A message to send to a chat.
+#[derive(Debug, Clone, Default)]
+pub struct Message {
+  pub text: String,
+  /// Message of the chat this one answers.
+  pub reply_to: Option<String>,
+  /// Files to attach (images, documents ...).
+  pub files: Vec<PathBuf>,
 }
 
 /// A started QR login: `url` is encoded into the QR code, `token` identifies
@@ -456,6 +489,49 @@ pub trait Platform: Sized {
   /// one of its posts, over the last `days` days where the platform allows it.
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
     unsupported!("insights")
+  }
+
+  // ── chat ─────────────────────────────────────────────────────────────
+  //
+  // Chats are `Collection`s (`kind`: server, channel, group, dm, thread ...)
+  // and messages are `Post`s. A message without a permalink takes
+  // `CHAT/MESSAGE` as its `id`, so commands accept it back.
+
+  /// The account's conversations: servers, teams, groups and direct chats,
+  /// or the channels inside `parent`.
+  async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
+    unsupported!("chats")
+  }
+
+  /// Messages of one chat, newest first.
+  async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
+    unsupported!("messages")
+  }
+
+  async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
+    unsupported!("send")
+  }
+
+  async fn members(&self, chat: &str, page: &PageReq) -> Result<Page<User>> {
+    unsupported!("members")
+  }
+
+  /// Add (or with `undo` remove) an emoji reaction to a message or post.
+  async fn react(&self, post: &str, emoji: &str, undo: bool) -> Result<Action> {
+    unsupported!("react")
+  }
+
+  /// Replace the text of one of your messages.
+  async fn edit(&self, post: &str, text: &str) -> Result<Action> {
+    unsupported!("edit")
+  }
+
+  /// Hand every incoming message (of `chats`, or of all chats when empty) to
+  /// `out` as it arrives, until the connection ends or the user interrupts.
+  /// Other events (edits, deletions, reactions ...) are `Post`s too, with
+  /// their kind in `kind`.
+  async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
+    unsupported!("listen")
   }
 
   // ── media ────────────────────────────────────────────────────────────

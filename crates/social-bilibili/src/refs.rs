@@ -4,8 +4,8 @@
 
 use std::sync::LazyLock;
 
-use social_core::{Ctx, Error, Result};
 use regex::Regex;
+use social_core::{Ctx, Error, Result};
 
 pub const VIDEO_URL: &str = "https://www.bilibili.com/video/";
 pub const DYNAMIC_URL: &str = "https://t.bilibili.com/";

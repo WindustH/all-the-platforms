@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use social_core::{Ctx, Error, Result, ValueExt};
 use serde::{Deserialize, Serialize};
+use social_core::{Ctx, Error, Result, ValueExt};
 
 const TOKEN_URL: &str = "https://www.reddit.com/api/v1/access_token";
 /// Upper bound for the cache file's age; the stored expiry decides first.
@@ -55,7 +55,10 @@ impl Credentials {
       .chars()
       .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
       .collect();
-    format!("cli:social-cli:{} (by /u/{name})", env!("CARGO_PKG_VERSION"))
+    format!(
+      "cli:social-cli:{} (by /u/{name})",
+      env!("CARGO_PKG_VERSION")
+    )
   }
 
   fn cache_key(&self) -> String {

@@ -168,8 +168,9 @@ pub fn platform(info: &PlatformInfo, cmd: &clap::Command) -> String {
 
 /// The index of `social guide`.
 pub fn index(platforms: &[(&'static str, &'static str)]) -> String {
-  let mut out =
-    String::from("# social-cli guide\n\nRead a topic with `social guide <topic>`.\n\n## Topics\n\n");
+  let mut out = String::from(
+    "# social-cli guide\n\nRead a topic with `social guide <topic>`.\n\n## Topics\n\n",
+  );
   for t in TOPICS {
     out.push_str(&format!("- `{}`: {}\n", t.name, t.summary));
   }

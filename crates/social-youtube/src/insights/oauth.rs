@@ -7,8 +7,8 @@ use std::cell::RefCell;
 use std::net::TcpListener;
 use std::time::{Duration, Instant};
 
-use social_core::{Ctx, Error, Result, Value, ValueExt, json};
 use serde::{Deserialize, Serialize};
+use social_core::{Ctx, Error, Result, Value, ValueExt, json};
 
 const AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";

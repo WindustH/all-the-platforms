@@ -3,8 +3,8 @@
 
 use std::sync::LazyLock;
 
-use social_core::{Error, Result, Value, ValueExt};
 use regex::Regex;
+use social_core::{Error, Result, Value, ValueExt};
 
 use crate::api::{Client, HOME};
 use crate::parse::snake_keys;

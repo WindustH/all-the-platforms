@@ -374,6 +374,59 @@ pub enum CommonCommand {
   /// Download the images / video / audio of a post
   #[command(after_long_help = EX_DOWNLOAD)]
   Download(DownloadArgs),
+  /// Your conversations: servers, groups, channels and direct messages
+  #[command(after_long_help = EX_CHATS)]
+  Chats {
+    /// Only the channels inside this server / team / space
+    parent: Option<String>,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Messages of a chat, newest first
+  Messages {
+    chat: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Send a message to a chat
+  Send {
+    chat: String,
+    /// Message text; `-` reads it from stdin
+    #[arg(required_unless_present = "files")]
+    text: Option<String>,
+    /// Attach a file (repeatable)
+    #[arg(short = 'a', long = "attach", value_name = "PATH")]
+    files: Vec<PathBuf>,
+    /// Answer this message
+    #[arg(long, value_name = "MESSAGE")]
+    reply_to: Option<String>,
+  },
+  /// Members of a chat, group or server
+  Members {
+    chat: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// React to a message or post with an emoji
+  React {
+    post: String,
+    emoji: String,
+    /// Remove the reaction instead
+    #[arg(long)]
+    undo: bool,
+  },
+  /// Replace the text of one of your messages
+  Edit {
+    post: String,
+    /// New text; `-` reads it from stdin
+    text: String,
+  },
+  /// Print messages as they arrive, until interrupted
+  #[command(after_long_help = EX_LISTEN)]
+  Listen {
+    /// Only these chats (default: everything the account receives)
+    chats: Vec<String>,
+  },
 }
 
 /// Drop items an upstream repeated across pages (same id), keeping the first.
@@ -406,6 +459,23 @@ Examples:
   social zhihu search rust -t topic
 
 Values of --sort / --filter differ per platform: see `social guide <platform>`.";
+
+const EX_CHATS: &str = "\
+Examples:
+  social discord chats                 # servers and direct messages
+  social discord chats '#2'            # the channels of the second server
+  social discord messages '#3' -n 200 --since 7d -f jsonl > channel.jsonl
+  social tg send '#1' 'Hello' -a photo.jpg
+
+Chats are collections and messages are posts: `#N` works for both.";
+
+const EX_LISTEN: &str = "\
+Examples:
+  social tg listen                     # everything, one line per message
+  social discord listen '#3' -f jsonl  # one JSON object per event, as it arrives
+
+Events other than new messages (edits, deletions, reactions ...) carry their
+kind in `kind`.";
 
 const EX_COMMENT: &str = "\
 Examples:

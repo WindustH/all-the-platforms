@@ -8,9 +8,11 @@ use super::args::{CommonCommand, SearchKind};
 use crate::account;
 use crate::download::{self, DownloadOpts};
 use crate::error::{Error, Result};
+use crate::model::Action;
 use crate::model::{Comment, Data};
+use crate::output::{Format, Stream};
 use crate::paging::collect;
-use crate::platform::{Cap, Draft, Platform, Query, Reply};
+use crate::platform::{Cap, Draft, Message, Platform, Query, Reply};
 
 fn confirm(yes: bool, what: &str) -> Result<()> {
   if yes {
@@ -44,10 +46,19 @@ pub fn read_text(text: Option<String>) -> Result<String> {
 
 /// Fails on the first image path that is not a file.
 pub fn check_images(images: &[PathBuf]) -> Result<()> {
-  match images.iter().find(|i| !i.is_file()) {
-    Some(missing) => Err(Error::input(format!(
-      "image not found: {}",
-      missing.display()
+  missing("image", images)
+}
+
+/// Fails on the first attachment path that is not a file.
+pub fn check_files(files: &[PathBuf]) -> Result<()> {
+  missing("file", files)
+}
+
+fn missing(what: &str, paths: &[PathBuf]) -> Result<()> {
+  match paths.iter().find(|p| !p.is_file()) {
+    Some(path) => Err(Error::input(format!(
+      "{what} not found: {}",
+      path.display()
     ))),
     None => Ok(()),
   }
@@ -58,6 +69,7 @@ pub(super) async fn common<P: Platform>(
   p: &P,
   cmd: CommonCommand,
   loaded: &account::Loaded,
+  format: Format,
 ) -> Result<(Data, ExitCode, bool)> {
   use CommonCommand as C;
   let ctx = p.ctx();
@@ -286,6 +298,66 @@ pub(super) async fn common<P: Platform>(
       let post = ctx.post_ref(&post)?;
       confirm(yes, &format!("delete {post}"))?;
       ok(Data::Action(p.delete(&post).await?))
+    }
+    C::Chats { parent, page } => {
+      let parent = parent.map(|c| ctx.collection_ref(&c)).transpose()?;
+      let parent = parent.as_deref();
+      ok(Data::Collections(
+        page.collect(async |r| p.chats(parent, &r).await).await?,
+      ))
+    }
+    C::Messages { chat, page } => {
+      let chat = ctx.collection_ref(&chat)?;
+      ok(Data::Posts(
+        page
+          .collect_dated(async |r| p.messages(&chat, &r).await)
+          .await?,
+      ))
+    }
+    C::Send {
+      chat,
+      text,
+      files,
+      reply_to,
+    } => {
+      check_files(&files)?;
+      let message = Message {
+        text: read_text(text)?,
+        reply_to: reply_to.map(|r| ctx.post_ref(&r)).transpose()?,
+        files,
+      };
+      if message.text.is_empty() && message.files.is_empty() {
+        return Err(Error::input("nothing to send: give a text or --attach"));
+      }
+      ok(Data::Action(
+        p.send(&ctx.collection_ref(&chat)?, &message).await?,
+      ))
+    }
+    C::Members { chat, page } => {
+      let chat = ctx.collection_ref(&chat)?;
+      ok(Data::Users(
+        page.collect(async |r| p.members(&chat, &r).await).await?,
+      ))
+    }
+    C::React { post, emoji, undo } => ok(Data::Action(
+      p.react(&ctx.post_ref(&post)?, &emoji, undo).await?,
+    )),
+    C::Edit { post, text } => {
+      let text = read_text(Some(text))?;
+      if text.is_empty() {
+        return Err(Error::input("the new text is empty"));
+      }
+      ok(Data::Action(p.edit(&ctx.post_ref(&post)?, &text).await?))
+    }
+    C::Listen { chats } => {
+      let chats = chats
+        .iter()
+        .map(|c| ctx.collection_ref(c))
+        .collect::<Result<Vec<_>>>()?;
+      p.listen(&chats, &Stream::new(format, P::INFO.id)).await?;
+      ok(Data::Action(
+        Action::done("listen", P::INFO.id).with_message("the stream ended"),
+      ))
     }
     C::Download(a) => {
       let audio_only = a.audio_only || a.split.is_some();

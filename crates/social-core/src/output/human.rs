@@ -104,9 +104,46 @@ fn headline(p: &Post) -> String {
   truncate(&s, 80)
 }
 
+/// One event of `listen`: time, chat, author and text on a line.
+pub fn stream_line(p: &Post) {
+  let time = p
+    .created_at
+    .map(|t| {
+      t.to_zoned(jiff::tz::TimeZone::system())
+        .strftime("%H:%M:%S")
+        .to_string()
+    })
+    .unwrap_or_default();
+  let chat = p
+    .extra
+    .get("chat_name")
+    .or_else(|| p.extra.get("chat"))
+    .and_then(|v| v.as_str())
+    .unwrap_or_default();
+  let author = p.author.as_ref().map(user_label).unwrap_or_default();
+  let kind = match p.kind.as_str() {
+    "" | "message" => String::new(),
+    k => format!("[{k}] "),
+  };
+  let mut line = format!("{time}  {chat}  {author}: {kind}{}", headline(p));
+  if !p.media.is_empty() {
+    line += &format!("  (+{} files)", p.media.len());
+  }
+  println!("{}", line.trim_start());
+}
+
 fn post_table(posts: &[Post]) {
+  // Counts chat messages lack stay out.
+  let likes = posts.iter().any(|p| p.metrics.likes.is_some());
+  let comments = posts.iter().any(|p| p.metrics.comments.is_some());
   let views = posts.iter().any(|p| p.metrics.views.is_some());
-  let mut header = vec!["#", "Content", "Author", "Likes", "Cmts"];
+  let mut header = vec!["#", "Content", "Author"];
+  if likes {
+    header.push("Likes");
+  }
+  if comments {
+    header.push("Cmts");
+  }
   if views {
     header.push("Views");
   }
@@ -122,9 +159,13 @@ fn post_table(posts: &[Post]) {
           .map(|a| truncate(&a.name, 16))
           .unwrap_or_default(),
       ),
-      num(p.metrics.likes),
-      num(p.metrics.comments),
     ];
+    if likes {
+      row.push(num(p.metrics.likes));
+    }
+    if comments {
+      row.push(num(p.metrics.comments));
+    }
     if views {
       row.push(num(p.metrics.views));
     }

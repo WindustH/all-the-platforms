@@ -32,6 +32,7 @@ pub use http::Http;
 pub use json::ValueExt;
 pub use model::*;
 pub use platform::{
-  Cap, Choices, Draft, NoExtra, PageReq, Platform, PlatformInfo, QrStatus, QrTicket, Query, Reply,
+  Cap, Choices, Draft, Message, NoExtra, PageReq, Platform, PlatformInfo, QrStatus, QrTicket,
+  Query, Reply,
 };
 pub use serde_json::{Value, json};

@@ -4,11 +4,11 @@
 
 use std::sync::LazyLock;
 
+use regex::Regex;
 use social_core::text::{from_millis, from_unix, parse_time};
 use social_core::{
   Collection, Comment, Extra, Media, Metrics, Notification, Post, User, UserStats, Value, ValueExt,
 };
-use regex::Regex;
 
 use crate::refs::{SOURCE_FEED, note_url, user_url};
 

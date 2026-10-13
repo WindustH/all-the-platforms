@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use social_core::{Ctx, Error, Result, ValueExt};
 use regex::Regex;
+use social_core::{Ctx, Error, Result, ValueExt};
 
 use crate::graphql::Op;
 use crate::sign::Material;

@@ -2,9 +2,9 @@
 
 use std::sync::LazyLock;
 
+use regex::Regex;
 use social_core::text::{html_to_text, parse_count};
 use social_core::{Media, Metrics, Post, Value, ValueExt};
-use regex::Regex;
 
 use super::{author, text, time};
 use crate::api::WWW;

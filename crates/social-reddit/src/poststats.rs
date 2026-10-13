@@ -17,10 +17,10 @@ use std::sync::LazyLock;
 
 use jiff::Timestamp;
 use jiff::civil::Date;
+use regex::Regex;
 use social_core::http::status_error;
 use social_core::text::{html_to_text, parse_count};
 use social_core::{Breakdown, Error, Insights, Point, Result, Series, Share, Value, ValueExt};
-use regex::Regex;
 
 use crate::api::{Api, WWW};
 

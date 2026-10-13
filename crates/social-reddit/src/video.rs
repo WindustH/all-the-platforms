@@ -6,8 +6,8 @@
 
 use std::sync::LazyLock;
 
-use social_core::{Error, Post, Result, ValueExt};
 use regex::Regex;
+use social_core::{Error, Post, Result, ValueExt};
 use url::Url;
 
 use crate::api::Api;

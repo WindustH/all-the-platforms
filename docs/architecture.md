@@ -1,6 +1,6 @@
 # Architecture
 
-social-cli is one binary (`media`) that drives several social platforms through
+social-cli is one binary (`social`) that drives several social platforms through
 the same command set. The code is split so that each part stays small and
 knows as little as possible about the others.
 
@@ -60,6 +60,24 @@ A platform crate exports one type implementing `social_core::Platform`:
   `Post.url` / `User.url`, because that is what `#N` resolves to).
 - `type Extra: clap::Subcommand` holds platform-only commands; `run_extra`
   returns `Data` like everything else.
+
+### Chat platforms
+
+Messaging platforms use the same model: a chat (server, channel, group,
+direct conversation, thread) is a `Collection` and a message is a `Post`. The
+chat commands (`chats [PARENT]`, `messages CHAT`, `send CHAT`, `members`,
+`react`, `edit`, `listen`) map to trait methods behind `Cap::Chats`,
+`Messages`, `Send`, `Members`, `React`, `Edit` and `Listen`, and stay hidden
+on platforms without them. `delete`, `read`, `search`, `user` and `download`
+work on messages as on posts. A message without a permalink takes
+`CHAT/MESSAGE` as its `id`, so it can be passed back like a link; `#N`
+resolves chats and messages from the last list. `listen` hands each event to
+an `output::Stream`, which prints it at once (a line, or one JSON object /
+YAML document per event).
+
+Credentials that are not cookies (bot tokens, API keys, `AppID:Secret`) come
+in through `login --token` (`Cap::TokenLogin`, `Platform::login_token`) and
+are kept in the session extras, or from environment variables.
 
 ### Flow of one command
 

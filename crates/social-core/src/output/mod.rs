@@ -148,6 +148,44 @@ pub fn emit_error(format: Format, platform: Option<&str>, error: &Error) {
   }
 }
 
+/// Live output of `listen`: each event is printed the moment it arrives, as
+/// a line for people or one JSON object (`jsonl`, `json`, `csv`) or YAML
+/// document (`yaml`) per event, with `platform` and `fetched_at` added.
+pub struct Stream {
+  format: Format,
+  platform: &'static str,
+}
+
+impl Stream {
+  pub fn new(format: Format, platform: &'static str) -> Self {
+    Self { format, platform }
+  }
+
+  pub fn post(&self, post: &crate::model::Post) {
+    if self.format == Format::Table {
+      human::stream_line(post);
+      return;
+    }
+    let mut row = match serde_json::to_value(post) {
+      Ok(serde_json::Value::Object(m)) => m,
+      _ => return,
+    };
+    row.insert("platform".into(), self.platform.into());
+    row.insert(
+      "fetched_at".into(),
+      jiff::Timestamp::now().to_string().into(),
+    );
+    let row = serde_json::Value::Object(row);
+    let text = match self.format {
+      Format::Yaml => format!("---\n{}", serde_saphyr::to_string(&row).unwrap_or_default()),
+      _ => format!("{row}\n"),
+    };
+    let mut out = std::io::stdout().lock();
+    let _ = out.write_all(text.as_bytes());
+    let _ = out.flush();
+  }
+}
+
 /// Progress / status line for people, on stderr so it never mixes with data.
 pub fn note(message: &str) {
   human::note(message);

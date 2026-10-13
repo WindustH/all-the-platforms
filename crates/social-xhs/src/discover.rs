@@ -3,8 +3,8 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use social_core::{Error, Page, PageReq, Post, Query, Result, Value, ValueExt, json};
 use serde::{Deserialize, Serialize};
+use social_core::{Error, Page, PageReq, Post, Query, Result, Value, ValueExt, json};
 
 use crate::api::Client;
 use crate::refs::{self, SOURCE_FEED, SOURCE_SEARCH};

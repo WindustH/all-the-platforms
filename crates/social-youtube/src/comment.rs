@@ -12,7 +12,9 @@
 
 use std::time::Duration;
 
-use social_core::{Action, Comment, Error, ErrorCode, Page, PageReq, Result, Value, ValueExt, json};
+use social_core::{
+  Action, Comment, Error, ErrorCode, Page, PageReq, Result, Value, ValueExt, json,
+};
 
 use crate::api::Api;
 use crate::parse::{self, Entities};

@@ -13,7 +13,7 @@ use std::process::ExitCode;
 use clap::{ArgMatches, FromArgMatches, Subcommand, builder::PossibleValuesParser};
 
 pub use self::args::*;
-pub use self::dispatch::{check_images, read_text};
+pub use self::dispatch::{check_files, check_images, read_text};
 use crate::account;
 use crate::ctx::Ctx;
 use crate::error::{Error, Result};
@@ -53,6 +53,13 @@ fn required_cap(name: &str) -> Option<&'static [Cap]> {
     "post" => &[Cap::Publish],
     "delete" => &[Cap::Delete],
     "download" => &[Cap::Download],
+    "chats" => &[Cap::Chats],
+    "messages" => &[Cap::Messages],
+    "send" => &[Cap::Send],
+    "members" => &[Cap::Members],
+    "react" => &[Cap::React],
+    "edit" => &[Cap::Edit],
+    "listen" => &[Cap::Listen],
     _ => return None,
   })
 }
@@ -164,7 +171,7 @@ async fn execute<P: Platform>(
   let name = matches.subcommand_name().unwrap_or_default();
   let (data, code, persist) = if CommonCommand::has_subcommand(name) {
     let cmd = CommonCommand::from_arg_matches(matches).map_err(|e| Error::input(e.to_string()))?;
-    dispatch::common(&platform, cmd, &loaded).await?
+    dispatch::common(&platform, cmd, &loaded, global.output_format()).await?
   } else {
     let cmd = <P::Extra as FromArgMatches>::from_arg_matches(matches)
       .map_err(|e| Error::input(e.to_string()))?;

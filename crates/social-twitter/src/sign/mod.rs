@@ -12,10 +12,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
-use social_core::{Error, ErrorCode, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use social_core::{Error, ErrorCode, Result};
 
 /// Epoch of the id's 32-bit clock (2023-05-01).
 const EPOCH_SECS: i64 = 1_682_924_400;

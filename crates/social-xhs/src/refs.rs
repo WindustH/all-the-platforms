@@ -5,9 +5,9 @@ use std::collections::BTreeMap;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use social_core::{Ctx, Error, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use social_core::{Ctx, Error, Result};
 
 use crate::api::{Client, HOME};
 
