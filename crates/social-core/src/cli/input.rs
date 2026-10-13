@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 
 /// Ask before something irreversible, unless `--yes`; refuse when nobody
 /// can answer (stdin is not a terminal).
-pub(super) fn confirm(yes: bool, what: &str) -> Result<()> {
+pub fn confirm(yes: bool, what: &str) -> Result<()> {
   if yes {
     return Ok(());
   }

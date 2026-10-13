@@ -168,4 +168,11 @@ impl Upload {
   pub fn is_image(&self) -> bool {
     self.mime.starts_with("image/")
   }
+
+  /// Width and height in pixels of an image, `None` for other files.
+  pub fn size(&self) -> Option<(usize, usize)> {
+    imagesize::blob_size(&self.data)
+      .ok()
+      .map(|s| (s.width, s.height))
+  }
 }

@@ -80,15 +80,15 @@ Use these instead of writing another copy:
 | --- | --- |
 | environment variables, `login --token` fields, saved credentials | `credentials::{env, env_any, fields, expect, saved, save}` |
 | access tokens that expire | `token::AccessToken` |
-| files to upload, MIME types | `file::{Upload, Image, mime_for, sniff}` |
+| files to upload, MIME types, image sizes | `file::{Upload, Image, mime_for, sniff}`, `Upload::size` |
 | `CHAT/MESSAGE` ids | `chat::{message_id, split_message_id, expect_message_id}` |
 | `listen` by polling, reconnect delays | `live::{poll, Seen, Backoff}` |
 | websockets | `socket::Socket` via `Http::websocket` |
 | proxy for non-HTTP connections | `Http::proxy` |
 | JSON access | `json::ValueExt` |
 | times, counts, text | `text::{from_secs, from_millis, parse_count, html_to_text, emoji_shortcode …}` |
-| listings | `cli::PageArgs`, `paging`, `PageReq` |
-| text and file arguments | `cli::{read_text, check_images, check_files}` |
+| listings | `cli::PageArgs`, `paging` (`paging::slice` for lists held in memory), `PageReq` |
+| text and file arguments, confirmations | `cli::{read_text, check_images, check_files, confirm}` |
 | HTTP errors | `http::status_error`, `Req::retries` |
 
 When a crate needs something a second crate already has, move it into

@@ -116,3 +116,14 @@ pub async fn collect_window<T: Dated>(
   })
   .await
 }
+
+/// One page of a list already held in memory, the cursor being the offset
+/// (for upstreams that return everything at once).
+pub fn slice<T>(items: Vec<T>, req: &PageReq) -> Page<T> {
+  let start = req.number_or(0) as usize;
+  let size = req.size.max(1);
+  let total = items.len();
+  let page: Vec<T> = items.into_iter().skip(start).take(size).collect();
+  let next = (start + size < total).then(|| (start + size).to_string());
+  Page::new(page, next)
+}
