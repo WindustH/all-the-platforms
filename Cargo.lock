@@ -3944,6 +3944,7 @@ dependencies = [
  "social-tieba",
  "social-tiktok",
  "social-twitter",
+ "social-wechat",
  "social-weibo",
  "social-xhs",
  "social-youtube",
@@ -4115,6 +4116,24 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "social-core",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "social-wechat"
+version = "0.1.0"
+dependencies = [
+ "aes 0.8.4",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "social-core",
+ "tokio",
  "tracing",
  "url",
 ]
