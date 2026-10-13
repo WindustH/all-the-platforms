@@ -3165,10 +3165,12 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "jiff",
+ "rand 0.9.5",
  "regex",
  "serde",
  "serde_json",
  "social-core",
+ "tokio",
  "tracing",
  "url",
 ]
