@@ -3,10 +3,13 @@
 use std::path::PathBuf;
 
 use social_core::cli::PageArgs;
-use social_core::{Ctx, Data, Error, Page, Result};
+use social_core::{Data, Error, Page, Result};
 
-use crate::refs::{self, Target};
-use crate::{discover, feeds, insights, lists, people, publish, read, write};
+use crate::api::Api;
+use crate::refs::Target;
+use crate::{
+  comments, discover, feeds, insights, library, lists, posts, publish, refs, topics, users,
+};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Extra {
@@ -202,15 +205,15 @@ pub enum Extra {
   },
 }
 
-pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
+pub async fn run(api: &Api, command: Extra) -> Result<Data> {
   match command {
     Extra::Answers {
       question,
       sort,
       page,
     } => {
-      let id = Target::question(&ctx.post_ref(&question)?)?;
-      let posts = page.collect_dated(async |r| read::answers(ctx, &id, &sort, &r).await);
+      let id = Target::question(&api.ctx.post_ref(&question)?)?;
+      let posts = page.collect_dated(async |r| posts::answers(api, &id, &sort, &r).await);
       Ok(Data::Posts(posts.await?))
     }
     Extra::Ask {
@@ -220,7 +223,7 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
       images,
     } => {
       check(&title, &images)?;
-      let done = publish::question(ctx, title.trim(), &detail, &topics, &images);
+      let done = publish::question(api, title.trim(), &detail, &topics, &images);
       Ok(Data::Action(done.await?))
     }
     Extra::Answer {
@@ -229,10 +232,10 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
       markdown,
       images,
     } => {
-      let id = Target::question(&ctx.post_ref(&question)?)?;
+      let id = Target::question(&api.ctx.post_ref(&question)?)?;
       let body = read_body(body, "the answer")?;
       check("answer", &images)?;
-      let done = publish::answer(ctx, &id, &body, markdown, &images);
+      let done = publish::answer(api, &id, &body, markdown, &images);
       Ok(Data::Action(done.await?))
     }
     Extra::Article {
@@ -244,99 +247,99 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
     } => {
       let body = read_body(body, "the article body")?;
       check(&title, &images)?;
-      let done = publish::article(ctx, title.trim(), &body, markdown, &topics, &images);
+      let done = publish::article(api, title.trim(), &body, markdown, &topics, &images);
       Ok(Data::Action(done.await?))
     }
     Extra::FollowQuestion { question, undo } => {
-      let id = Target::question(&ctx.post_ref(&question)?)?;
+      let id = Target::question(&api.ctx.post_ref(&question)?)?;
       Ok(Data::Action(
-        write::follow(ctx, "questions", &id, undo).await?,
+        users::follow(api, "questions", &id, undo).await?,
       ))
     }
     Extra::Topic { id, essence, page } => {
-      let id = topic_id(&ctx.collection_ref(&id)?)?;
+      let id = topic_id(&api.ctx.collection_ref(&id)?)?;
       if essence {
-        let posts = page.collect_dated(async |r| read::topic_essence(ctx, &id, &r).await);
+        let posts = page.collect_dated(async |r| topics::topic_essence(api, &id, &r).await);
         Ok(Data::Posts(posts.await?))
       } else {
-        let topic = read::topic(ctx, &id).await?;
+        let topic = topics::topic(api, &id).await?;
         Ok(Data::Collections(Page::last(vec![topic])))
       }
     }
     Extra::UserArticles { user, page } => {
-      let token = refs::user(&ctx.user_ref(&user)?)?;
-      let posts = page.collect_dated(async |r| people::articles(ctx, &token, &r).await);
+      let token = refs::user(&api.ctx.user_ref(&user)?)?;
+      let posts = page.collect_dated(async |r| users::articles(api, &token, &r).await);
       Ok(Data::Posts(posts.await?))
     }
     Extra::UserPins { user, page } => {
-      let token = refs::user(&ctx.user_ref(&user)?)?;
-      let posts = page.collect_dated(async |r| people::pins(ctx, &token, &r).await);
+      let token = refs::user(&api.ctx.user_ref(&user)?)?;
+      let posts = page.collect_dated(async |r| users::pins(api, &token, &r).await);
       Ok(Data::Posts(posts.await?))
     }
     Extra::Activities { user, page } => {
-      let token = owner(ctx, user).await?;
-      let posts = page.collect_dated(async |r| feeds::activities(ctx, &token, &r).await);
+      let token = owner(api, user).await?;
+      let posts = page.collect_dated(async |r| feeds::activities(api, &token, &r).await);
       Ok(Data::Posts(posts.await?))
     }
     Extra::UserQuestions { user, page } => {
-      let token = owner(ctx, user).await?;
-      let posts = page.collect_dated(async |r| lists::questions(ctx, &token, &r).await);
+      let token = owner(api, user).await?;
+      let posts = page.collect_dated(async |r| lists::questions(api, &token, &r).await);
       Ok(Data::Posts(posts.await?))
     }
     Extra::UserVideos { user, page } => {
-      let token = owner(ctx, user).await?;
-      let posts = page.collect_dated(async |r| lists::videos(ctx, &token, &r).await);
+      let token = owner(api, user).await?;
+      let posts = page.collect_dated(async |r| lists::videos(api, &token, &r).await);
       Ok(Data::Posts(posts.await?))
     }
     Extra::UserColumns { user, page } => {
-      let token = owner(ctx, user).await?;
-      let columns = page.collect(async |r| lists::columns(ctx, &token, &r).await);
+      let token = owner(api, user).await?;
+      let columns = page.collect(async |r| lists::columns(api, &token, &r).await);
       Ok(Data::Collections(columns.await?))
     }
     Extra::UserFollowing { user, kind, page } => {
-      let token = owner(ctx, user).await?;
+      let token = owner(api, user).await?;
       if kind == "questions" {
-        let posts = page.collect(async |r| lists::following_questions(ctx, &token, &r).await);
+        let posts = page.collect(async |r| lists::following_questions(api, &token, &r).await);
         return Ok(Data::Posts(posts.await?));
       }
-      let items = page.collect(async |r| lists::following(ctx, &token, &kind, &r).await);
+      let items = page.collect(async |r| lists::following(api, &token, &kind, &r).await);
       Ok(Data::Collections(items.await?))
     }
     Extra::QuestionFollowers { question, page } => {
-      let id = Target::question(&ctx.post_ref(&question)?)?;
-      let users = page.collect(async |r| lists::question_followers(ctx, &id, &r).await);
+      let id = Target::question(&api.ctx.post_ref(&question)?)?;
+      let users = page.collect(async |r| lists::question_followers(api, &id, &r).await);
       Ok(Data::Users(users.await?))
     }
     Extra::TopicFollowers { topic, page } => {
-      let id = topic_id(&ctx.collection_ref(&topic)?)?;
-      let users = page.collect(async |r| lists::topic_followers(ctx, &id, &r).await);
+      let id = topic_id(&api.ctx.collection_ref(&topic)?)?;
+      let users = page.collect(async |r| lists::topic_followers(api, &id, &r).await);
       Ok(Data::Users(users.await?))
     }
     Extra::Column { column, info, page } => {
-      let id = column_id(&ctx.collection_ref(&column)?)?;
+      let id = column_id(&api.ctx.collection_ref(&column)?)?;
       if info {
-        let column = lists::column(ctx, &id).await?;
+        let column = lists::column(api, &id).await?;
         return Ok(Data::Collections(Page::last(vec![column])));
       }
-      let posts = page.collect_dated(async |r| lists::column_items(ctx, &id, &r).await);
+      let posts = page.collect_dated(async |r| lists::column_items(api, &id, &r).await);
       Ok(Data::Posts(posts.await?))
     }
-    Extra::HotSearch => Ok(Data::Collections(discover::hot_search(ctx).await?)),
+    Extra::HotSearch => Ok(Data::Collections(discover::hot_search(api).await?)),
     Extra::Daily { date, page } => {
       let date = date.as_deref();
-      let posts = page.collect(async |r| discover::daily(ctx, date, &r).await);
+      let posts = page.collect(async |r| discover::daily(api, date, &r).await);
       Ok(Data::Posts(posts.await?))
     }
     Extra::Vote { post, direction } => {
-      let target = Target::parse(&ctx.post_ref(&post)?)?;
-      Ok(Data::Action(write::vote(ctx, &target, &direction).await?))
+      let target = Target::parse(&api.ctx.post_ref(&post)?)?;
+      Ok(Data::Action(posts::vote(api, &target, &direction).await?))
     }
     Extra::LikeComment { comment, undo } => Ok(Data::Action(
-      write::like_comment(ctx, comment.trim(), undo).await?,
+      comments::like_comment(api, comment.trim(), undo).await?,
     )),
     Extra::Block { user, undo } => {
-      let token = refs::user(&ctx.user_ref(&user)?)?;
-      Ok(Data::Action(write::block(ctx, &token, undo).await?))
+      let token = refs::user(&api.ctx.user_ref(&user)?)?;
+      Ok(Data::Action(users::block(api, &token, undo).await?))
     }
     Extra::CreateFolder {
       title,
@@ -344,7 +347,7 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
       private,
     } => {
       check(&title, &[])?;
-      let done = write::create_folder(ctx, title.trim(), &description, private);
+      let done = library::create_folder(api, title.trim(), &description, private);
       Ok(Data::Action(done.await?))
     }
     Extra::DeleteFolder { folder, yes } => {
@@ -353,11 +356,11 @@ pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
           "refusing to delete folder {folder} without --yes"
         )));
       }
-      let folder = ctx.collection_ref(&folder)?;
-      Ok(Data::Action(write::delete_folder(ctx, &folder).await?))
+      let folder = api.ctx.collection_ref(&folder)?;
+      Ok(Data::Action(library::delete_folder(api, &folder).await?))
     }
     Extra::Creations { kind, page } => {
-      let posts = page.collect_dated(async |r| insights::creations(ctx, &kind, &r).await);
+      let posts = page.collect_dated(async |r| insights::creations(api, &kind, &r).await);
       Ok(Data::Posts(posts.await?))
     }
   }
@@ -390,12 +393,12 @@ fn check(title: &str, images: &[PathBuf]) -> Result<()> {
 }
 
 /// A user given as `#N`, token or link; the logged-in account when absent.
-async fn owner(ctx: &Ctx, user: Option<String>) -> Result<String> {
+async fn owner(api: &Api, user: Option<String>) -> Result<String> {
   let token = match user {
-    Some(u) => Some(refs::user(&ctx.user_ref(&u)?)?),
+    Some(u) => Some(refs::user(&api.ctx.user_ref(&u)?)?),
     None => None,
   };
-  people::owner(ctx, token.as_deref()).await
+  users::owner(api, token.as_deref()).await
 }
 
 /// A column id, bare or from `https://zhuanlan.zhihu.com/<id>` or

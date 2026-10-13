@@ -6,18 +6,17 @@
 //! answer the logged-in session without the `x-zse-96` signature, and report
 //! failures as HTTP 200 `{"code": "403", "msg": "no auth"}` (e.g. someone else's post).
 
-use jiff::tz::{self, TimeZone};
-use jiff::{Timestamp, ToSpan};
+use jiff::tz::TimeZone;
+use jiff::{Timestamp, ToSpan, tz};
 use social_core::text::{one_line, truncate};
 use social_core::{
-  Breakdown, Ctx, Error, ErrorCode, Insights, Page, PageReq, Post, Result, Share, Value, ValueExt,
-  json,
+  Breakdown, Error, ErrorCode, Insights, Page, PageReq, Post, Result, Share, Value, ValueExt, json,
 };
 
-use crate::api::{self, V4};
+use crate::api::{Api, V4};
 use crate::parse::stats;
 use crate::refs::Target;
-use crate::{account, read};
+use crate::{api, posts, users};
 
 /// The last `days` days up to today (China time), as the creator center asks for them.
 fn window(days: u32) -> (String, String) {
@@ -28,9 +27,11 @@ fn window(days: u32) -> (String, String) {
   (from.to_string(), today.to_string())
 }
 
-async fn get(ctx: &Ctx, path: &str, query: &[(&str, &str)]) -> Result<Value> {
+async fn get(api: &Api, path: &str, query: &[(&str, &str)]) -> Result<Value> {
   let url = format!("{V4}/creators/analysis/{path}");
-  let v = api::call(ctx, api::get(ctx, &url).queries(query.iter().copied())).await?;
+  let v = api
+    .call(api.get(&url).queries(query.iter().copied()))
+    .await?;
   match (v.str("code"), v.str("msg")) {
     (Some(code), Some(msg)) if code == "403" => Err(Error::new(
       ErrorCode::PermissionDenied,
@@ -78,8 +79,8 @@ fn names() -> Value {
     .into()
 }
 
-pub async fn account(ctx: &Ctx, days: u32) -> Result<Insights> {
-  let me = account::whoami(ctx).await?;
+pub async fn account(api: &Api, days: u32) -> Result<Insights> {
+  let me = users::whoami(api).await?;
   let (from, to) = window(days);
   let range = [("start", from.as_str()), ("end", to.as_str())];
   let tab = [("tab", "all"), range[0], range[1]];
@@ -90,16 +91,16 @@ pub async fn account(ctx: &Ctx, days: u32) -> Result<Insights> {
     url: me.url.clone(),
     ..Insights::default()
   };
-  let aggr = get(ctx, "realtime/member/aggr", &tab).await?;
-  let daily = get(ctx, "realtime/member/daily", &tab).await;
+  let aggr = get(api, "realtime/member/aggr", &tab).await?;
+  let daily = get(api, "realtime/member/daily", &tab).await;
   let daily = soft(&mut ins, "daily", daily)?;
-  let follow = get(ctx, "aggregation/tab/follow", &[]).await;
+  let follow = get(api, "aggregation/tab/follow", &[]).await;
   let follow = soft(&mut ins, "followers", follow)?;
-  let changes = get(ctx, "aggregation/tab/follow/detail/v2", &range).await;
+  let changes = get(api, "aggregation/tab/follow/detail/v2", &range).await;
   let changes = soft(&mut ins, "follower_changes", changes)?;
-  let readers = get(ctx, "realtime/member/visitor_portrait", &[("type", "all")]).await;
+  let readers = get(api, "realtime/member/visitor_portrait", &[("type", "all")]).await;
   let readers = soft(&mut ins, "reader_portrait", readers)?;
-  let profile = get(ctx, "aggregation/tab/follow/profile", &[]).await;
+  let profile = get(api, "aggregation/tab/follow/profile", &[]).await;
   let profile = soft(&mut ins, "follower_portrait", profile)?;
 
   stats::totals(&mut ins, &aggr, false);
@@ -176,10 +177,10 @@ fn content_types(follow: &Value, me: &social_core::User) -> Option<Breakdown> {
   })
 }
 
-pub async fn post(ctx: &Ctx, target: &Target, days: u32) -> Result<Insights> {
+pub async fn post(api: &Api, target: &Target, days: u32) -> Result<Insights> {
   let kind = match target {
     Target::Question(_) => {
-      return public(ctx, target, "Zhihu has no creator analytics for questions").await;
+      return public(api, target, "Zhihu has no creator analytics for questions").await;
     }
     Target::Answer(_) => "answer",
     Target::Article(_) => "article",
@@ -194,10 +195,10 @@ pub async fn post(ctx: &Ctx, target: &Target, days: u32) -> Result<Insights> {
     ("start", from.as_str()),
     ("end", to.as_str()),
   ];
-  let aggr = match get(ctx, "realtime/content/aggr", &q).await {
+  let aggr = match get(api, "realtime/content/aggr", &q).await {
     Err(e) if e.code == ErrorCode::PermissionDenied => {
       let note = "not your post: public counters only (creator analytics cover your own posts)";
-      return public(ctx, target, note).await;
+      return public(api, target, note).await;
     }
     other => other?,
   };
@@ -207,9 +208,9 @@ pub async fn post(ctx: &Ctx, target: &Target, days: u32) -> Result<Insights> {
     url: Some(target.url()),
     ..Insights::default()
   };
-  let daily = get(ctx, "realtime/content/daily", &q).await;
+  let daily = get(api, "realtime/content/daily", &q).await;
   let daily = soft(&mut ins, "daily", daily)?;
-  let readers = get(ctx, "realtime/content/visitor_portrait", &one).await;
+  let readers = get(api, "realtime/content/visitor_portrait", &one).await;
   let readers = soft(&mut ins, "reader_portrait", readers)?;
 
   let pin = kind == "pin";
@@ -239,8 +240,8 @@ pub async fn post(ctx: &Ctx, target: &Target, days: u32) -> Result<Insights> {
 }
 
 /// Current public counters of any post.
-async fn public(ctx: &Ctx, target: &Target, note: &str) -> Result<Insights> {
-  let post = read::read(ctx, target).await?;
+async fn public(api: &Api, target: &Target, note: &str) -> Result<Insights> {
+  let post = posts::read(api, target).await?;
   let m = &post.metrics;
   let mut ins = Insights {
     kind: "post".into(),
@@ -267,11 +268,11 @@ async fn public(ctx: &Ctx, target: &Target, note: &str) -> Result<Insights> {
 }
 
 /// The account's own posts of one type with their lifetime numbers (内容分析 list).
-pub async fn creations(ctx: &Ctx, kind: &str, page: &PageReq) -> Result<Page<Post>> {
+pub async fn creations(api: &Api, kind: &str, page: &PageReq) -> Result<Page<Post>> {
   let offset = page.number_or(0).to_string();
   let limit = page.size_within(20).to_string();
   let v = get(
-    ctx,
+    api,
     "realtime/content/list",
     &[("type", kind), ("offset", &offset), ("limit", &limit)],
   )

@@ -5,37 +5,41 @@
 //! referred to by URL or typed id (`q:`, `a:`, `p:` for pins, `article:`);
 //! a bare number is an answer. Users are referred to by `url_token`.
 
-mod account;
 mod api;
 mod comments;
 mod discover;
 mod extra;
 mod feeds;
-mod inbox;
 mod insights;
+mod library;
 mod lists;
+mod login;
 mod markup;
+mod notifications;
 mod parse;
-mod people;
+mod posts;
 mod publish;
-mod read;
 mod refs;
+mod search;
 mod sign;
-mod write;
+mod topics;
+mod uploads;
+mod users;
 
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use api::Api;
+use refs::Target;
 use social_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Notification, Page,
   PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 pub use extra::Extra;
-use refs::Target;
 
 pub struct Zhihu {
-  ctx: Ctx,
+  api: Api,
 }
 
 impl Platform for Zhihu {
@@ -83,7 +87,7 @@ impl Platform for Zhihu {
       search_filter: &["answer", "article"],
       feed_kind: &["recommend", "follow"],
       comment_sort: &["score", "ts"],
-      notification_kind: inbox::KINDS,
+      notification_kind: notifications::KINDS,
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(600),
@@ -92,56 +96,55 @@ impl Platform for Zhihu {
 
   type Extra = Extra;
 
-  fn new(mut ctx: Ctx) -> Result<Self> {
-    ctx.http.set_header("referer", "https://www.zhihu.com/");
-    Ok(Self { ctx })
+  fn new(ctx: Ctx) -> Result<Self> {
+    Ok(Self { api: Api::new(ctx) })
   }
 
   fn ctx(&self) -> &Ctx {
-    &self.ctx
+    &self.api.ctx
   }
 
   async fn whoami(&self) -> Result<User> {
-    account::whoami(&self.ctx).await
+    users::whoami(&self.api).await
   }
 
   async fn prepare_login(&self) -> Result<()> {
-    account::helper_cookies(&self.ctx).await
+    self.api.helper_cookies().await
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {
-    account::qr_start(&self.ctx).await
+    login::qr_start(&self.api).await
   }
 
   async fn qr_poll(&self, ticket: &QrTicket) -> Result<QrStatus> {
-    account::qr_poll(&self.ctx, ticket).await
+    login::qr_poll(&self.api, ticket).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    read::search(&self.ctx, query, page).await
+    search::search(&self.api, query, page).await
   }
 
   async fn search_users(&self, query: &Query, page: &PageReq) -> Result<Page<User>> {
-    read::search_users(&self.ctx, query, page).await
+    search::search_users(&self.api, query, page).await
   }
 
   async fn search_topics(&self, query: &Query, page: &PageReq) -> Result<Page<Collection>> {
-    read::search_topics(&self.ctx, query, page).await
+    search::search_topics(&self.api, query, page).await
   }
 
   async fn hot(&self, _category: Option<&str>, _page: &PageReq) -> Result<Page<Post>> {
-    read::hot(&self.ctx).await
+    feeds::hot(&self.api).await
   }
 
   async fn feed(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
     match kind {
-      Some("follow") => feeds::follow(&self.ctx, page).await,
-      _ => read::feed(&self.ctx, page).await,
+      Some("follow") => feeds::follow(&self.api, page).await,
+      _ => feeds::feed(&self.api, page).await,
     }
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
-    read::read(&self.ctx, &Target::parse(post)?).await
+    posts::read(&self.api, &Target::parse(post)?).await
   }
 
   async fn comments(
@@ -150,37 +153,37 @@ impl Platform for Zhihu {
     sort: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Comment>> {
-    comments::roots(&self.ctx, &Target::parse(post)?, sort, page).await
+    comments::roots(&self.api, &Target::parse(post)?, sort, page).await
   }
 
   async fn replies(&self, post: &str, comment: &str, page: &PageReq) -> Result<Page<Comment>> {
     Target::parse(post)?;
-    comments::children(&self.ctx, comment, page).await
+    comments::children(&self.api, comment, page).await
   }
 
   async fn likers(&self, post: &str, page: &PageReq) -> Result<Page<User>> {
-    people::likers(&self.ctx, &Target::parse(post)?, page).await
+    users::likers(&self.api, &Target::parse(post)?, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    people::user(&self.ctx, &refs::user(user)?).await
+    users::user(&self.api, &refs::user(user)?).await
   }
 
   async fn user_posts(&self, user: &str, page: &PageReq) -> Result<Page<Post>> {
-    people::answers(&self.ctx, &refs::user(user)?, page).await
+    users::answers(&self.api, &refs::user(user)?, page).await
   }
 
   async fn followers(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    people::follows(&self.ctx, &refs::user(user)?, "followers", page).await
+    users::follows(&self.api, &refs::user(user)?, "followers", page).await
   }
 
   async fn following(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    people::follows(&self.ctx, &refs::user(user)?, "followees", page).await
+    users::follows(&self.api, &refs::user(user)?, "followees", page).await
   }
 
   async fn collections(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
     let user = user.map(refs::user).transpose()?;
-    people::folders(&self.ctx, user.as_deref(), page).await
+    library::folders(&self.api, user.as_deref(), page).await
   }
 
   async fn favorites(
@@ -193,43 +196,43 @@ impl Platform for Zhihu {
       Some(f) => f.to_owned(),
       None => {
         let user = user.map(refs::user).transpose()?;
-        people::first_folder(&self.ctx, user.as_deref()).await?
+        library::first_folder(&self.api, user.as_deref()).await?
       }
     };
-    people::folder_items(&self.ctx, &folder, page).await
+    library::folder_items(&self.api, &folder, page).await
   }
 
   async fn history(&self, page: &PageReq) -> Result<Page<Post>> {
-    feeds::history(&self.ctx, page).await
+    library::history(&self.api, page).await
   }
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    inbox::notifications(&self.ctx, kind, page).await
+    notifications::notifications(&self.api, kind, page).await
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    account::unread(&self.ctx).await
+    notifications::unread(&self.api).await
   }
 
   async fn like(&self, post: &str, undo: bool) -> Result<Action> {
-    write::like(&self.ctx, &Target::parse(post)?, undo).await
+    posts::like(&self.api, &Target::parse(post)?, undo).await
   }
 
   async fn favorite(&self, post: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
-    write::favorite(&self.ctx, &Target::parse(post)?, folder, undo).await
+    library::favorite(&self.api, &Target::parse(post)?, folder, undo).await
   }
 
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
     let target = Target::parse(post)?;
-    write::comment(&self.ctx, &target, &reply.text, reply.reply_to.as_deref()).await
+    comments::comment(&self.api, &target, &reply.text, reply.reply_to.as_deref()).await
   }
 
   async fn delete_comment(&self, post: &str, comment: &str) -> Result<Action> {
-    write::delete_comment(&self.ctx, &Target::parse(post)?, comment).await
+    comments::delete_comment(&self.api, &Target::parse(post)?, comment).await
   }
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
-    write::follow(&self.ctx, "members", &refs::user(user)?, undo).await
+    users::follow(&self.api, "members", &refs::user(user)?, undo).await
   }
 
   /// Publishes a pin (想法); questions and articles have their own commands.
@@ -240,21 +243,21 @@ impl Platform for Zhihu {
       ));
     }
     let title = draft.title.as_deref().unwrap_or_default().trim();
-    publish::pin(&self.ctx, title, &draft.text, &draft.images).await
+    publish::pin(&self.api, title, &draft.text, &draft.images).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
-    write::delete(&self.ctx, &Target::parse(post)?).await
+    posts::delete(&self.api, &Target::parse(post)?).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
     match post {
-      Some(post) => insights::post(&self.ctx, &Target::parse(post)?, days).await,
-      None => insights::account(&self.ctx, days).await,
+      Some(post) => insights::post(&self.api, &Target::parse(post)?, days).await,
+      None => insights::account(&self.api, days).await,
     }
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {
-    extra::run(&self.ctx, command).await
+    extra::run(&self.api, command).await
   }
 }
