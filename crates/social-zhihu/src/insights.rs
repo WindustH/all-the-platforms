@@ -10,7 +10,8 @@ use jiff::tz::TimeZone;
 use jiff::{Timestamp, ToSpan, tz};
 use social_core::text::{one_line, truncate};
 use social_core::{
-  Breakdown, Error, ErrorCode, Insights, Page, PageReq, Post, Result, Share, Value, ValueExt, json,
+  Breakdown, Error, ErrorCode, Insights, Page, PageReq, Post, Result, Share, User, Value, ValueExt,
+  json,
 };
 
 use crate::api::{Api, V4};
@@ -27,7 +28,8 @@ fn window(days: u32) -> (String, String) {
   (from.to_string(), today.to_string())
 }
 
-async fn get(api: &Api, path: &str, query: &[(&str, &str)]) -> Result<Value> {
+/// One endpoint of the creator center's analysis API (`creators/analysis/...`).
+async fn analysis(api: &Api, path: &str, query: &[(&str, &str)]) -> Result<Value> {
   let url = format!("{V4}/creators/analysis/{path}");
   let v = api
     .call(api.get(&url).queries(query.iter().copied()))
@@ -82,8 +84,6 @@ fn names() -> Value {
 pub async fn account(api: &Api, days: u32) -> Result<Insights> {
   let me = users::whoami(api).await?;
   let (from, to) = window(days);
-  let range = [("start", from.as_str()), ("end", to.as_str())];
-  let tab = [("tab", "all"), range[0], range[1]];
   let mut ins = Insights {
     kind: "account".into(),
     subject: me.handle.clone().unwrap_or_else(|| me.id.clone()),
@@ -91,69 +91,101 @@ pub async fn account(api: &Api, days: u32) -> Result<Insights> {
     url: me.url.clone(),
     ..Insights::default()
   };
-  let aggr = get(api, "realtime/member/aggr", &tab).await?;
-  let daily = get(api, "realtime/member/daily", &tab).await;
-  let daily = soft(&mut ins, "daily", daily)?;
-  let follow = get(api, "aggregation/tab/follow", &[]).await;
-  let follow = soft(&mut ins, "followers", follow)?;
-  let changes = get(api, "aggregation/tab/follow/detail/v2", &range).await;
-  let changes = soft(&mut ins, "follower_changes", changes)?;
-  let readers = get(api, "realtime/member/visitor_portrait", &[("type", "all")]).await;
-  let readers = soft(&mut ins, "reader_portrait", readers)?;
-  let profile = get(api, "aggregation/tab/follow/profile", &[]).await;
-  let profile = soft(&mut ins, "follower_portrait", profile)?;
+  let data = AccountData::fetch(api, &mut ins, &from, &to).await?;
+  account_totals(&mut ins, &data, &me);
+  ins.series = stats::series(rows(&data.daily), false);
+  ins
+    .series
+    .extend(stats::follower_series(rows(&data.changes)));
+  account_breakdowns(&mut ins, &data, &me);
+  ins.from = Some(from);
+  ins.to = Some(to);
+  if let Some(updated) = data.aggr.str("updated") {
+    ins.extra.insert("updated".into(), updated.into());
+  }
+  ins.extra.insert("metric_names".into(), names());
+  ins.raw = Some(json!({
+    "aggr": data.aggr, "daily": data.daily, "follow": data.follow,
+    "follower_changes": data.changes, "reader_portrait": data.readers,
+    "follower_portrait": data.profile,
+  }));
+  Ok(ins)
+}
 
-  stats::totals(&mut ins, &aggr, false);
+/// The creator center's answers for the account; parts that fail become
+/// warnings (only the aggregate is required).
+struct AccountData {
+  aggr: Value,
+  daily: Value,
+  follow: Value,
+  changes: Value,
+  readers: Value,
+  profile: Value,
+}
+
+impl AccountData {
+  async fn fetch(api: &Api, ins: &mut Insights, from: &str, to: &str) -> Result<Self> {
+    let range = [("start", from), ("end", to)];
+    let tab = [("tab", "all"), range[0], range[1]];
+    let aggr = analysis(api, "realtime/member/aggr", &tab).await?;
+    let daily = analysis(api, "realtime/member/daily", &tab).await;
+    let daily = soft(ins, "daily", daily)?;
+    let follow = analysis(api, "aggregation/tab/follow", &[]).await;
+    let follow = soft(ins, "followers", follow)?;
+    let changes = analysis(api, "aggregation/tab/follow/detail/v2", &range).await;
+    let changes = soft(ins, "follower_changes", changes)?;
+    let readers = analysis(api, "realtime/member/visitor_portrait", &[("type", "all")]).await;
+    let readers = soft(ins, "reader_portrait", readers)?;
+    let profile = analysis(api, "aggregation/tab/follow/profile", &[]).await;
+    let profile = soft(ins, "follower_portrait", profile)?;
+    Ok(Self {
+      aggr,
+      daily,
+      follow,
+      changes,
+      readers,
+      profile,
+    })
+  }
+}
+
+fn account_totals(ins: &mut Insights, data: &AccountData, me: &User) {
+  let follow = &data.follow;
+  stats::totals(ins, &data.aggr, false);
   let followers = follow.u64("follow.total").or(me.stats.followers);
   ins.total("followers", followers.map(Value::from));
   ins.total(
     "active_followers",
-    stats::number(&follow, "follow.active_follower_num"),
+    stats::number(follow, "follow.active_follower_num"),
   );
   ins.total(
     "active_follower_ratio",
-    stats::number(&follow, "follow.active_follower_ratio"),
+    stats::number(follow, "follow.active_follower_ratio"),
   );
-  stats::follower_totals(&mut ins, rows(&changes));
+  stats::follower_totals(ins, rows(&data.changes));
+}
 
-  ins.series = stats::series(rows(&daily), false);
-  ins.series.extend(stats::follower_series(rows(&changes)));
-
-  ins.breakdowns = stats::portrait(readers.at("content.content"), "");
-  let status = profile.i64("profile.status");
+/// Reader and follower portraits (lifetime, as Zhihu reports them) and
+/// published works per content type.
+fn account_breakdowns(ins: &mut Insights, data: &AccountData, me: &User) {
+  ins.breakdowns = stats::portrait(data.readers.at("content.content"), "");
+  let status = data.profile.i64("profile.status");
   if status == Some(1) {
-    let all = profile.at("profile.all_follower");
+    let all = data.profile.at("profile.all_follower");
     ins.breakdowns.extend(stats::portrait(all, "follower_"));
   } else if let Some(status) = status {
     // 0 not active, 2..4 updating / processing / generating (creator bundle `lj`).
     let note = format!("not available (status {status}); Zhihu builds it for larger audiences");
     ins.extra.insert("follower_portrait".into(), note.into());
   }
-  ins.breakdowns.extend(content_types(&follow, &me));
-
-  ins.from = Some(from);
-  ins.to = Some(to);
-  if let Some(updated) = aggr.str("updated") {
-    ins.extra.insert("updated".into(), updated.into());
-  }
-  // Reader portraits are what Zhihu reports overall, not only the window.
-  for b in ins
-    .breakdowns
-    .iter_mut()
-    .filter(|b| !matches!(b.dimension.as_str(), "content_type"))
-  {
+  for b in ins.breakdowns.iter_mut() {
     b.period.get_or_insert_with(|| "lifetime".into());
   }
-  ins.extra.insert("metric_names".into(), names());
-  ins.raw = Some(json!({
-    "aggr": aggr, "daily": daily, "follow": follow, "follower_changes": changes,
-    "reader_portrait": readers, "follower_portrait": profile,
-  }));
-  Ok(ins)
+  ins.breakdowns.extend(content_types(&data.follow, me));
 }
 
 /// Published works per content type (`creation_count`, plus pins from the profile).
-fn content_types(follow: &Value, me: &social_core::User) -> Option<Breakdown> {
+fn content_types(follow: &Value, me: &User) -> Option<Breakdown> {
   let mut items: Vec<(String, u64)> = ["answer", "article", "video"]
     .iter()
     .filter_map(|k| Some(((*k).to_owned(), follow.u64(&format!("creation_count.{k}"))?)))
@@ -178,14 +210,8 @@ fn content_types(follow: &Value, me: &social_core::User) -> Option<Breakdown> {
 }
 
 pub async fn post(api: &Api, target: &Target, days: u32) -> Result<Insights> {
-  let kind = match target {
-    Target::Question(_) => {
-      return public(api, target, "Zhihu has no creator analytics for questions").await;
-    }
-    Target::Answer(_) => "answer",
-    Target::Article(_) => "article",
-    Target::Pin(_) => "pin",
-    Target::Zvideo(_) => "zvideo",
+  let Some(kind) = content_kind(target) else {
+    return public(api, target, "Zhihu has no creator analytics for questions").await;
   };
   let (from, to) = window(days);
   let one = [("type", kind), ("token", target.id())];
@@ -195,7 +221,7 @@ pub async fn post(api: &Api, target: &Target, days: u32) -> Result<Insights> {
     ("start", from.as_str()),
     ("end", to.as_str()),
   ];
-  let aggr = match get(api, "realtime/content/aggr", &q).await {
+  let aggr = match analysis(api, "realtime/content/aggr", &q).await {
     Err(e) if e.code == ErrorCode::PermissionDenied => {
       let note = "not your post: public counters only (creator analytics cover your own posts)";
       return public(api, target, note).await;
@@ -208,14 +234,14 @@ pub async fn post(api: &Api, target: &Target, days: u32) -> Result<Insights> {
     url: Some(target.url()),
     ..Insights::default()
   };
-  let daily = get(api, "realtime/content/daily", &q).await;
+  let daily = analysis(api, "realtime/content/daily", &q).await;
   let daily = soft(&mut ins, "daily", daily)?;
-  let readers = get(api, "realtime/content/visitor_portrait", &one).await;
+  let readers = analysis(api, "realtime/content/visitor_portrait", &one).await;
   let readers = soft(&mut ins, "reader_portrait", readers)?;
 
   let pin = kind == "pin";
-  let obj = aggr.at(kind);
-  ins.title = obj
+  ins.title = aggr
+    .at(kind)
     .first_str(&stats::TITLE)
     .map(|t| truncate(&one_line(&t), 80));
   stats::totals(&mut ins, &aggr, pin);
@@ -223,6 +249,26 @@ pub async fn post(api: &Api, target: &Target, days: u32) -> Result<Insights> {
   ins.breakdowns = stats::portrait(readers.at("content.content"), "");
   ins.from = Some(from);
   ins.to = Some(to);
+  post_flags(&mut ins, &aggr);
+  ins.extra.insert("metric_names".into(), names());
+  ins.raw = Some(json!({ "aggr": aggr, "daily": daily, "reader_portrait": readers }));
+  Ok(ins)
+}
+
+/// The creator center's name for a post's type; questions have no analytics.
+fn content_kind(target: &Target) -> Option<&'static str> {
+  match target {
+    Target::Question(_) => None,
+    Target::Answer(_) => Some("answer"),
+    Target::Article(_) => Some("article"),
+    Target::Pin(_) => Some("pin"),
+    Target::Zvideo(_) => Some("zvideo"),
+  }
+}
+
+/// Why advanced numbers are missing, and whether the post is collapsed or
+/// recommended.
+fn post_flags(ins: &mut Insights, aggr: &Value) {
   if let Some(status) = aggr.str("advanced.status").filter(|s| s != "normal") {
     // `unnormal_by_level` / `unnormal_by_pv`: advanced numbers need a creator level or more reads.
     ins.extra.insert("advanced_status".into(), status.into());
@@ -234,9 +280,6 @@ pub async fn post(api: &Api, target: &Target, days: u32) -> Result<Insights> {
         .insert(flag.trim_start_matches("is_").into(), true.into());
     }
   }
-  ins.extra.insert("metric_names".into(), names());
-  ins.raw = Some(json!({ "aggr": aggr, "daily": daily, "reader_portrait": readers }));
-  Ok(ins)
 }
 
 /// Current public counters of any post.
@@ -271,7 +314,7 @@ async fn public(api: &Api, target: &Target, note: &str) -> Result<Insights> {
 pub async fn creations(api: &Api, kind: &str, page: &PageReq) -> Result<Page<Post>> {
   let offset = page.number_or(0).to_string();
   let limit = page.size_within(20).to_string();
-  let v = get(
+  let v = analysis(
     api,
     "realtime/content/list",
     &[("type", kind), ("offset", &offset), ("limit", &limit)],
