@@ -368,7 +368,15 @@ pub(super) async fn common<P: Platform>(
         split: a.split,
       };
       ok(Data::Downloads(
-        download::download(ctx, P::INFO.home, &post, &media, &opts).await?,
+        download::download(
+          ctx,
+          P::INFO.home,
+          &post,
+          &media,
+          &opts,
+          async |m, dir, name| p.save_media(m, dir, name).await,
+        )
+        .await?,
       ))
     }
   }

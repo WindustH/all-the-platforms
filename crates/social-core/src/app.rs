@@ -213,7 +213,7 @@ impl App {
 
 fn init_logging(verbose: bool) {
   let filter = tracing_subscriber::EnvFilter::try_from_env("SOCIAL_LOG").unwrap_or_else(|_| {
-    tracing_subscriber::EnvFilter::new(if verbose { "warn,media=debug" } else { "warn" })
+    tracing_subscriber::EnvFilter::new(if verbose { "warn,social=debug" } else { "warn" })
   });
   let _ = tracing_subscriber::fmt()
     .with_env_filter(filter)

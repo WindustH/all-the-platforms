@@ -13,5 +13,6 @@ fn main() -> ExitCode {
   .platform::<social_reddit::Reddit>()
   .platform::<social_youtube::YouTube>()
   .platform::<social_mp::Mp>()
+  .platform::<social_telegram::Telegram>()
   .run()
 }

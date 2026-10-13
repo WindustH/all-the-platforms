@@ -558,8 +558,22 @@ async fn backoff(attempt: u32) {
 }
 
 /// Drop the query string from logged URLs; it may carry tokens.
-fn redact(url: &str) -> &str {
-  url.split('?').next().unwrap_or(url)
+/// The URL without its query, and with Telegram Bot API tokens
+/// (`/bot<id>:<secret>/`) masked, for logs.
+fn redact(url: &str) -> String {
+  let url = url.split('?').next().unwrap_or(url);
+  let Some(start) = url.find("/bot").map(|i| i + 4) else {
+    return url.to_owned();
+  };
+  let rest = &url[start..];
+  let end = rest.find('/').unwrap_or(rest.len());
+  let token = &rest[..end];
+  match token.split_once(':') {
+    Some((id, _)) if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) => {
+      format!("{}***{}", &url[..start], &rest[end..])
+    }
+    _ => url.to_owned(),
+  }
 }
 
 /// What [`Req::append_to`] wrote.

@@ -107,6 +107,8 @@ pub enum MediaKind {
   Video,
   Audio,
   Gif,
+  /// Any other attachment: documents, archives, stickers ...
+  File,
 }
 
 #[derive(Debug, Clone, Serialize)]
