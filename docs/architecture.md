@@ -6,13 +6,9 @@ knows as little as possible about the others.
 
 ```
 src/main.rs                 registry: lists the platforms, nothing else
-crates/social-core           platform-agnostic kernel
-crates/social-zhihu          Zhihu
-crates/social-xhs            Xiaohongshu
-crates/social-twitter        Twitter / X
-crates/social-bilibili       Bilibili
-crates/social-reddit         Reddit
-crates/social-youtube        YouTube
+crates/social-core          platform-agnostic kernel
+crates/social-<platform>    one crate per platform (social-zhihu, social-telegram ...)
+crates/social-meta          Graph API pieces shared by social-facebook and social-instagram
 ```
 
 Dependencies only point downwards: the binary depends on every crate,

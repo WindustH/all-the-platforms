@@ -1,21 +1,22 @@
 # Getting started
 
-`social` drives six platforms through one command set:
+`social` drives social networks, video sites and chat apps through one
+command set:
 
     social <platform> <command> [arguments] [options]
 
-Platforms (each also answers to shorter names):
+`social platforms` lists every platform with its shorter names and the
+commands it supports; `social guide <platform>` explains one of them.
 
-| Platform | Name | Aliases |
-| --- | --- | --- |
-| Zhihu | `zhihu` | `zh` |
-| Xiaohongshu / RedNote | `xhs` | `xiaohongshu`, `rednote` |
-| Twitter / X | `twitter` | `x`, `tw` |
-| Bilibili | `bili` | `bilibili`, `b23` |
-| Reddit | `reddit` | `rd` |
-| YouTube | `youtube` | `yt` |
+- Social and content: `zhihu`, `xhs`, `weibo`, `tieba`, `mp` (WeChat
+  Official Accounts), `twitter`, `reddit`, `facebook`, `instagram`, `misskey`.
+- Video: `bili`, `douyin`, `youtube`, `tiktok`.
+- Chat: `wechat`, `telegram`, `discord`, `whatsapp`, `qq`, `onebot`,
+  `feishu`, `dingtalk`, `wecom`, `slack`, `mattermost`, `rocketchat`,
+  `matrix`, `kook`, `vocechat`, `line`, `satori`.
 
-`social platforms` shows which commands each platform supports.
+Chat apps share `chats`, `messages`, `send`, `members`, `react`, `edit` and
+`listen` (see `social guide interact`).
 
 ## First steps
 

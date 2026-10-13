@@ -3,7 +3,7 @@ name = "social-cli"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "One command line for Zhihu, Xiaohongshu, Twitter/X, Bilibili, Reddit and YouTube"
+description = "One command line for social, video and chat platforms: Zhihu, Xiaohongshu, Weibo, Bilibili, Douyin, WeChat, Telegram, Discord, YouTube, TikTok, Reddit, Twitter/X and more"
 
 [[bin]]
 name = "social"
