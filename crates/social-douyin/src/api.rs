@@ -4,7 +4,7 @@
 //! `{status_code, status_msg}` envelope.
 //!
 //! The query is built and signed here as one string and sent exactly as
-//! signed: the signature covers its bytes.
+//! signed: the signature covers its bytes. [`Api`] owns the context.
 
 use social_core::http::{Method, USER_AGENT};
 use social_core::{Ctx, Error, ErrorCode, Http, Result, Value, ValueExt};
@@ -20,7 +20,33 @@ const LOGIN_HINT: &str = "log in with `social douyin login --browser` (a browser
 const WALL_HINT: &str = "Douyin refuses this to visitors or flagged clients: log in with \
    `social douyin login --browser`, retry later, or use a residential network in mainland China";
 
-pub fn configure(http: &mut Http) {
+/// The transport: the context with Douyin's referer.
+pub struct Api {
+  pub ctx: Ctx,
+}
+
+impl Api {
+  pub fn new(mut ctx: Ctx) -> Self {
+    configure(&mut ctx.http);
+    Self { ctx }
+  }
+
+  pub fn get(&self, path: &str) -> Call<'_> {
+    Call::new(self, path, Method::GET)
+  }
+
+  /// A read sent as a form POST (the body is signed too).
+  pub fn post(&self, path: &str) -> Call<'_> {
+    Call::new(self, path, Method::POST)
+  }
+
+  /// Fail with `not_authenticated` unless the session cookie is present.
+  pub fn require_login(&self) -> Result<()> {
+    self.ctx.require_login(LOGIN_COOKIES)
+  }
+}
+
+fn configure(http: &mut Http) {
   http.set_header("referer", &format!("{WWW}/"));
 }
 
@@ -62,21 +88,8 @@ fn common(chrome: &str) -> Vec<(&'static str, String)> {
   .collect()
 }
 
-pub fn get<'a>(ctx: &'a Ctx, path: &str) -> Call<'a> {
-  Call::new(ctx, path, Method::GET)
-}
-
-/// A read sent as a form POST (the body is signed too).
-pub fn post<'a>(ctx: &'a Ctx, path: &str) -> Call<'a> {
-  Call::new(ctx, path, Method::POST)
-}
-
-pub fn require_login(ctx: &Ctx) -> Result<()> {
-  ctx.require_login(LOGIN_COOKIES)
-}
-
 pub struct Call<'a> {
-  ctx: &'a Ctx,
+  api: &'a Api,
   path: String,
   method: Method,
   query: Vec<(String, String)>,
@@ -85,9 +98,9 @@ pub struct Call<'a> {
 }
 
 impl<'a> Call<'a> {
-  fn new(ctx: &'a Ctx, path: &str, method: Method) -> Self {
+  fn new(api: &'a Api, path: &str, method: Method) -> Self {
     Self {
-      ctx,
+      api,
       path: path.to_owned(),
       method,
       query: Vec::new(),
@@ -121,7 +134,7 @@ impl<'a> Call<'a> {
   /// The final query string: common parameters, the call's own, the visitor
   /// ids, `a_bogus`, and on protected paths the web signature.
   fn signed_query(&self, body: &str) -> String {
-    let http = &self.ctx.http;
+    let http = &self.api.ctx.http;
     let chrome = format!("{}.0.0.0", social_core::http::CHROME_VERSION);
     let mut pairs: Vec<(String, String)> = if self.bare {
       Vec::new()
@@ -166,8 +179,9 @@ impl<'a> Call<'a> {
 
   /// Send and return the JSON body whatever its `status_code`.
   pub async fn send_raw(self) -> Result<Value> {
-    let ctx = self.ctx;
-    device::ensure(ctx).await;
+    let api = self.api;
+    let ctx = &api.ctx;
+    device::ensure(api).await;
     let form = self.method == Method::POST;
     let body = sign::query_string(&self.form);
     let url = format!(

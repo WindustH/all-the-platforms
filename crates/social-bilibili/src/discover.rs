@@ -1,9 +1,10 @@
 //! Discovery beyond `hot`: trending searches, the weekly picks (每周必看),
 //! the all-time picks (入站必刷), ranking boards by region and topic feeds.
 
-use social_core::{Collection, Ctx, Error, Page, PageReq, Post, Result, Value, ValueExt, json};
+use social_core::{Collection, Error, Page, PageReq, Post, Result, Value, ValueExt, json};
 
-use crate::{api, parse, video};
+use crate::api::Api;
+use crate::{parse, videos};
 
 const TRENDING: &str = "https://api.bilibili.com/x/v2/search/trending/ranking";
 const WEEKLY: &str = "https://api.bilibili.com/x/web-interface/popular/series/one";
@@ -12,8 +13,9 @@ const PRECIOUS: &str = "https://api.bilibili.com/x/web-interface/popular/preciou
 const TOPIC_FEED: &str = "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/topic";
 
 /// Trending search words (热搜), best first.
-pub async fn trending(ctx: &Ctx, limit: usize) -> Result<Page<Collection>> {
-  let data = api::get(ctx, TRENDING)
+pub async fn trending(api: &Api, limit: usize) -> Result<Page<Collection>> {
+  let data = api
+    .get(TRENDING)
     .arg("limit", limit.clamp(1, 50))
     .send()
     .await?;
@@ -55,11 +57,11 @@ fn url_escape(s: &str) -> String {
 }
 
 /// One issue of 每周必看 (`number`), or the latest when omitted.
-pub async fn weekly(ctx: &Ctx, number: Option<u64>) -> Result<Page<Post>> {
+pub async fn weekly(api: &Api, number: Option<u64>) -> Result<Page<Post>> {
   let number = match number {
     Some(n) => n,
     None => {
-      let list = api::get(ctx, WEEKLY_LIST).send().await?;
+      let list = api.get(WEEKLY_LIST).send().await?;
       list
         .list("list")
         .first()
@@ -67,13 +69,14 @@ pub async fn weekly(ctx: &Ctx, number: Option<u64>) -> Result<Page<Post>> {
         .ok_or_else(|| Error::upstream("no weekly issue listed"))?
     }
   };
-  let data = api::get(ctx, WEEKLY).arg("number", number).send().await?;
+  let data = api.get(WEEKLY).arg("number", number).send().await?;
   Ok(Page::last(with_reason(data.list("list"))))
 }
 
 /// 入站必刷: the all-time picks.
-pub async fn precious(ctx: &Ctx) -> Result<Page<Post>> {
-  let data = api::get(ctx, PRECIOUS)
+pub async fn precious(api: &Api) -> Result<Page<Post>> {
+  let data = api
+    .get(PRECIOUS)
     .arg("page_size", 100)
     .arg("page", 1)
     .send()
@@ -100,15 +103,15 @@ fn with_reason(list: &[Value]) -> Vec<Post> {
 }
 
 /// A ranking board: the whole site, or a region of `hot --category`.
-pub async fn rank(ctx: &Ctx, region: Option<&str>) -> Result<Page<Post>> {
+pub async fn rank(api: &Api, region: Option<&str>) -> Result<Page<Post>> {
   match region {
-    None | Some("all") => video::ranking(ctx, 0, "all").await,
-    Some(name) => video::hot(ctx, Some(name), &PageReq::default()).await,
+    None | Some("all") => videos::ranking(api, 0, "all").await,
+    Some(name) => videos::hot(api, Some(name), &PageReq::default()).await,
   }
 }
 
 /// Dynamics under a topic (`sort`: hot, new or the topic's default).
-pub async fn topic(ctx: &Ctx, id: &str, sort: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+pub async fn topic(api: &Api, id: &str, sort: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
   let id = id
     .rsplit("topic_id=")
     .next()
@@ -121,7 +124,8 @@ pub async fn topic(ctx: &Ctx, id: &str, sort: Option<&str>, page: &PageReq) -> R
     Some("new") => 2,
     _ => 0,
   };
-  let data = api::get(ctx, TOPIC_FEED)
+  let data = api
+    .get(TOPIC_FEED)
     .arg("topic_id", id)
     .arg("sort_by", sort_by)
     .arg("offset", page.cursor.as_deref().unwrap_or_default())

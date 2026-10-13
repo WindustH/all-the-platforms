@@ -5,35 +5,34 @@
 //! conversations (`dm:MID`) and live rooms (`live:ROOM`). The modules below
 //! own one domain each; this file only describes the platform and delegates.
 
-mod account;
 mod api;
-mod archive;
-mod article;
-mod comment;
-mod creator;
+mod articles;
+mod bangumi;
+mod comments;
 mod device;
 mod discover;
-mod dynamic;
+mod dynamics;
 mod extra;
-mod folder;
+mod folders;
 mod history;
-mod im;
+mod insights;
 mod library;
+mod lists;
 mod live;
-mod message;
-mod page;
+mod login;
+mod media;
+mod messages;
+mod notifications;
+mod paging;
 mod parse;
-mod pgc;
-mod play;
 mod proto;
 mod refs;
-mod relation;
+mod relations;
+mod rooms;
 mod search;
 mod sign;
-mod space;
-mod stream;
-mod user;
-mod video;
+mod users;
+mod videos;
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -45,21 +44,20 @@ use social_core::{
   Result, User, ValueExt,
 };
 
+use crate::api::Api;
 use crate::refs::PostRef;
 
-pub use extra::Extra;
-
 pub struct Bilibili {
-  ctx: Ctx,
+  api: Api,
 }
 
 impl Bilibili {
   async fn post(&self, arg: &str) -> Result<PostRef> {
-    refs::post(&self.ctx, arg).await
+    refs::post(&self.api, arg).await
   }
 
-  async fn section(&self, post: &str) -> Result<comment::Section> {
-    comment::section(&self.ctx, &self.post(post).await?).await
+  async fn section(&self, post: &str) -> Result<comments::Section> {
+    comments::section(&self.api, &self.post(post).await?).await
   }
 
   /// Likers and reposts are those of a dynamic; a video's are those of the
@@ -67,8 +65,8 @@ impl Bilibili {
   async fn dynamic_id(&self, post: &str) -> Result<String> {
     match self.post(post).await? {
       PostRef::Dynamic(id) => Ok(id),
-      PostRef::Video(v) => dynamic::of_video(&self.ctx, &v).await,
-      PostRef::Article(id) => article::view(&self.ctx, id)
+      PostRef::Video(v) => dynamics::of_video(&self.api, &v).await,
+      PostRef::Article(id) => articles::view(&self.api, id)
         .await?
         .str("dyn_id_str")
         .filter(|d| d != "0")
@@ -125,7 +123,7 @@ impl Platform for Bilibili {
     choices: Choices {
       search_sort: &["totalrank", "click", "pubdate", "dm", "stow", "scores"],
       search_filter: search::FILTERS,
-      hot_category: video::HOT_CATEGORIES,
+      hot_category: videos::HOT_CATEGORIES,
       feed_kind: &["all", "video"],
       comment_sort: &["hot", "time"],
       notification_kind: &["reply", "at", "like"],
@@ -134,59 +132,58 @@ impl Platform for Bilibili {
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = Extra;
+  type Extra = extra::Command;
 
-  fn new(mut ctx: Ctx) -> Result<Self> {
-    api::configure(&mut ctx.http);
-    Ok(Self { ctx })
+  fn new(ctx: Ctx) -> Result<Self> {
+    Ok(Self { api: Api::new(ctx) })
   }
 
   fn ctx(&self) -> &Ctx {
-    &self.ctx
+    &self.api.ctx
   }
 
   async fn whoami(&self) -> Result<User> {
-    account::whoami(&self.ctx).await
+    users::whoami(&self.api).await
   }
 
   async fn prepare_login(&self) -> Result<()> {
-    device::ensure(&self.ctx).await;
+    device::ensure(&self.api).await;
     Ok(())
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {
-    account::qr_start(&self.ctx).await
+    login::qr_start(&self.api).await
   }
 
   async fn qr_poll(&self, ticket: &QrTicket) -> Result<QrStatus> {
-    account::qr_poll(&self.ctx, ticket).await
+    login::qr_poll(&self.api, ticket).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
-    search::posts(&self.ctx, query, page).await
+    search::posts(&self.api, query, page).await
   }
 
   async fn search_topics(&self, query: &Query, page: &PageReq) -> Result<Page<Collection>> {
-    search::topics(&self.ctx, query, page).await
+    search::topics(&self.api, query, page).await
   }
 
   async fn search_users(&self, query: &Query, page: &PageReq) -> Result<Page<User>> {
-    video::search_users(&self.ctx, query, page).await
+    videos::search_users(&self.api, query, page).await
   }
 
   async fn hot(&self, category: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    video::hot(&self.ctx, category, page).await
+    videos::hot(&self.api, category, page).await
   }
 
   async fn feed(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
-    dynamic::feed(&self.ctx, kind, page).await
+    dynamics::feed(&self.api, kind, page).await
   }
 
   async fn read(&self, post: &str) -> Result<Post> {
     match self.post(post).await? {
-      PostRef::Video(v) => video::read(&self.ctx, &v).await,
-      PostRef::Dynamic(id) => dynamic::read(&self.ctx, &id).await,
-      PostRef::Article(id) => article::read(&self.ctx, id).await,
+      PostRef::Video(v) => videos::read(&self.api, &v).await,
+      PostRef::Dynamic(id) => dynamics::read(&self.api, &id).await,
+      PostRef::Article(id) => articles::read(&self.api, id).await,
     }
   }
 
@@ -197,44 +194,44 @@ impl Platform for Bilibili {
     page: &PageReq,
   ) -> Result<Page<Comment>> {
     let section = self.section(post).await?;
-    comment::list(&self.ctx, &section, sort, page).await
+    comments::list(&self.api, &section, sort, page).await
   }
 
   async fn replies(&self, post: &str, comment: &str, page: &PageReq) -> Result<Page<Comment>> {
     let section = self.section(post).await?;
     let (root, _) = refs::reply_target(comment)?;
-    comment::thread(&self.ctx, &section, &root, page).await
+    comments::thread(&self.api, &section, &root, page).await
   }
 
   async fn likers(&self, post: &str, page: &PageReq) -> Result<Page<User>> {
     let id = self.dynamic_id(post).await?;
-    dynamic::likers(&self.ctx, &id, page).await
+    dynamics::likers(&self.api, &id, page).await
   }
 
   async fn reposts(&self, post: &str, page: &PageReq) -> Result<Page<Post>> {
     let id = self.dynamic_id(post).await?;
-    dynamic::reposts(&self.ctx, &id, page).await
+    dynamics::reposts(&self.api, &id, page).await
   }
 
   async fn user(&self, user: &str) -> Result<User> {
-    user::profile(&self.ctx, user).await
+    users::profile(&self.api, user).await
   }
 
   async fn user_posts(&self, user: &str, page: &PageReq) -> Result<Page<Post>> {
-    let mid = user::mid(&self.ctx, user).await?;
-    video::uploads(&self.ctx, &mid, page).await
+    let mid = users::mid(&self.api, user).await?;
+    videos::uploads(&self.api, &mid, page).await
   }
 
   async fn followers(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    user::followers(&self.ctx, user, page).await
+    users::followers(&self.api, user, page).await
   }
 
   async fn following(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    user::following(&self.ctx, user, page).await
+    users::following(&self.api, user, page).await
   }
 
   async fn collections(&self, user: Option<&str>, _page: &PageReq) -> Result<Page<Collection>> {
-    library::collections(&self.ctx, user).await
+    library::collections(&self.api, user).await
   }
 
   async fn favorites(
@@ -243,21 +240,21 @@ impl Platform for Bilibili {
     folder: Option<&str>,
     page: &PageReq,
   ) -> Result<Page<Post>> {
-    library::favorites(&self.ctx, user, folder, page).await
+    library::favorites(&self.api, user, folder, page).await
   }
 
   async fn history(&self, page: &PageReq) -> Result<Page<Post>> {
-    library::history(&self.ctx, page).await
+    library::history(&self.api, page).await
   }
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-    message::notifications(&self.ctx, kind, page).await
+    notifications::notifications(&self.api, kind, page).await
   }
 
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
-    let mut counts = message::unread(&self.ctx).await?;
+    let mut counts = notifications::unread(&self.api).await?;
     // Private messages have their own counters (best effort).
-    if let Ok(dm) = im::unread(&self.ctx).await {
+    if let Ok(dm) = messages::unread(&self.api).await {
       counts.extend(dm);
     }
     Ok(counts)
@@ -265,34 +262,34 @@ impl Platform for Bilibili {
 
   async fn like(&self, post: &str, undo: bool) -> Result<Action> {
     match self.post(post).await? {
-      PostRef::Video(v) => video::like(&self.ctx, &v, undo).await,
-      PostRef::Dynamic(id) => dynamic::like(&self.ctx, &id, undo).await,
-      PostRef::Article(id) => article::like(&self.ctx, id, undo).await,
+      PostRef::Video(v) => videos::like(&self.api, &v, undo).await,
+      PostRef::Dynamic(id) => dynamics::like(&self.api, &id, undo).await,
+      PostRef::Article(id) => articles::like(&self.api, id, undo).await,
     }
   }
 
   async fn favorite(&self, post: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
     match self.post(post).await? {
-      PostRef::Video(v) => library::favorite(&self.ctx, &v, folder, undo).await,
-      PostRef::Dynamic(id) => dynamic::favorite(&self.ctx, &id, undo).await,
-      PostRef::Article(id) => article::favorite(&self.ctx, id, undo).await,
+      PostRef::Video(v) => library::favorite(&self.api, &v, folder, undo).await,
+      PostRef::Dynamic(id) => dynamics::favorite(&self.api, &id, undo).await,
+      PostRef::Article(id) => articles::favorite(&self.api, id, undo).await,
     }
   }
 
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
-    self.ctx.require_login(api::LOGIN_COOKIES)?;
+    self.api.require_login()?;
     let section = self.section(post).await?;
-    comment::add(&self.ctx, &section, &reply.text, reply.reply_to.as_deref()).await
+    comments::add(&self.api, &section, &reply.text, reply.reply_to.as_deref()).await
   }
 
   async fn delete_comment(&self, post: &str, comment: &str) -> Result<Action> {
-    self.ctx.require_login(api::LOGIN_COOKIES)?;
+    self.api.require_login()?;
     let section = self.section(post).await?;
-    comment::delete(&self.ctx, &section, comment).await
+    comments::delete(&self.api, &section, comment).await
   }
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
-    user::follow(&self.ctx, user, undo).await
+    users::follow(&self.api, user, undo).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {
@@ -303,12 +300,12 @@ impl Platform for Bilibili {
         _ => return Err(Error::input("--quote takes a dynamic")),
       },
     };
-    dynamic::publish(&self.ctx, draft, quote.as_deref()).await
+    dynamics::publish(&self.api, draft, quote.as_deref()).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
     match self.post(post).await? {
-      PostRef::Dynamic(id) => dynamic::delete(&self.ctx, &id).await,
+      PostRef::Dynamic(id) => dynamics::delete(&self.api, &id).await,
       PostRef::Video(_) => Err(Error::unsupported("delete (videos)")),
       PostRef::Article(_) => Err(Error::unsupported("delete (articles)")),
     }
@@ -316,17 +313,17 @@ impl Platform for Bilibili {
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
     match post {
-      None => creator::account(&self.ctx, days).await,
-      Some(p) => archive::insights(&self.ctx, &self.post(p).await?, days).await,
+      None => insights::account(&self.api, days).await,
+      Some(p) => insights::post(&self.api, &self.post(p).await?, days).await,
     }
   }
 
   async fn media(&self, post: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
     match self.post(post).await? {
-      PostRef::Video(v) => play::media(&self.ctx, &v, audio_only).await,
-      PostRef::Dynamic(id) => play::dynamic_media(&self.ctx, &id, audio_only).await,
+      PostRef::Video(v) => media::media(&self.api, &v, audio_only).await,
+      PostRef::Dynamic(id) => media::dynamic_media(&self.api, &id, audio_only).await,
       PostRef::Article(id) => {
-        let post = article::read(&self.ctx, id).await?;
+        let post = articles::read(&self.api, id).await?;
         let media = post.media.clone();
         Ok((post, media))
       }
@@ -337,15 +334,15 @@ impl Platform for Bilibili {
     if parent.is_some() {
       return Err(Error::unsupported("chats PARENT (Bilibili chats are flat)"));
     }
-    im::chats(&self.ctx, page).await
+    messages::chats(&self.api, page).await
   }
 
   /// A private conversation, or the latest danmaku of a live room.
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
     if refs::room(chat).is_some() {
-      return live::recent(&self.ctx, chat).await;
+      return rooms::recent(&self.api, chat).await;
     }
-    im::messages(&self.ctx, chat, page).await
+    messages::messages(&self.api, chat, page).await
   }
 
   /// A private message, or danmaku to a live room (`live:ROOM`).
@@ -356,17 +353,17 @@ impl Platform for Bilibili {
           "send --attach / --reply-to (live rooms)",
         ));
       }
-      return live::send(&self.ctx, chat, &message.text).await;
+      return rooms::send(&self.api, chat, &message.text).await;
     }
-    im::send(&self.ctx, chat, message).await
+    messages::send(&self.api, chat, message).await
   }
 
   /// Live danmaku, super chats, gifts and memberships of live rooms.
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
-    stream::listen(&self.ctx, chats, out).await
+    live::listen(&self.api, chats, out).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {
-    extra::run(&self.ctx, command).await
+    extra::run(&self.api, command).await
   }
 }

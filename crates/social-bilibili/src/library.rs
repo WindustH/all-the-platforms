@@ -1,12 +1,11 @@
 //! Favorites folders and their videos, adding / removing videos, and the watch history.
 
-use social_core::{
-  Action, Collection, Ctx, Error, Page, PageReq, Post, Result, Value, ValueExt, json,
-};
+use social_core::{Action, Collection, Error, Page, PageReq, Post, Result, Value, ValueExt, json};
 
-use crate::page::Pn;
+use crate::api::Api;
+use crate::paging::Pn;
 use crate::refs::{self, Video};
-use crate::{account, api, parse, user};
+use crate::{parse, users};
 
 const FOLDERS: &str = "https://api.bilibili.com/x/v3/fav/folder/created/list-all";
 const ITEMS: &str = "https://api.bilibili.com/x/v3/fav/resource/list";
@@ -14,15 +13,16 @@ const DEAL: &str = "https://api.bilibili.com/x/v3/fav/resource/deal";
 const HISTORY: &str = "https://api.bilibili.com/x/web-interface/history/cursor";
 
 /// `user` as a mid, or the logged-in account's mid when omitted.
-async fn owner(ctx: &Ctx, user: Option<&str>) -> Result<String> {
+async fn owner(api: &Api, user: Option<&str>) -> Result<String> {
   match user {
-    Some(u) => user::mid(ctx, u).await,
-    None => account::my_mid(ctx).await,
+    Some(u) => users::mid(api, u).await,
+    None => users::my_mid(api).await,
   }
 }
 
-async fn folder_list(ctx: &Ctx, mid: &str) -> Result<Vec<Value>> {
-  let data = api::get(ctx, FOLDERS)
+async fn folder_list(api: &Api, mid: &str) -> Result<Vec<Value>> {
+  let data = api
+    .get(FOLDERS)
     .arg("up_mid", mid)
     .arg("type", 2)
     .arg("web_location", "333.1387")
@@ -32,17 +32,17 @@ async fn folder_list(ctx: &Ctx, mid: &str) -> Result<Vec<Value>> {
 }
 
 /// Favorites folders of a user (all in one page).
-pub async fn collections(ctx: &Ctx, user: Option<&str>) -> Result<Page<Collection>> {
-  let mid = owner(ctx, user).await?;
-  let folders = folder_list(ctx, &mid).await?;
+pub async fn collections(api: &Api, user: Option<&str>) -> Result<Page<Collection>> {
+  let mid = owner(api, user).await?;
+  let folders = folder_list(api, &mid).await?;
   Ok(Page::last(
     folders.iter().map(|f| parse::folder(f, &mid)).collect(),
   ))
 }
 
 /// The default folder (attr bit 1 clear), else the first one.
-async fn default_folder(ctx: &Ctx, mid: &str) -> Result<u64> {
-  let folders = folder_list(ctx, mid).await?;
+async fn default_folder(api: &Api, mid: &str) -> Result<u64> {
+  let folders = folder_list(api, mid).await?;
   folders
     .iter()
     .find(|f| f.u64("attr").is_some_and(|a| a & 2 == 0))
@@ -53,17 +53,18 @@ async fn default_folder(ctx: &Ctx, mid: &str) -> Result<u64> {
 
 /// Videos saved in a folder (the user's default folder when none is given).
 pub async fn favorites(
-  ctx: &Ctx,
+  api: &Api,
   user: Option<&str>,
   folder: Option<&str>,
   page: &PageReq,
 ) -> Result<Page<Post>> {
   let media_id = match folder {
     Some(f) => refs::folder(f)?,
-    None => default_folder(ctx, &owner(ctx, user).await?).await?,
+    None => default_folder(api, &owner(api, user).await?).await?,
   };
   let pn = Pn::of(page, 20);
-  let data = api::get(ctx, ITEMS)
+  let data = api
+    .get(ITEMS)
     .arg("media_id", media_id)
     .arg("pn", pn.pn)
     .arg("ps", pn.ps)
@@ -90,10 +91,10 @@ pub async fn favorites(
 }
 
 /// Add a video to a folder (default folder when none is given) or remove it.
-pub async fn favorite(ctx: &Ctx, v: &Video, folder: Option<&str>, undo: bool) -> Result<Action> {
+pub async fn favorite(api: &Api, v: &Video, folder: Option<&str>, undo: bool) -> Result<Action> {
   let media_id = match folder {
     Some(f) => refs::folder(f)?,
-    None => default_folder(ctx, &account::my_mid(ctx).await?).await?,
+    None => default_folder(api, &users::my_mid(api).await?).await?,
   };
   let id = media_id.to_string();
   let (add, del) = if undo {
@@ -101,7 +102,8 @@ pub async fn favorite(ctx: &Ctx, v: &Video, folder: Option<&str>, undo: bool) ->
   } else {
     (id, String::new())
   };
-  api::post(ctx, DEAL)
+  api
+    .post(DEAL)
     .arg("rid", v.aid)
     .arg("type", 2)
     .arg("add_media_ids", add)
@@ -117,14 +119,15 @@ pub async fn favorite(ctx: &Ctx, v: &Video, folder: Option<&str>, undo: bool) ->
 }
 
 /// Watched videos, newest first; the cursor is `max:view_at`.
-pub async fn history(ctx: &Ctx, page: &PageReq) -> Result<Page<Post>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
+pub async fn history(api: &Api, page: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
   let (max, view_at) = page
     .cursor
     .as_deref()
     .and_then(|c| c.split_once(':'))
     .unwrap_or(("0", "0"));
-  let data = api::get(ctx, HISTORY)
+  let data = api
+    .get(HISTORY)
     .arg("type", "archive")
     .arg("ps", page.size_within(30))
     .arg("max", max)

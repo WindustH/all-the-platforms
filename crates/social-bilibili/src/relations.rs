@@ -2,13 +2,12 @@
 //! follows, the blacklist and followings shared with another user.
 
 use social_core::text::from_secs;
-use social_core::{
-  Action, Collection, Ctx, Error, Page, PageReq, Result, User, Value, ValueExt, json,
-};
+use social_core::{Action, Collection, Error, Page, PageReq, Result, User, Value, ValueExt, json};
 
-use crate::page::Pn;
+use crate::api::Api;
+use crate::paging::Pn;
 use crate::refs::space_url;
-use crate::{api, parse, user};
+use crate::{parse, users};
 
 const TAGS: &str = "https://api.bilibili.com/x/relation/tags";
 const TAG: &str = "https://api.bilibili.com/x/relation/tag";
@@ -26,9 +25,9 @@ const SAME: &str = "https://api.bilibili.com/x/relation/same/followings";
 const DEVICE: &str = r#"{"platform":"web","device":"pc","spmid":"333.1387"}"#;
 
 /// Your follow groups, with how many people each holds.
-pub async fn groups(ctx: &Ctx) -> Result<Page<Collection>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
-  let data = api::get(ctx, TAGS).send().await?;
+pub async fn groups(api: &Api) -> Result<Page<Collection>> {
+  api.require_login()?;
+  let data = api.get(TAGS).send().await?;
   let items = data
     .as_array()
     .into_iter()
@@ -47,11 +46,11 @@ pub async fn groups(ctx: &Ctx) -> Result<Page<Collection>> {
 }
 
 /// A group id from its id or exact name.
-async fn group_id(ctx: &Ctx, group: &str) -> Result<String> {
+async fn group_id(api: &Api, group: &str) -> Result<String> {
   if group.bytes().all(|b| b.is_ascii_digit() || b == b'-') {
     return Ok(group.to_owned());
   }
-  groups(ctx)
+  groups(api)
     .await?
     .items
     .into_iter()
@@ -61,10 +60,11 @@ async fn group_id(ctx: &Ctx, group: &str) -> Result<String> {
 }
 
 /// The people in one of your follow groups.
-pub async fn members(ctx: &Ctx, group: &str, page: &PageReq) -> Result<Page<User>> {
-  let id = group_id(ctx, group).await?;
+pub async fn members(api: &Api, group: &str, page: &PageReq) -> Result<Page<User>> {
+  let id = group_id(api, group).await?;
   let pn = Pn::of(page, 50);
-  let data = api::get(ctx, TAG)
+  let data = api
+    .get(TAG)
     .arg("tagid", &id)
     .arg("pn", pn.pn)
     .arg("ps", pn.ps)
@@ -83,8 +83,9 @@ fn person(v: &Value) -> User {
   u
 }
 
-pub async fn create_group(ctx: &Ctx, name: &str) -> Result<Action> {
-  let data = api::post(ctx, TAG_CREATE)
+pub async fn create_group(api: &Api, name: &str) -> Result<Action> {
+  let data = api
+    .post(TAG_CREATE)
     .query("x-bili-device-req-json", DEVICE)
     .arg("tag", name)
     .send()
@@ -93,9 +94,10 @@ pub async fn create_group(ctx: &Ctx, name: &str) -> Result<Action> {
   Ok(Action::done("group-create", name).with_id(id))
 }
 
-pub async fn rename_group(ctx: &Ctx, group: &str, name: &str) -> Result<Action> {
-  let id = group_id(ctx, group).await?;
-  api::post(ctx, TAG_UPDATE)
+pub async fn rename_group(api: &Api, group: &str, name: &str) -> Result<Action> {
+  let id = group_id(api, group).await?;
+  api
+    .post(TAG_UPDATE)
     .query("x-bili-device-req-json", DEVICE)
     .arg("tagid", &id)
     .arg("name", name)
@@ -104,9 +106,10 @@ pub async fn rename_group(ctx: &Ctx, group: &str, name: &str) -> Result<Action> 
   Ok(Action::done("group-rename", id).with_message(name.to_owned()))
 }
 
-pub async fn delete_group(ctx: &Ctx, group: &str) -> Result<Action> {
-  let id = group_id(ctx, group).await?;
-  api::post(ctx, TAG_DEL)
+pub async fn delete_group(api: &Api, group: &str) -> Result<Action> {
+  let id = group_id(api, group).await?;
+  api
+    .post(TAG_DEL)
     .query("x-bili-device-req-json", DEVICE)
     .arg("tagid", &id)
     .send()
@@ -115,21 +118,22 @@ pub async fn delete_group(ctx: &Ctx, group: &str) -> Result<Action> {
 }
 
 /// Put users into groups (replacing their current groups); no groups = 默认分组.
-pub async fn assign(ctx: &Ctx, users: &[String], groups: &[String]) -> Result<Action> {
+pub async fn assign(api: &Api, users: &[String], groups: &[String]) -> Result<Action> {
   let mut mids = Vec::new();
   for u in users {
-    mids.push(user::mid(ctx, u).await?);
+    mids.push(users::mid(api, u).await?);
   }
   let mut ids = Vec::new();
   for g in groups {
-    ids.push(group_id(ctx, g).await?);
+    ids.push(group_id(api, g).await?);
   }
   let tags = if ids.is_empty() {
     "0".to_owned()
   } else {
     ids.join(",")
   };
-  api::post(ctx, ADD_USERS)
+  api
+    .post(ADD_USERS)
     .query("x-bili-device-req-json", DEVICE)
     .arg("fids", mids.join(","))
     .arg("tagids", &tags)
@@ -139,9 +143,10 @@ pub async fn assign(ctx: &Ctx, users: &[String], groups: &[String]) -> Result<Ac
 }
 
 /// Mark (or with `undo` unmark) a user as a special follow (特别关注).
-pub async fn special(ctx: &Ctx, input: &str, undo: bool) -> Result<Action> {
-  let mid = user::mid(ctx, input).await?;
-  api::post(ctx, if undo { SPECIAL_DEL } else { SPECIAL_ADD })
+pub async fn special(api: &Api, input: &str, undo: bool) -> Result<Action> {
+  let mid = users::mid(api, input).await?;
+  api
+    .post(if undo { SPECIAL_DEL } else { SPECIAL_ADD })
     .arg("fid", &mid)
     .send()
     .await?;
@@ -149,10 +154,11 @@ pub async fn special(ctx: &Ctx, input: &str, undo: bool) -> Result<Action> {
   Ok(Action::done(action, &mid).with_url(space_url(&mid)))
 }
 
-pub async fn blacklist(ctx: &Ctx, page: &PageReq) -> Result<Page<User>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
+pub async fn blacklist(api: &Api, page: &PageReq) -> Result<Page<User>> {
+  api.require_login()?;
   let pn = Pn::of(page, 50);
-  let data = api::get(ctx, BLACKS)
+  let data = api
+    .get(BLACKS)
     .arg("pn", pn.pn)
     .arg("ps", pn.ps)
     .send()
@@ -172,9 +178,10 @@ pub async fn blacklist(ctx: &Ctx, page: &PageReq) -> Result<Page<User>> {
 }
 
 /// Block (or with `undo` unblock) a user.
-pub async fn block(ctx: &Ctx, input: &str, undo: bool) -> Result<Action> {
-  let mid = user::mid(ctx, input).await?;
-  api::post(ctx, MODIFY)
+pub async fn block(api: &Api, input: &str, undo: bool) -> Result<Action> {
+  let mid = users::mid(api, input).await?;
+  api
+    .post(MODIFY)
     .arg("fid", &mid)
     .arg("act", if undo { 6 } else { 5 })
     .arg("re_src", 11)
@@ -185,11 +192,12 @@ pub async fn block(ctx: &Ctx, input: &str, undo: bool) -> Result<Action> {
 }
 
 /// People both you and `input` follow.
-pub async fn shared(ctx: &Ctx, input: &str, page: &PageReq) -> Result<Page<User>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
-  let mid = user::mid(ctx, input).await?;
+pub async fn shared(api: &Api, input: &str, page: &PageReq) -> Result<Page<User>> {
+  api.require_login()?;
+  let mid = users::mid(api, input).await?;
   let pn = Pn::of(page, 50);
-  let data = api::get(ctx, SAME)
+  let data = api
+    .get(SAME)
     .arg("vmid", &mid)
     .arg("pn", pn.pn)
     .arg("ps", pn.ps)

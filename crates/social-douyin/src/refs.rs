@@ -6,8 +6,9 @@
 use std::sync::LazyLock;
 
 use regex::Regex;
-use social_core::{Ctx, Error, Result};
+use social_core::{Error, Result};
 
+use crate::api::Api;
 use crate::api::WWW;
 
 static URL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"https?://[^\s，。！？、]+").unwrap());
@@ -32,24 +33,24 @@ pub fn user_url(sec_uid: &str) -> String {
 }
 
 /// The first link of a shared text, short links followed to their target.
-async fn link(ctx: &Ctx, arg: &str) -> Result<Option<String>> {
+async fn link(api: &Api, arg: &str) -> Result<Option<String>> {
   let Some(m) = URL.find(arg) else {
     return Ok(None);
   };
   let url = m.as_str().to_owned();
   if url.contains("v.douyin.com") || url.contains("iesdouyin.com/share") && url.contains("/s/") {
-    return Ok(Some(ctx.http.final_url(&url).await?));
+    return Ok(Some(api.ctx.http.final_url(&url).await?));
   }
   Ok(Some(url))
 }
 
 /// The aweme id of a post reference.
-pub async fn aweme(ctx: &Ctx, arg: &str) -> Result<String> {
+pub async fn aweme(api: &Api, arg: &str) -> Result<String> {
   let arg = arg.trim();
   if DIGITS.is_match(arg) {
     return Ok(arg.to_owned());
   }
-  if let Some(url) = link(ctx, arg).await?
+  if let Some(url) = link(api, arg).await?
     && let Some(c) = AWEME_IN_URL.captures(&url)
   {
     return Ok(c[1].to_owned());
@@ -66,7 +67,7 @@ pub enum UserArg {
   Handle(String),
 }
 
-pub async fn user(ctx: &Ctx, arg: &str) -> Result<UserArg> {
+pub async fn user(api: &Api, arg: &str) -> Result<UserArg> {
   let arg = arg.trim();
   if let Some(handle) = arg.strip_prefix('@') {
     return Ok(UserArg::Handle(handle.to_owned()));
@@ -74,7 +75,7 @@ pub async fn user(ctx: &Ctx, arg: &str) -> Result<UserArg> {
   if arg.starts_with("MS4wLjABAAAA") {
     return Ok(UserArg::SecUid(arg.to_owned()));
   }
-  if let Some(url) = link(ctx, arg).await? {
+  if let Some(url) = link(api, arg).await? {
     if let Some(c) = USER_IN_URL.captures(&url) {
       return Ok(UserArg::SecUid(c[1].to_owned()));
     }

@@ -1,10 +1,11 @@
 //! Users: profiles, the logged-in account, their posts and liked posts,
 //! followers and following.
 
-use social_core::{Ctx, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt};
+use social_core::{Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt};
 
+use crate::api::Api;
 use crate::refs::{self, UserArg};
-use crate::{api, discover, parse};
+use crate::{discover, parse};
 
 const PROFILE: &str = "/aweme/v1/web/user/profile/other/";
 const SELF: &str = "/aweme/v1/web/user/profile/self/";
@@ -14,8 +15,8 @@ const FOLLOWERS: &str = "/aweme/v1/web/user/follower/list/";
 const FOLLOWING: &str = "/aweme/v1/web/user/following/list/";
 
 /// The `sec_uid` of a user reference; `@douyin_id` is looked up by search.
-pub async fn sec_uid(ctx: &Ctx, arg: &str) -> Result<String> {
-  match refs::user(ctx, arg).await? {
+pub async fn sec_uid(api: &Api, arg: &str) -> Result<String> {
+  match refs::user(api, arg).await? {
     UserArg::SecUid(s) => Ok(s),
     UserArg::Handle(handle) => {
       let q = Query {
@@ -23,7 +24,7 @@ pub async fn sec_uid(ctx: &Ctx, arg: &str) -> Result<String> {
         ..Query::default()
       };
       let found = discover::search_users(
-        ctx,
+        api,
         &q,
         &PageReq {
           cursor: None,
@@ -44,8 +45,9 @@ pub async fn sec_uid(ctx: &Ctx, arg: &str) -> Result<String> {
   }
 }
 
-async fn profile_raw(ctx: &Ctx, sec: &str) -> Result<Value> {
-  let v = api::get(ctx, PROFILE)
+async fn profile_raw(api: &Api, sec: &str) -> Result<Value> {
+  let v = api
+    .get(PROFILE)
     .arg("publish_video_strategy_type", "2")
     .arg("source", "channel_pc_web")
     .arg("sec_user_id", sec)
@@ -62,15 +64,16 @@ async fn profile_raw(ctx: &Ctx, sec: &str) -> Result<Value> {
   }
 }
 
-pub async fn profile(ctx: &Ctx, arg: &str) -> Result<User> {
-  let sec = sec_uid(ctx, arg).await?;
-  let v = profile_raw(ctx, &sec).await?;
+pub async fn profile(api: &Api, arg: &str) -> Result<User> {
+  let sec = sec_uid(api, arg).await?;
+  let v = profile_raw(api, &sec).await?;
   parse::user(&v).ok_or_else(|| Error::upstream("Douyin returned a user without a sec_uid"))
 }
 
-pub async fn whoami(ctx: &Ctx) -> Result<User> {
-  api::require_login(ctx)?;
-  let v = api::get(ctx, SELF)
+pub async fn whoami(api: &Api) -> Result<User> {
+  api.require_login()?;
+  let v = api
+    .get(SELF)
     .arg("publish_video_strategy_type", "2")
     .arg("source", "channel_pc_web")
     .arg("personal_center_strategy", "1")
@@ -83,9 +86,10 @@ pub async fn whoami(ctx: &Ctx) -> Result<User> {
 }
 
 /// A `max_cursor` listing of awemes (posts, likes).
-async fn awemes(ctx: &Ctx, path: &str, sec: &str, page: &PageReq, own: bool) -> Result<Page<Post>> {
+async fn awemes(api: &Api, path: &str, sec: &str, page: &PageReq, own: bool) -> Result<Page<Post>> {
   let cursor = page.number_or(0);
-  let mut call = api::get(ctx, path)
+  let mut call = api
+    .get(path)
     .arg("sec_user_id", sec)
     .arg("max_cursor", cursor)
     .arg("min_cursor", "0")
@@ -116,37 +120,38 @@ async fn awemes(ctx: &Ctx, path: &str, sec: &str, page: &PageReq, own: bool) -> 
   Ok(Page::new(items, next))
 }
 
-pub async fn posts(ctx: &Ctx, arg: &str, page: &PageReq) -> Result<Page<Post>> {
-  let sec = sec_uid(ctx, arg).await?;
-  awemes(ctx, POSTS, &sec, page, false).await
+pub async fn posts(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
+  let sec = sec_uid(api, arg).await?;
+  awemes(api, POSTS, &sec, page, false).await
 }
 
 /// Posts a user liked (public only when the user allows it).
-pub async fn likes(ctx: &Ctx, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+pub async fn likes(api: &Api, user: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
   let sec = match user {
-    Some(u) => sec_uid(ctx, u).await?,
-    None => whoami(ctx).await?.id,
+    Some(u) => sec_uid(api, u).await?,
+    None => whoami(api).await?.id,
   };
-  awemes(ctx, LIKES, &sec, page, user.is_none()).await
+  awemes(api, LIKES, &sec, page, user.is_none()).await
 }
 
 /// Followers or followings, paged by `max_time` (seconds; the first page
 /// asks with the current time, `0` would return an empty list).
 async fn relations(
-  ctx: &Ctx,
+  api: &Api,
   arg: &str,
   path: &str,
   key: &str,
   page: &PageReq,
 ) -> Result<Page<User>> {
-  let sec = sec_uid(ctx, arg).await?;
-  let uid = profile_raw(ctx, &sec)
+  let sec = sec_uid(api, arg).await?;
+  let uid = profile_raw(api, &sec)
     .await?
     .str("uid")
     .ok_or_else(|| Error::upstream("profile without uid"))?;
   let now = jiff::Timestamp::now().as_second().to_string();
   let max_time = page.cursor.clone().unwrap_or(now);
-  let mut call = api::get(ctx, path)
+  let mut call = api
+    .get(path)
     .arg("user_id", &uid)
     .arg("sec_user_id", &sec)
     .arg("offset", "0")
@@ -168,10 +173,10 @@ async fn relations(
   Ok(Page::new(items, next))
 }
 
-pub async fn followers(ctx: &Ctx, arg: &str, page: &PageReq) -> Result<Page<User>> {
-  relations(ctx, arg, FOLLOWERS, "followers", page).await
+pub async fn followers(api: &Api, arg: &str, page: &PageReq) -> Result<Page<User>> {
+  relations(api, arg, FOLLOWERS, "followers", page).await
 }
 
-pub async fn following(ctx: &Ctx, arg: &str, page: &PageReq) -> Result<Page<User>> {
-  relations(ctx, arg, FOLLOWING, "followings", page).await
+pub async fn following(api: &Api, arg: &str, page: &PageReq) -> Result<Page<User>> {
+  relations(api, arg, FOLLOWING, "followings", page).await
 }

@@ -4,12 +4,15 @@
 use std::collections::BTreeMap;
 
 use jiff::Timestamp;
+use social_core::chat;
 use social_core::text::from_secs;
 use social_core::{
-  Action, Collection, Ctx, Error, Message, Page, PageReq, Post, Result, User, Value, ValueExt, json,
+  Action, Collection, Error, Message, Page, PageReq, Post, Result, User, Value, ValueExt, json,
 };
 
-use crate::{account, api, parse, refs};
+use crate::api::Api;
+use crate::users;
+use crate::{parse, refs};
 
 const SESSIONS: &str = "https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions";
 const MESSAGES: &str = "https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs";
@@ -43,11 +46,12 @@ pub fn talker(chat: &str) -> Result<String> {
 }
 
 /// Names and avatars of user ids (one request for all).
-async fn cards(ctx: &Ctx, mids: &[String]) -> BTreeMap<String, Value> {
+async fn cards(api: &Api, mids: &[String]) -> BTreeMap<String, Value> {
   if mids.is_empty() {
     return BTreeMap::new();
   }
-  let data = api::get(ctx, CARDS)
+  let data = api
+    .get(CARDS)
     .arg("uids", mids.join(","))
     .arg("build", 0)
     .arg("mobi_app", "web")
@@ -63,9 +67,10 @@ async fn cards(ctx: &Ctx, mids: &[String]) -> BTreeMap<String, Value> {
 }
 
 /// Private conversations, most recent first; the cursor is the last `session_ts`.
-pub async fn chats(ctx: &Ctx, page: &PageReq) -> Result<Page<Collection>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
-  let mut call = api::get(ctx, SESSIONS)
+pub async fn chats(api: &Api, page: &PageReq) -> Result<Page<Collection>> {
+  api.require_login()?;
+  let mut call = api
+    .get(SESSIONS)
     .arg("session_type", 1)
     .arg("group_fold", 1)
     .arg("unfollow_fold", 0)
@@ -82,7 +87,7 @@ pub async fn chats(ctx: &Ctx, page: &PageReq) -> Result<Page<Collection>> {
     .filter(|s| s.u64("session_type") == Some(1))
     .filter_map(|s| s.str("talker_id"))
     .collect();
-  let cards = cards(ctx, &people).await;
+  let cards = cards(api, &people).await;
   let items: Vec<Collection> = sessions
     .iter()
     .map(|s| session(s, cards.get(&s.str("talker_id").unwrap_or_default())))
@@ -93,14 +98,14 @@ pub async fn chats(ctx: &Ctx, page: &PageReq) -> Result<Page<Collection>> {
   Ok(Page::new(items, next))
 }
 
-fn session(s: &Value, card: Option<&Value>) -> Collection {
-  let talker = s.str("talker_id").unwrap_or_default();
-  let group = s.u64("session_type") == Some(2);
+fn session(v: &Value, card: Option<&Value>) -> Collection {
+  let talker = v.str("talker_id").unwrap_or_default();
+  let group = v.u64("session_type") == Some(2);
   let name = card
     .and_then(|c| c.str("name"))
-    .or_else(|| s.str("group_name"))
+    .or_else(|| v.str("group_name"))
     .unwrap_or_else(|| talker.clone());
-  let last = s.at("last_msg");
+  let last = v.at("last_msg");
   let mut c = Collection {
     id: if group {
       format!("group:{talker}")
@@ -111,16 +116,16 @@ fn session(s: &Value, card: Option<&Value>) -> Collection {
     name,
     description: text(last.u64("msg_type"), last.str("content").as_deref()),
     url: (!group).then(|| chat_url(&talker)),
-    raw: Some(s.clone()),
+    raw: Some(v.clone()),
     ..Collection::default()
   };
-  if let Some(n) = s.u64("unread_count").filter(|n| *n > 0) {
+  if let Some(n) = v.u64("unread_count").filter(|n| *n > 0) {
     c.extra.insert("unread".into(), json!(n));
   }
   if let Some(at) = last.i64("timestamp").and_then(from_secs) {
     c.extra.insert("last_message_at".into(), json!(at));
   }
-  if s.u64("is_follow") == Some(1) {
+  if v.u64("is_follow") == Some(1) {
     c.extra.insert("following".into(), json!(true));
   }
   c
@@ -146,10 +151,11 @@ fn text(kind: Option<u64>, content: Option<&str>) -> Option<String> {
 }
 
 /// Messages of one conversation, newest first; the cursor is the oldest seqno seen.
-pub async fn messages(ctx: &Ctx, chat: &str, page: &PageReq) -> Result<Page<Post>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
+pub async fn messages(api: &Api, chat: &str, page: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
   let talker = talker(chat)?;
-  let mut call = api::get(ctx, MESSAGES)
+  let mut call = api
+    .get(MESSAGES)
     .arg("talker_id", &talker)
     .arg("session_type", 1)
     .arg("size", page.size_within(50))
@@ -161,12 +167,12 @@ pub async fn messages(ctx: &Ctx, chat: &str, page: &PageReq) -> Result<Page<Post
     call = call.arg("end_seqno", end);
   }
   let data = call.wbi().send().await?;
-  let me = account::my_mid(ctx).await.unwrap_or_default();
+  let me = users::my_mid(api).await.unwrap_or_default();
   let senders: Vec<String> = [talker.clone(), me.clone()]
     .into_iter()
     .filter(|m| !m.is_empty())
     .collect();
-  let cards = cards(ctx, &senders).await;
+  let cards = cards(api, &senders).await;
   let mut posts: Vec<Post> = data
     .list("messages")
     .iter()
@@ -180,14 +186,14 @@ pub async fn messages(ctx: &Ctx, chat: &str, page: &PageReq) -> Result<Page<Post
   Ok(Page::new(posts, next))
 }
 
-fn message(m: &Value, talker: &str, cards: &BTreeMap<String, Value>) -> Post {
-  let sender = m.str("sender_uid").unwrap_or_default();
+fn message(v: &Value, talker: &str, cards: &BTreeMap<String, Value>) -> Post {
+  let sender = v.str("sender_uid").unwrap_or_default();
   let card = cards.get(&sender);
-  let kind = m.u64("msg_type");
+  let kind = v.u64("msg_type");
   let mut post = Post {
-    id: format!("{talker}/{}", m.str("msg_seqno").unwrap_or_default()),
+    id: chat::message_id(talker, &v.str("msg_seqno").unwrap_or_default()),
     kind: "message".into(),
-    text: text(kind, m.str("content").as_deref()),
+    text: text(kind, v.str("content").as_deref()),
     author: Some(User {
       url: Some(refs::space_url(&sender)),
       name: card
@@ -197,12 +203,12 @@ fn message(m: &Value, talker: &str, cards: &BTreeMap<String, Value>) -> Post {
       id: sender,
       ..User::default()
     }),
-    created_at: m.i64("timestamp").and_then(from_secs),
-    raw: Some(m.clone()),
+    created_at: v.i64("timestamp").and_then(from_secs),
+    raw: Some(v.clone()),
     ..Post::default()
   };
   if kind == Some(2)
-    && let Some(url) = m
+    && let Some(url) = v
       .str("content")
       .and_then(|c| serde_json::from_str::<Value>(&c).ok())
       .and_then(|c| c.str("url"))
@@ -218,7 +224,7 @@ fn message(m: &Value, talker: &str, cards: &BTreeMap<String, Value>) -> Post {
 }
 
 /// Send a text message (attachments are not supported).
-pub async fn send(ctx: &Ctx, chat: &str, msg: &Message) -> Result<Action> {
+pub async fn send(api: &Api, chat: &str, msg: &Message) -> Result<Action> {
   if !msg.files.is_empty() {
     return Err(Error::unsupported(
       "send --attach (Bilibili private messages)",
@@ -230,10 +236,11 @@ pub async fn send(ctx: &Ctx, chat: &str, msg: &Message) -> Result<Action> {
     ));
   }
   let receiver = talker(chat)?;
-  let me = account::my_mid(ctx).await?;
+  let me = users::my_mid(api).await?;
   let dev = device_id();
   let content = json!({ "content": msg.text }).to_string();
-  let data = api::post(ctx, SEND)
+  let data = api
+    .post(SEND)
     .arg("msg[sender_uid]", &me)
     .arg("msg[receiver_id]", &receiver)
     .arg("msg[receiver_type]", 1)
@@ -254,7 +261,7 @@ pub async fn send(ctx: &Ctx, chat: &str, msg: &Message) -> Result<Action> {
     .await?;
   let mut action = Action::done("send", format!("dm:{receiver}")).with_url(chat_url(&receiver));
   if let Some(key) = data.str("msg_key") {
-    action = action.with_id(format!("{receiver}/{key}"));
+    action = action.with_id(chat::message_id(&receiver, &key));
   }
   Ok(action)
 }
@@ -274,8 +281,9 @@ fn device_id() -> String {
 }
 
 /// Unread private messages: from people you follow, others, and groups.
-pub async fn unread(ctx: &Ctx) -> Result<BTreeMap<String, u64>> {
-  let data = api::get(ctx, UNREAD)
+pub async fn unread(api: &Api) -> Result<BTreeMap<String, u64>> {
+  let data = api
+    .get(UNREAD)
     .arg("unread_type", 0)
     .arg("show_dustbin", 1)
     .arg("build", 0)

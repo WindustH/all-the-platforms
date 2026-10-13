@@ -2,11 +2,13 @@
 //! folders and collections (合集) you saved from others, and cleaning out
 //! videos that became unavailable.
 
-use social_core::{Action, Collection, Ctx, Page, PageReq, Result, ValueExt, json};
+use social_core::{Action, Collection, Page, PageReq, Result, ValueExt, json};
 
-use crate::page::Pn;
+use crate::api::Api;
+use crate::paging::Pn;
+use crate::parse;
 use crate::refs::{self, space_url};
-use crate::{account, api, parse};
+use crate::users;
 
 const ADD: &str = "https://api.bilibili.com/x/v3/fav/folder/add";
 const EDIT: &str = "https://api.bilibili.com/x/v3/fav/folder/edit";
@@ -18,8 +20,9 @@ const FAV_SEASON: &str = "https://api.bilibili.com/x/v3/fav/season/fav";
 const UNFAV_SEASON: &str = "https://api.bilibili.com/x/v3/fav/season/unfav";
 const CLEAN: &str = "https://api.bilibili.com/x/v3/fav/resource/clean";
 
-pub async fn create(ctx: &Ctx, title: &str, intro: &str, private: bool) -> Result<Action> {
-  let data = api::post(ctx, ADD)
+pub async fn create(api: &Api, title: &str, intro: &str, private: bool) -> Result<Action> {
+  let data = api
+    .post(ADD)
     .arg("title", title)
     .arg("intro", intro)
     .arg("privacy", u8::from(private))
@@ -27,7 +30,7 @@ pub async fn create(ctx: &Ctx, title: &str, intro: &str, private: bool) -> Resul
     .send()
     .await?;
   let id = data.str("id").unwrap_or_default();
-  let mid = account::my_mid(ctx).await.unwrap_or_default();
+  let mid = users::my_mid(api).await.unwrap_or_default();
   Ok(
     Action::done("folder-create", title)
       .with_id(&id)
@@ -37,19 +40,21 @@ pub async fn create(ctx: &Ctx, title: &str, intro: &str, private: bool) -> Resul
 
 /// Rename a folder or change its description / privacy (unset values stay).
 pub async fn edit(
-  ctx: &Ctx,
+  api: &Api,
   folder: &str,
   title: Option<&str>,
   intro: Option<&str>,
   private: Option<bool>,
 ) -> Result<Action> {
   let id = refs::folder(folder)?;
-  let info = api::get(ctx, "https://api.bilibili.com/x/v3/fav/folder/info")
+  let info = api
+    .get("https://api.bilibili.com/x/v3/fav/folder/info")
     .arg("media_id", id)
     .send()
     .await?;
   let current_private = info.u64("attr").is_some_and(|a| a & 1 == 1);
-  api::post(ctx, EDIT)
+  api
+    .post(EDIT)
     .arg("media_id", id)
     .arg(
       "title",
@@ -72,9 +77,10 @@ pub async fn edit(
   Ok(Action::done("folder-edit", id.to_string()))
 }
 
-pub async fn delete(ctx: &Ctx, folder: &str) -> Result<Action> {
+pub async fn delete(api: &Api, folder: &str) -> Result<Action> {
   let id = refs::folder(folder)?;
-  api::post(ctx, DEL)
+  api
+    .post(DEL)
     .arg("media_ids", id)
     .arg("platform", "web")
     .send()
@@ -83,17 +89,18 @@ pub async fn delete(ctx: &Ctx, folder: &str) -> Result<Action> {
 }
 
 /// Drop the videos that became unavailable from a folder.
-pub async fn clean(ctx: &Ctx, folder: &str) -> Result<Action> {
+pub async fn clean(api: &Api, folder: &str) -> Result<Action> {
   let id = refs::folder(folder)?;
-  api::post(ctx, CLEAN).arg("media_id", id).send().await?;
+  api.post(CLEAN).arg("media_id", id).send().await?;
   Ok(Action::done("folder-clean", id.to_string()))
 }
 
 /// Folders and collections you saved from other people.
-pub async fn collected(ctx: &Ctx, page: &PageReq) -> Result<Page<Collection>> {
-  let mid = account::my_mid(ctx).await?;
+pub async fn collected(api: &Api, page: &PageReq) -> Result<Page<Collection>> {
+  let mid = users::my_mid(api).await?;
   let pn = Pn::of(page, 20);
-  let data = api::get(ctx, COLLECTED)
+  let data = api
+    .get(COLLECTED)
     .arg("pn", pn.pn)
     .arg("ps", pn.ps)
     .arg("up_mid", &mid)
@@ -122,7 +129,7 @@ pub async fn collected(ctx: &Ctx, page: &PageReq) -> Result<Page<Collection>> {
 }
 
 /// Save (or with `undo` drop) someone's folder or collection.
-pub async fn save(ctx: &Ctx, target: &str, undo: bool) -> Result<Action> {
+pub async fn save(api: &Api, target: &str, undo: bool) -> Result<Action> {
   let (url, key, id) = match refs::list(target) {
     Ok((_, id, "season")) => (
       if undo { UNFAV_SEASON } else { FAV_SEASON },
@@ -135,7 +142,8 @@ pub async fn save(ctx: &Ctx, target: &str, undo: bool) -> Result<Action> {
       refs::folder(target)?.to_string(),
     ),
   };
-  api::post(ctx, url)
+  api
+    .post(url)
     .arg(key, &id)
     .arg("platform", "web")
     .send()

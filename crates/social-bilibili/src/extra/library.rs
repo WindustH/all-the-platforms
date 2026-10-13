@@ -2,13 +2,33 @@
 //! follow groups and the blacklist.
 
 use social_core::cli::PageArgs;
-use social_core::{Ctx, Data, Result};
+use social_core::{Data, Result};
 
 use super::{confirm, video_ref};
-use crate::{folder, history, relation};
+use crate::api::Api;
+use crate::{folders, history, relations};
 
 #[derive(Debug, clap::Subcommand)]
-pub enum Library {
+pub enum LibraryCommand {
+  #[command(flatten)]
+  History(HistoryCommand),
+  #[command(flatten)]
+  Folders(FolderCommand),
+  #[command(flatten)]
+  Follows(FollowCommand),
+}
+
+pub async fn run(api: &Api, command: LibraryCommand) -> Result<Data> {
+  match command {
+    LibraryCommand::History(c) => run_history(api, c).await,
+    LibraryCommand::Folders(c) => run_folders(api, c).await,
+    LibraryCommand::Follows(c) => run_follows(api, c).await,
+  }
+}
+
+/// Watch history and watch later.
+#[derive(Debug, clap::Subcommand)]
+pub enum HistoryCommand {
   /// Search your watch history
   HistorySearch {
     keyword: String,
@@ -38,6 +58,42 @@ pub enum Library {
     #[arg(short, long)]
     yes: bool,
   },
+}
+
+async fn run_history(api: &Api, command: HistoryCommand) -> Result<Data> {
+  use HistoryCommand as L;
+  Ok(match command {
+    L::HistorySearch { keyword, page } => Data::Posts(
+      page
+        .collect_dated(async |r| history::search(api, &keyword, &r).await)
+        .await?,
+    ),
+    L::HistoryDelete { video } => {
+      Data::Action(history::delete(api, &video_ref(api, &video).await?).await?)
+    }
+    L::HistoryClear { yes } => {
+      confirm(yes, "erase your whole watch history")?;
+      Data::Action(history::clear(api).await?)
+    }
+    L::HistoryPause { undo } => Data::Action(history::pause(api, undo).await?),
+    L::LaterAdd { video } => {
+      Data::Action(history::later_add(api, &video_ref(api, &video).await?).await?)
+    }
+    L::LaterRemove { video } => {
+      Data::Action(history::later_remove(api, &video_ref(api, &video).await?).await?)
+    }
+    L::LaterClear { watched, yes } => {
+      if !watched {
+        confirm(yes, "empty your whole watch-later list")?;
+      }
+      Data::Action(history::later_clear(api, watched).await?)
+    }
+  })
+}
+
+/// Favorites folders, and folders saved from others.
+#[derive(Debug, clap::Subcommand)]
+pub enum FolderCommand {
   /// Create a favorites folder
   FolderCreate {
     title: String,
@@ -77,6 +133,49 @@ pub enum Library {
     #[arg(long)]
     undo: bool,
   },
+}
+
+async fn run_folders(api: &Api, command: FolderCommand) -> Result<Data> {
+  use FolderCommand as L;
+  Ok(match command {
+    L::FolderCreate {
+      title,
+      intro,
+      private,
+    } => Data::Action(folders::create(api, &title, &intro, private).await?),
+    L::FolderEdit {
+      folder,
+      title,
+      intro,
+      private,
+      public,
+    } => {
+      let folder = api.ctx.collection_ref(&folder)?;
+      let privacy = (private || public).then_some(private);
+      Data::Action(folders::edit(api, &folder, title.as_deref(), intro.as_deref(), privacy).await?)
+    }
+    L::FolderDelete { folder, yes } => {
+      let folder = api.ctx.collection_ref(&folder)?;
+      confirm(yes, &format!("delete folder {folder} and its contents"))?;
+      Data::Action(folders::delete(api, &folder).await?)
+    }
+    L::FolderClean { folder } => {
+      Data::Action(folders::clean(api, &api.ctx.collection_ref(&folder)?).await?)
+    }
+    L::SavedFolders { page } => Data::Collections(
+      page
+        .collect(async |r| folders::collected(api, &r).await)
+        .await?,
+    ),
+    L::Save { folder, undo } => {
+      Data::Action(folders::save(api, &api.ctx.collection_ref(&folder)?, undo).await?)
+    }
+  })
+}
+
+/// Follow groups, special follows and the blacklist.
+#[derive(Debug, clap::Subcommand)]
+pub enum FollowCommand {
   /// Your follow groups (分组)
   Groups,
   /// The people in one of your follow groups (id or exact name)
@@ -127,112 +226,55 @@ pub enum Library {
   },
 }
 
-pub async fn run(ctx: &Ctx, command: Library) -> Result<Data> {
-  use Library as L;
+async fn run_follows(api: &Api, command: FollowCommand) -> Result<Data> {
+  use FollowCommand as L;
   Ok(match command {
-    L::HistorySearch { keyword, page } => Data::Posts(
-      page
-        .collect_dated(async |r| history::search(ctx, &keyword, &r).await)
-        .await?,
-    ),
-    L::HistoryDelete { video } => {
-      Data::Action(history::delete(ctx, &video_ref(ctx, &video).await?).await?)
-    }
-    L::HistoryClear { yes } => {
-      confirm(yes, "erase your whole watch history")?;
-      Data::Action(history::clear(ctx).await?)
-    }
-    L::HistoryPause { undo } => Data::Action(history::pause(ctx, undo).await?),
-    L::LaterAdd { video } => {
-      Data::Action(history::later_add(ctx, &video_ref(ctx, &video).await?).await?)
-    }
-    L::LaterRemove { video } => {
-      Data::Action(history::later_remove(ctx, &video_ref(ctx, &video).await?).await?)
-    }
-    L::LaterClear { watched, yes } => {
-      if !watched {
-        confirm(yes, "empty your whole watch-later list")?;
-      }
-      Data::Action(history::later_clear(ctx, watched).await?)
-    }
-    L::FolderCreate {
-      title,
-      intro,
-      private,
-    } => Data::Action(folder::create(ctx, &title, &intro, private).await?),
-    L::FolderEdit {
-      folder,
-      title,
-      intro,
-      private,
-      public,
-    } => {
-      let folder = ctx.collection_ref(&folder)?;
-      let privacy = (private || public).then_some(private);
-      Data::Action(folder::edit(ctx, &folder, title.as_deref(), intro.as_deref(), privacy).await?)
-    }
-    L::FolderDelete { folder, yes } => {
-      let folder = ctx.collection_ref(&folder)?;
-      confirm(yes, &format!("delete folder {folder} and its contents"))?;
-      Data::Action(folder::delete(ctx, &folder).await?)
-    }
-    L::FolderClean { folder } => {
-      Data::Action(folder::clean(ctx, &ctx.collection_ref(&folder)?).await?)
-    }
-    L::SavedFolders { page } => Data::Collections(
-      page
-        .collect(async |r| folder::collected(ctx, &r).await)
-        .await?,
-    ),
-    L::Save { folder, undo } => {
-      Data::Action(folder::save(ctx, &ctx.collection_ref(&folder)?, undo).await?)
-    }
-    L::Groups => Data::Collections(relation::groups(ctx).await?),
+    L::Groups => Data::Collections(relations::groups(api).await?),
     L::Group { group, page } => {
-      let group = ctx.collection_ref(&group)?;
+      let group = api.ctx.collection_ref(&group)?;
       Data::Users(
         page
-          .collect(async |r| relation::members(ctx, &group, &r).await)
+          .collect(async |r| relations::members(api, &group, &r).await)
           .await?,
       )
     }
-    L::GroupCreate { name } => Data::Action(relation::create_group(ctx, &name).await?),
+    L::GroupCreate { name } => Data::Action(relations::create_group(api, &name).await?),
     L::GroupRename { group, name } => {
-      let group = ctx.collection_ref(&group)?;
-      Data::Action(relation::rename_group(ctx, &group, &name).await?)
+      let group = api.ctx.collection_ref(&group)?;
+      Data::Action(relations::rename_group(api, &group, &name).await?)
     }
     L::GroupDelete { group, yes } => {
-      let group = ctx.collection_ref(&group)?;
+      let group = api.ctx.collection_ref(&group)?;
       confirm(yes, &format!("delete follow group {group}"))?;
-      Data::Action(relation::delete_group(ctx, &group).await?)
+      Data::Action(relations::delete_group(api, &group).await?)
     }
     L::GroupAssign { users, groups } => {
       let users = users
         .iter()
-        .map(|u| ctx.user_ref(u))
+        .map(|u| api.ctx.user_ref(u))
         .collect::<Result<Vec<_>>>()?;
       let groups = groups
         .iter()
-        .map(|g| ctx.collection_ref(g))
+        .map(|g| api.ctx.collection_ref(g))
         .collect::<Result<Vec<_>>>()?;
-      Data::Action(relation::assign(ctx, &users, &groups).await?)
+      Data::Action(relations::assign(api, &users, &groups).await?)
     }
     L::Special { user, undo } => {
-      Data::Action(relation::special(ctx, &ctx.user_ref(&user)?, undo).await?)
+      Data::Action(relations::special(api, &api.ctx.user_ref(&user)?, undo).await?)
     }
     L::Blacklist { page } => Data::Users(
       page
-        .collect(async |r| relation::blacklist(ctx, &r).await)
+        .collect(async |r| relations::blacklist(api, &r).await)
         .await?,
     ),
     L::Block { user, undo } => {
-      Data::Action(relation::block(ctx, &ctx.user_ref(&user)?, undo).await?)
+      Data::Action(relations::block(api, &api.ctx.user_ref(&user)?, undo).await?)
     }
     L::SharedFollowing { user, page } => {
-      let user = ctx.user_ref(&user)?;
+      let user = api.ctx.user_ref(&user)?;
       Data::Users(
         page
-          .collect(async |r| relation::shared(ctx, &user, &r).await)
+          .collect(async |r| relations::shared(api, &user, &r).await)
           .await?,
       )
     }

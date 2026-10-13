@@ -29,7 +29,37 @@ pub fn is_images(v: &Value) -> bool {
 pub fn aweme(v: &Value) -> Option<Post> {
   let id = v.str("aweme_id")?;
   let images = is_images(v);
-  let stats = v.at("statistics");
+  let tags = v
+    .list("text_extra")
+    .iter()
+    .filter_map(|t| t.str("hashtag_name"))
+    .collect();
+  let desc = v.first_str(&["desc", "caption"]);
+  let title = v
+    .first_str(&["item_title", "preview_title"])
+    .filter(|t| Some(t) != desc.as_ref());
+  Some(Post {
+    url: Some(if images {
+      note_url(&id)
+    } else {
+      video_url(&id)
+    }),
+    kind: if images { "note" } else { "video" }.into(),
+    title,
+    text: desc,
+    author: v.at("author").as_object().and(user(v.at("author"))),
+    created_at: v.i64("create_time").and_then(from_secs),
+    metrics: aweme_metrics(v.at("statistics")),
+    media: media(v),
+    tags,
+    extra: aweme_extra(v),
+    raw: Some(v.clone()),
+    id,
+    ..Post::default()
+  })
+}
+
+fn aweme_metrics(stats: &Value) -> Metrics {
   let mut metrics = Metrics {
     views: stats.count("play_count").filter(|n| *n > 0),
     likes: stats.count("digg_count"),
@@ -44,60 +74,27 @@ pub fn aweme(v: &Value) -> Option<Post> {
   if let Some(n) = stats.count("admire_count").filter(|n| *n > 0) {
     metrics.other.insert("admires".into(), n);
   }
-  let tags = v
-    .list("text_extra")
-    .iter()
-    .filter_map(|t| t.str("hashtag_name"))
-    .collect();
-  let desc = v.first_str(&["desc", "caption"]);
-  let title = v
-    .first_str(&["item_title", "preview_title"])
-    .filter(|t| Some(t) != desc.as_ref());
+  metrics
+}
+
+/// Type, location, pinned flag, mix, music, duration and share link.
+fn aweme_extra(v: &Value) -> Extra {
   let mut extra = Extra::new();
+  let text = |path: &str| v.str(path).map(Value::from);
   put(&mut extra, "aweme_type", v.at("aweme_type").clone().into());
-  put(&mut extra, "location", v.str("ip_label").map(Value::from));
+  put(&mut extra, "location", text("ip_label"));
   put(&mut extra, "pinned", v.at("is_top").clone().into());
-  put(
-    &mut extra,
-    "mix_id",
-    v.str("mix_info.mix_id").map(Value::from),
-  );
-  put(
-    &mut extra,
-    "mix",
-    v.str("mix_info.mix_name").map(Value::from),
-  );
-  put(&mut extra, "music", v.str("music.title").map(Value::from));
-  put(
-    &mut extra,
-    "music_id",
-    v.str("music.id_str").map(Value::from),
-  );
+  put(&mut extra, "mix_id", text("mix_info.mix_id"));
+  put(&mut extra, "mix", text("mix_info.mix_name"));
+  put(&mut extra, "music", text("music.title"));
+  put(&mut extra, "music_id", text("music.id_str"));
   put(
     &mut extra,
     "duration_ms",
     v.at("video.duration").clone().into(),
   );
-  put(&mut extra, "share_url", v.str("share_url").map(Value::from));
-  Some(Post {
-    url: Some(if images {
-      note_url(&id)
-    } else {
-      video_url(&id)
-    }),
-    kind: if images { "note" } else { "video" }.into(),
-    title,
-    text: desc,
-    author: v.at("author").as_object().and(user(v.at("author"))),
-    created_at: v.i64("create_time").and_then(from_secs),
-    metrics,
-    media: media(v),
-    tags,
-    extra,
-    raw: Some(v.clone()),
-    id,
-    ..Post::default()
-  })
+  put(&mut extra, "share_url", text("share_url"));
+  extra
 }
 
 /// Downloadable media: every image (and its live-photo clip) of an image

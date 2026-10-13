@@ -4,18 +4,20 @@
 //! browser `UIFID` are refused there; the share page's own API
 //! (`iesdouyin.com/web/api/v2/aweme/iteminfo/`) answers them instead.
 
-use social_core::{Ctx, Error, ErrorCode, Media, Page, PageReq, Post, Result, Value, ValueExt};
+use social_core::{Error, ErrorCode, Media, Page, PageReq, Post, Result, Value, ValueExt};
 
-use crate::{api, parse, refs};
+use crate::api::Api;
+use crate::{parse, refs};
 
 const DETAIL: &str = "/aweme/v1/web/aweme/detail/";
 const RELATED: &str = "/aweme/v1/web/aweme/related/";
 const ITEMINFO: &str = "/web/api/v2/aweme/iteminfo/";
 
 /// The raw aweme of a post reference.
-pub async fn detail(ctx: &Ctx, arg: &str) -> Result<Value> {
-  let id = refs::aweme(ctx, arg).await?;
-  let web = api::get(ctx, DETAIL)
+pub async fn detail(api: &Api, arg: &str) -> Result<Value> {
+  let id = refs::aweme(api, arg).await?;
+  let web = api
+    .get(DETAIL)
     .arg("aweme_id", &id)
     .arg("version_code", "190500")
     .arg("version_name", "19.5.0")
@@ -31,7 +33,7 @@ pub async fn detail(ctx: &Ctx, arg: &str) -> Result<Value> {
         ErrorCode::VerificationRequired | ErrorCode::PermissionDenied
       ) =>
     {
-      share_page(ctx, &id).await.map_err(|_| e)
+      share_page(api, &id).await.map_err(|_| e)
     }
     Err(e) => Err(e),
   }
@@ -50,8 +52,9 @@ fn missing(v: &Value, id: &str) -> Error {
 }
 
 /// The aweme as the share page loads it (`iesdouyin.com/web/api/v2/`).
-async fn share_page(ctx: &Ctx, id: &str) -> Result<Value> {
-  let v = api::get(ctx, ITEMINFO)
+async fn share_page(api: &Api, id: &str) -> Result<Value> {
+  let v = api
+    .get(ITEMINFO)
     .bare()
     .arg("reflow_source", "reflow_page")
     .arg("use_new_select_scope", "0")
@@ -66,14 +69,14 @@ async fn share_page(ctx: &Ctx, id: &str) -> Result<Value> {
     .ok_or_else(|| Error::not_found(format!("post {id} is not available")))
 }
 
-pub async fn read(ctx: &Ctx, arg: &str) -> Result<Post> {
-  let v = detail(ctx, arg).await?;
+pub async fn read(api: &Api, arg: &str) -> Result<Post> {
+  let v = detail(api, arg).await?;
   parse::aweme(&v).ok_or_else(|| Error::upstream("Douyin returned a post without an id"))
 }
 
 /// The post and its media: the video (or every image), or the music alone.
-pub async fn media(ctx: &Ctx, arg: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
-  let v = detail(ctx, arg).await?;
+pub async fn media(api: &Api, arg: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {
+  let v = detail(api, arg).await?;
   let post =
     parse::aweme(&v).ok_or_else(|| Error::upstream("Douyin returned a post without an id"))?;
   let media = if audio_only {
@@ -93,9 +96,10 @@ pub async fn media(ctx: &Ctx, arg: &str, audio_only: bool) -> Result<(Post, Vec<
 }
 
 /// Posts Douyin recommends next to this one.
-pub async fn related(ctx: &Ctx, arg: &str, page: &PageReq) -> Result<Page<Post>> {
-  let id = refs::aweme(ctx, arg).await?;
-  let v = api::get(ctx, RELATED)
+pub async fn related(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
+  let id = refs::aweme(api, arg).await?;
+  let v = api
+    .get(RELATED)
     .arg("aweme_id", &id)
     .arg("count", page.size_within(20))
     .arg("filterGids", "")

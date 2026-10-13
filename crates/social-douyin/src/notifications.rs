@@ -1,8 +1,9 @@
 //! The notice center (互动消息) of the logged-in account.
 
-use social_core::{Ctx, Error, Notification, Page, PageReq, Result, ValueExt};
+use social_core::{Error, Notification, Page, PageReq, Result, ValueExt};
 
-use crate::{api, parse};
+use crate::api::Api;
+use crate::parse;
 
 const NOTICE: &str = "/aweme/v1/web/notice/";
 
@@ -22,14 +23,15 @@ fn group(kind: Option<&str>) -> Result<&'static str> {
 }
 
 /// Pages continue from the `min_time` / `max_time` pair the last one returned.
-pub async fn list(ctx: &Ctx, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
-  api::require_login(ctx)?;
+pub async fn list(api: &Api, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
+  api.require_login()?;
   let (min, max) = page
     .cursor
     .as_deref()
     .and_then(|c| c.split_once('-'))
     .unwrap_or(("0", "0"));
-  let v = api::get(ctx, NOTICE)
+  let v = api
+    .get(NOTICE)
     .arg("is_new_notice", "1")
     .arg("is_mark_read", "1")
     .arg("notice_group", group(kind)?)

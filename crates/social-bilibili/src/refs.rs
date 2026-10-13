@@ -5,8 +5,9 @@
 
 use std::sync::LazyLock;
 
+use crate::api::Api;
 use regex::Regex;
-use social_core::{Ctx, Error, Result};
+use social_core::{Error, Result};
 
 pub const VIDEO_URL: &str = "https://www.bilibili.com/video/";
 pub const DYNAMIC_URL: &str = "https://t.bilibili.com/";
@@ -78,7 +79,7 @@ pub enum PostRef {
 }
 
 /// Parse a post argument; b23.tv short links are resolved over HTTP.
-pub async fn post(ctx: &Ctx, input: &str) -> Result<PostRef> {
+pub async fn post(api: &Api, input: &str) -> Result<PostRef> {
   let input = input.trim();
   if is_short_link(input) {
     let url = if input.starts_with("http") {
@@ -86,7 +87,7 @@ pub async fn post(ctx: &Ctx, input: &str) -> Result<PostRef> {
     } else {
       format!("https://{input}")
     };
-    let target = ctx.http.final_url(&url).await?;
+    let target = api.ctx.http.final_url(&url).await?;
     return parse_post(&target)
       .ok_or_else(|| Error::input(format!("short link did not lead to a post: {target}")));
   }
@@ -98,8 +99,8 @@ pub async fn post(ctx: &Ctx, input: &str) -> Result<PostRef> {
 }
 
 /// A post argument that must be a video.
-pub async fn video(ctx: &Ctx, input: &str) -> Result<Video> {
-  match post(ctx, input).await? {
+pub async fn video(api: &Api, input: &str) -> Result<Video> {
+  match post(api, input).await? {
     PostRef::Video(v) => Ok(v),
     _ => Err(Error::input(format!("not a video: {input}"))),
   }

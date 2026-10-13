@@ -1,205 +1,285 @@
-//! Live rooms (直播): room info, the rooms you follow, recent danmaku,
-//! sending danmaku, and the live danmaku stream for `listen` ([`stream`]).
+//! The live danmaku stream (`listen live:ROOM`): Bilibili's broadcast
+//! websocket. Packets have a 16-byte header (length, header length, protocol
+//! version, operation, sequence); operation 7 authenticates with the token
+//! of `getDanmuInfo`, 2 is the 30-second heartbeat, 5 carries commands as
+//! JSON, zlib-compressed batches under protocol version 2.
 
-use jiff::Timestamp;
-use social_core::http::Part;
+use std::io::Read;
+use std::time::Duration;
+
+use flate2::read::ZlibDecoder;
+use social_core::chat;
+use social_core::output::Stream;
+use social_core::socket::{Frame, Socket};
 use social_core::text::from_secs;
-use social_core::{Action, Ctx, Error, Page, PageReq, Post, Result, User, Value, ValueExt, json};
+use social_core::{Error, Post, Result, Value, ValueExt, json};
 
-use crate::refs::{self, room_url};
-use crate::{api, parse, user};
+use crate::api::Api;
+use crate::rooms::{self, danmaku_post};
+use crate::users;
 
-const INFO: &str = "https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom";
-const OF_USER: &str = "https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld";
-const FOLLOWING: &str = "https://api.live.bilibili.com/xlive/web-ucenter/user/following";
-const HISTORY: &str = "https://api.live.bilibili.com/xlive/web-room/v1/dM/gethistory";
-const SEND: &str = "https://api.live.bilibili.com/msg/send";
+const DANMU_INFO: &str = "https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo";
+const HEARTBEAT: Duration = Duration::from_secs(30);
 
-/// A room id from a room link, `live:ID` or a bare number, or the room of a
-/// user (`uid:MID`, `@name`, space link).
-pub async fn room_id(ctx: &Ctx, input: &str) -> Result<u64> {
-  if let Some(id) = refs::room(input).or_else(|| input.trim().parse().ok()) {
-    return Ok(id);
+const OP_HEARTBEAT: u32 = 2;
+const OP_MESSAGE: u32 = 5;
+const OP_AUTH: u32 = 7;
+
+/// Follow every room in `rooms` until the connections end.
+pub async fn listen(api: &Api, rooms: &[String], out: &Stream) -> Result<()> {
+  if rooms.is_empty() {
+    return Err(Error::input(
+      "give the live rooms to follow: `listen live:ROOM` or a live.bilibili.com link",
+    ));
   }
-  let mid = user::mid(ctx, input).await?;
-  let data = api::get(ctx, OF_USER).arg("mid", &mid).send().await?;
-  data
-    .u64("roomid")
-    .filter(|id| *id > 0)
-    .ok_or_else(|| Error::not_found(format!("user {mid} has no live room")))
+  let mut tasks = Vec::new();
+  for r in rooms {
+    let room = rooms::room_id(api, r).await?;
+    tasks.push(room_loop(api, room, out));
+  }
+  futures_util::future::try_join_all(tasks).await?;
+  Ok(())
 }
 
-/// Raw `getInfoByRoom` data (room_info, anchor_info, watched_show ...).
-pub async fn info(ctx: &Ctx, room: u64) -> Result<Value> {
-  api::get(ctx, INFO).arg("room_id", room).send().await
-}
-
-/// A room as a post: title, streamer, live state, audience.
-pub async fn read(ctx: &Ctx, input: &str) -> Result<Post> {
-  let room = room_id(ctx, input).await?;
-  let data = info(ctx, room).await?;
-  let r = data.at("room_info");
-  let mut post = room_post(r);
-  post.author = Some(User {
-    id: r.str("uid").unwrap_or_default(),
-    name: data.str("anchor_info.base_info.uname").unwrap_or_default(),
-    avatar: data.str("anchor_info.base_info.face").map(parse::https),
-    url: r.str("uid").map(refs::space_url),
-    ..User::default()
-  });
-  post.text = r
-    .str("description")
-    .map(|d| social_core::text::html_to_text(&d));
-  if let Some(n) = data.count("watched_show.num") {
-    post.metrics.other.insert("watched".into(), n);
-  }
-  if let Some(n) = data.count("anchor_info.relation_info.attention") {
-    post.extra.insert("followers".into(), json!(n));
-  }
-  post.raw = Some(data);
-  Ok(post)
-}
-
-/// A room from any listing (info, search, following, history ...).
-pub fn room_post(v: &Value) -> Post {
-  let id = v.first_str(&["room_id", "roomid"]).unwrap_or_default();
-  let status = v.u64("live_status");
-  let mut post = Post {
-    url: Some(room_url(&id)),
-    id,
-    kind: "live".into(),
-    title: parse::plain(v, &["title"]),
-    author: parse::author(v, &["uid"], &["uname"], &["uface", "face"]),
-    created_at: v
-      .i64("live_start_time")
-      .and_then(from_secs)
-      .or_else(|| v.str("live_time").and_then(|t| parse::beijing(&t))),
-    raw: Some(v.clone()),
-    ..Post::default()
-  };
-  post.metrics.views = v.count("online").filter(|n| *n > 0);
-  if let Some(s) = status {
-    post.extra.insert("live".into(), json!(s == 1));
-  }
-  for (key, paths) in [
-    ("area", &["area_name", "area_name_v2", "cate_name"][..]),
-    ("parent_area", &["parent_area_name"][..]),
-    ("cover", &["user_cover", "cover", "room_cover"][..]),
-    ("short_id", &["short_id"][..]),
-  ] {
-    if let Some(x) = v.first_str(paths).filter(|x| !x.is_empty() && x != "0") {
-      let x = if key == "cover" {
-        parse::https(x)
-      } else {
-        social_core::text::html_to_text(&x)
-      };
-      post.extra.insert(key.into(), json!(x));
+async fn room_loop(api: &Api, room: u64, out: &Stream) -> Result<()> {
+  let (mut sock, chat) = connect(api, room).await?;
+  let mut beat = tokio::time::interval(HEARTBEAT);
+  loop {
+    tokio::select! {
+      _ = beat.tick() => sock.send_binary(packet(OP_HEARTBEAT, b"[object Object]")).await?,
+      frame = sock.next() => match frame? {
+        Some(Frame::Binary(data)) => {
+          for v in commands(&data) {
+            if let Some(post) = chat.event(&v) {
+              out.post(&post);
+            }
+          }
+        }
+        Some(Frame::Text(_)) => {}
+        None => return Ok(()),
+      },
     }
   }
-  post
 }
 
-/// Rooms of the people you follow, live ones first.
-pub async fn following(ctx: &Ctx, page: &PageReq) -> Result<Page<Post>> {
-  ctx.require_login(api::LOGIN_COOKIES)?;
-  let pn = page.number_or(1);
-  let data = api::get(ctx, FOLLOWING)
-    .arg("page", pn)
-    .arg("page_size", page.size_within(10))
-    .send()
-    .await?;
-  let posts: Vec<Post> = data.list("list").iter().map(room_post).collect();
-  let more = pn < data.u64("totalPage").unwrap_or(0);
-  let next = (more && !posts.is_empty()).then(|| (pn + 1).to_string());
-  Ok(Page::new(posts, next))
-}
-
-/// The last danmaku of a room (about ten).
-pub async fn recent(ctx: &Ctx, input: &str) -> Result<Page<Post>> {
-  let room = room_id(ctx, input).await?;
-  let data = api::get(ctx, HISTORY)
-    .arg("roomid", room)
-    .arg("room_type", 0)
-    .send()
-    .await?;
-  let posts = data
-    .list("room")
-    .iter()
-    .map(|d| {
-      let at = d
-        .i64("check_info.ts")
-        .and_then(from_secs)
-        .or_else(|| d.str("timeline").and_then(|t| parse::beijing(&t)));
-      danmaku_post(
-        room,
-        d.str("id_str").unwrap_or_default(),
-        d.str("text").unwrap_or_default(),
-        d.str("uid").unwrap_or_default(),
-        d.str("nickname").unwrap_or_default(),
-        at,
-        d.clone(),
-      )
-    })
-    .collect();
-  Ok(Page::last(posts))
-}
-
-/// One live danmaku as a post with id `ROOM/DANMAKU`.
-pub fn danmaku_post(
-  room: u64,
-  id: String,
-  text: String,
-  uid: String,
-  name: String,
-  at: Option<Timestamp>,
-  raw: Value,
-) -> Post {
-  let mut post = Post {
-    id: format!("{room}/{id}"),
-    kind: "message".into(),
-    text: Some(text),
-    author: Some(User {
-      url: (!uid.is_empty() && uid != "0").then(|| refs::space_url(&uid)),
-      id: uid,
-      name,
-      ..User::default()
-    }),
-    created_at: at,
-    raw: Some(raw),
-    ..Post::default()
-  };
-  post
-    .extra
-    .insert("chat".into(), json!(format!("live:{room}")));
-  post
-}
-
-/// Send danmaku to a live room.
-pub async fn send(ctx: &Ctx, input: &str, text: &str) -> Result<Action> {
-  let room = room_id(ctx, input).await?;
-  let now = Timestamp::now().as_second().to_string();
-  let parts = vec![
-    Part::text("bubble", "0"),
-    Part::text("msg", text),
-    Part::text("color", "16777215"),
-    Part::text("mode", "1"),
-    Part::text("room_type", "0"),
-    Part::text("jumpfrom", "0"),
-    Part::text("reply_mid", "0"),
-    Part::text("reply_attr", "0"),
-    Part::text("replay_dmid", ""),
-    Part::text("statistics", r#"{"appId":100,"platform":5}"#),
-    Part::text("reply_type", "0"),
-    Part::text("reply_uname", ""),
-    Part::text("fontsize", "25"),
-    Part::text("rnd", now),
-    Part::text("roomid", room.to_string()),
-  ];
-  api::post(ctx, SEND)
-    .multipart(parts)
-    .query("web_location", "444.8")
+/// Open the room's broadcast socket and authenticate with its danmaku token.
+async fn connect(api: &Api, room: u64) -> Result<(Socket, Chat)> {
+  let info = rooms::info(api, room).await?;
+  let real = info.u64("room_info.room_id").unwrap_or(room);
+  let title = info.str("room_info.title").unwrap_or_default();
+  let auth = api
+    .get(DANMU_INFO)
+    .arg("id", real)
+    .arg("type", 0)
+    .arg("web_location", "444.8")
     .wbi()
     .send()
     .await?;
-  Ok(Action::done("send", format!("live:{room}")).with_url(room_url(room)))
+  let token = auth.str("token").unwrap_or_default();
+  let host = auth
+    .list("host_list")
+    .first()
+    .and_then(|h| {
+      Some(format!(
+        "wss://{}:{}/sub",
+        h.str("host")?,
+        h.str("wss_port")?
+      ))
+    })
+    .unwrap_or_else(|| "wss://broadcastlv.chat.bilibili.com/sub".into());
+  // Logged out, Bilibili masks the senders' names.
+  let uid: u64 = match users::my_mid(api).await {
+    Ok(mid) => mid.parse().unwrap_or(0),
+    Err(_) => 0,
+  };
+  let mut sock = api
+    .ctx
+    .http
+    .websocket(&host, &[("Origin", "https://live.bilibili.com")], true)
+    .await?;
+  let body = json!({
+    "uid": uid,
+    "roomid": real,
+    "protover": 2,
+    "buvid": api.ctx.http.cookie("buvid3").unwrap_or_default(),
+    "platform": "web",
+    "type": 2,
+    "key": token,
+  });
+  sock
+    .send_binary(packet(OP_AUTH, body.to_string().as_bytes()))
+    .await?;
+  Ok((sock, Chat { room: real, title }))
+}
+
+fn packet(op: u32, body: &[u8]) -> Vec<u8> {
+  let mut p = Vec::with_capacity(16 + body.len());
+  p.extend_from_slice(&((16 + body.len()) as u32).to_be_bytes());
+  p.extend_from_slice(&16u16.to_be_bytes());
+  p.extend_from_slice(&1u16.to_be_bytes());
+  p.extend_from_slice(&op.to_be_bytes());
+  p.extend_from_slice(&1u32.to_be_bytes());
+  p.extend_from_slice(body);
+  p
+}
+
+/// The JSON commands in a frame, unpacking compressed batches.
+fn commands(data: &[u8]) -> Vec<Value> {
+  let mut out = Vec::new();
+  let mut rest = data;
+  while rest.len() >= 16 {
+    let len = u32::from_be_bytes([rest[0], rest[1], rest[2], rest[3]]) as usize;
+    let header = u16::from_be_bytes([rest[4], rest[5]]) as usize;
+    let version = u16::from_be_bytes([rest[6], rest[7]]);
+    let op = u32::from_be_bytes([rest[8], rest[9], rest[10], rest[11]]);
+    if len < header || len > rest.len() {
+      break;
+    }
+    let body = &rest[header..len];
+    if op == OP_MESSAGE {
+      match version {
+        2 => {
+          let mut inflated = Vec::new();
+          if ZlibDecoder::new(body).read_to_end(&mut inflated).is_ok() {
+            out.extend(commands(&inflated));
+          }
+        }
+        _ => {
+          if let Ok(v) = serde_json::from_slice::<Value>(body) {
+            out.push(v);
+          }
+        }
+      }
+    }
+    rest = &rest[len..];
+  }
+  out
+}
+
+struct Chat {
+  room: u64,
+  title: String,
+}
+
+impl Chat {
+  /// Danmaku, super chats, gifts, memberships and live state changes.
+  fn event(&self, v: &Value) -> Option<Post> {
+    let cmd = v.str("cmd")?;
+    let cmd = cmd.split(':').next().unwrap_or_default();
+    let mut post = match cmd {
+      "DANMU_MSG" => self.danmaku(v),
+      "SUPER_CHAT_MESSAGE" => self.superchat(v.at("data")),
+      "SEND_GIFT" => self.gift(v.at("data")),
+      "GUARD_BUY" => self.membership(v.at("data")),
+      "LIVE" | "PREPARING" => self.state(cmd, v),
+      _ => return None,
+    };
+    post
+      .extra
+      .insert("chat_name".into(), json!(self.title.clone()));
+    Some(post)
+  }
+
+  fn danmaku(&self, v: &Value) -> Post {
+    let info = v.at("info");
+    let at = info.i64("0.4").map(|ms| ms / 1000).and_then(from_secs);
+    let id = info
+      .str("0.15.extra")
+      .and_then(|e| serde_json::from_str::<Value>(&e).ok())
+      .and_then(|e| e.str("id_str"))
+      .unwrap_or_else(|| info.str("0.4").unwrap_or_default());
+    danmaku_post(
+      self.room,
+      id,
+      info.str("1").unwrap_or_default(),
+      info.str("2.0").unwrap_or_default(),
+      info.str("2.1").unwrap_or_default(),
+      at,
+      v.clone(),
+    )
+  }
+
+  fn superchat(&self, data: &Value) -> Post {
+    let mut post = self.other(
+      "superchat",
+      data,
+      data.str("message"),
+      ("uid", "user_info.uname"),
+      "start_time",
+    );
+    if let Some(price) = data.u64("price") {
+      post.extra.insert("price_cny".into(), json!(price));
+    }
+    post
+  }
+
+  fn gift(&self, data: &Value) -> Post {
+    let text = format!(
+      "{} × {}",
+      data.str("giftName").unwrap_or_default(),
+      data.u64("num").unwrap_or(1)
+    );
+    let mut post = self.other("gift", data, Some(text), ("uid", "uname"), "timestamp");
+    if let Some(price) = data.u64("total_coin").or_else(|| data.u64("price")) {
+      post.extra.insert("coins".into(), json!(price));
+    }
+    post
+  }
+
+  fn membership(&self, data: &Value) -> Post {
+    let text = format!(
+      "{} × {}",
+      data.str("gift_name").unwrap_or_default(),
+      data.u64("num").unwrap_or(1)
+    );
+    self.other(
+      "membership",
+      data,
+      Some(text),
+      ("uid", "username"),
+      "start_time",
+    )
+  }
+
+  /// The room went live (`LIVE`) or offline (`PREPARING`).
+  fn state(&self, cmd: &str, v: &Value) -> Post {
+    let live = cmd == "LIVE";
+    let mut post = Post {
+      id: chat::message_id(&self.room.to_string(), &cmd.to_lowercase()),
+      kind: if live { "live" } else { "offline" }.into(),
+      text: Some(if live { "live started" } else { "live ended" }.into()),
+      created_at: Some(jiff::Timestamp::now()),
+      raw: Some(v.clone()),
+      ..Post::default()
+    };
+    post
+      .extra
+      .insert("chat".into(), json!(format!("live:{}", self.room)));
+    post
+  }
+
+  fn other(
+    &self,
+    kind: &str,
+    d: &Value,
+    text: Option<String>,
+    (uid, name): (&str, &str),
+    time: &str,
+  ) -> Post {
+    let at = d.i64(time).and_then(from_secs);
+    let id = d
+      .first_str(&["id", "tid"])
+      .unwrap_or_else(|| d.str(time).unwrap_or_default());
+    let mut p = danmaku_post(
+      self.room,
+      id,
+      text.unwrap_or_default(),
+      d.str(uid).unwrap_or_default(),
+      d.str(name).unwrap_or_default(),
+      at,
+      d.clone(),
+    );
+    p.kind = kind.into();
+    p
+  }
 }

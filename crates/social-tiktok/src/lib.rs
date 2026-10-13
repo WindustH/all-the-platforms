@@ -22,8 +22,8 @@ mod write;
 use std::time::Duration;
 
 use social_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Error, Insights, Media, Page, PageReq,
-  Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Insights, Media, Page, PageReq, Platform,
+  PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -93,11 +93,7 @@ impl Platform for TikTok {
   }
 
   async fn login_token(&self, token: &str) -> Result<()> {
-    if token.chars().any(char::is_whitespace) {
-      return Err(Error::input("an access token has no spaces"));
-    }
-    self.api.ctx.set_extra(ads::TOKEN_KEY, token);
-    Ok(())
+    ads::login_token(&self.api, token)
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {

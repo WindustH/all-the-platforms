@@ -5,7 +5,7 @@
 
 use std::time::Duration;
 
-use social_core::Ctx;
+use crate::api::Api;
 
 const REGISTER: &str = "https://ttwid.bytedance.com/ttwid/union/register/";
 const REGISTER_BODY: &str = r#"{"region":"cn","aid":1768,"needFid":false,"service":"www.ixigua.com","migrate_info":{"ticket":"","source":"node"},"cbUrlProtocol":"https","union":true}"#;
@@ -20,12 +20,12 @@ struct Visitor {
 
 /// Make sure the jar holds `ttwid` and `s_v_web_id`. Best effort: a failed
 /// registration surfaces later as an empty answer.
-pub async fn ensure(ctx: &Ctx) {
-  let http = &ctx.http;
+pub async fn ensure(api: &Api) {
+  let http = &api.ctx.http;
   if http.has_cookie("ttwid") && http.has_cookie("s_v_web_id") {
     return;
   }
-  if let Some(v) = ctx.store.cache_get::<Visitor>(CACHE_KEY, CACHE_TTL) {
+  if let Some(v) = api.ctx.store.cache_get::<Visitor>(CACHE_KEY, CACHE_TTL) {
     if !http.has_cookie("ttwid") {
       http.set_cookie("ttwid", &v.ttwid);
     }
@@ -50,6 +50,6 @@ pub async fn ensure(ctx: &Ctx) {
     }
   }
   if let (Some(ttwid), Some(fp)) = (http.cookie("ttwid"), http.cookie("s_v_web_id")) {
-    ctx.store.cache_put(CACHE_KEY, &Visitor { ttwid, fp });
+    api.ctx.store.cache_put(CACHE_KEY, &Visitor { ttwid, fp });
   }
 }

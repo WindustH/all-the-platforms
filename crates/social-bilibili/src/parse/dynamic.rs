@@ -1,6 +1,6 @@
 //! Dynamics (`/x/polymer/web-dynamic/v1/*`): text, image, video, forward, article ...
 
-use social_core::{Media, Post, Value, ValueExt, json};
+use social_core::{Media, Metrics, Post, Value, ValueExt, json};
 
 use super::{https, secs, user, video};
 use crate::refs::DYNAMIC_URL;
@@ -41,34 +41,8 @@ pub fn dynamic(v: &Value) -> Post {
     raw: Some(v.clone()),
     ..Post::default()
   };
-  p.metrics.likes = stat.count("like.count");
-  p.metrics.comments = stat.count("comment.count");
-  p.metrics.shares = stat.count("forward.count");
-  // A video dynamic also carries the video's plays and danmaku.
-  p.metrics.views = major.count("archive.stat.play");
-  if let Some(n) = major.count("archive.stat.danmaku") {
-    p.metrics.other.insert("danmaku".into(), n);
-  }
-  let images = major
-    .list("draw.items")
-    .iter()
-    .map(|i| (i, "src"))
-    .chain(major.list("opus.pics").iter().map(|i| (i, "url")));
-  for (img, key) in images {
-    if let Some(src) = img.str(key) {
-      p.media.push(Media {
-        width: img.u64("width").map(|w| w as u32),
-        height: img.u64("height").map(|h| h as u32),
-        ..Media::image(https(src))
-      });
-    }
-  }
-  if let Some(cover) = major.first_str(&["archive.cover", "article.covers.0"]) {
-    p.media.push(Media {
-      alt: Some("cover".into()),
-      ..Media::image(https(cover))
-    });
-  }
+  p.metrics = metrics(stat, major);
+  p.media = media(major);
   if let Some(orig) = Some(v.at("orig")).filter(|o| o.str("id_str").is_some()) {
     p.quoted = Some(Box::new(dynamic(orig)));
   }
@@ -85,6 +59,47 @@ pub fn dynamic(v: &Value) -> Post {
     p.extra.insert("pinned".into(), json!(true));
   }
   p
+}
+
+/// Likes, comments and reposts; a video dynamic also carries the video's
+/// plays and danmaku.
+fn metrics(stat: &Value, major: &Value) -> Metrics {
+  let mut metrics = Metrics {
+    likes: stat.count("like.count"),
+    comments: stat.count("comment.count"),
+    shares: stat.count("forward.count"),
+    views: major.count("archive.stat.play"),
+    ..Metrics::default()
+  };
+  if let Some(n) = major.count("archive.stat.danmaku") {
+    metrics.other.insert("danmaku".into(), n);
+  }
+  metrics
+}
+
+/// Images of an image / opus dynamic, then the cover of a video or article.
+fn media(major: &Value) -> Vec<Media> {
+  let images = major
+    .list("draw.items")
+    .iter()
+    .map(|i| (i, "src"))
+    .chain(major.list("opus.pics").iter().map(|i| (i, "url")));
+  let mut media: Vec<Media> = images
+    .filter_map(|(img, key)| {
+      Some(Media {
+        width: img.u64("width").map(|w| w as u32),
+        height: img.u64("height").map(|h| h as u32),
+        ..Media::image(https(img.str(key)?))
+      })
+    })
+    .collect();
+  if let Some(cover) = major.first_str(&["archive.cover", "article.covers.0"]) {
+    media.push(Media {
+      alt: Some("cover".into()),
+      ..Media::image(https(cover))
+    });
+  }
+  media
 }
 
 /// One entry of a dynamic's repost list (`detail/forward`): who reposted, with what text.

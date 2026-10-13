@@ -1,8 +1,9 @@
 //! Comments of a post and replies under one comment.
 
-use social_core::{Comment, Ctx, Page, PageReq, Result, Value, ValueExt};
+use social_core::{Comment, Page, PageReq, Result, Value, ValueExt};
 
-use crate::{api, parse, refs};
+use crate::api::Api;
+use crate::{parse, refs};
 
 const LIST: &str = "/aweme/v1/web/comment/list/";
 const REPLIES: &str = "/aweme/v1/web/comment/list/reply/";
@@ -21,10 +22,11 @@ fn page_of(v: &Value, cursor: u64) -> Page<Comment> {
   Page::new(items, next)
 }
 
-pub async fn list(ctx: &Ctx, post: &str, page: &PageReq) -> Result<Page<Comment>> {
-  let id = refs::aweme(ctx, post).await?;
+pub async fn list(api: &Api, post: &str, page: &PageReq) -> Result<Page<Comment>> {
+  let id = refs::aweme(api, post).await?;
   let cursor = page.number_or(0);
-  let v = api::get(ctx, LIST)
+  let v = api
+    .get(LIST)
     .arg("aweme_id", &id)
     .arg("cursor", cursor)
     .arg("count", page.size_within(20))
@@ -41,14 +43,15 @@ pub async fn list(ctx: &Ctx, post: &str, page: &PageReq) -> Result<Page<Comment>
 }
 
 pub async fn replies(
-  ctx: &Ctx,
+  api: &Api,
   post: &str,
   comment: &str,
   page: &PageReq,
 ) -> Result<Page<Comment>> {
-  let id = refs::aweme(ctx, post).await?;
+  let id = refs::aweme(api, post).await?;
   let cursor = page.number_or(0);
-  let v = api::get(ctx, REPLIES)
+  let v = api
+    .get(REPLIES)
     .arg("item_id", &id)
     .arg("comment_id", comment.trim())
     .arg("cut_version", "1")

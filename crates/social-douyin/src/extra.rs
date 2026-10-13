@@ -1,12 +1,13 @@
 //! Douyin-only commands.
 
 use social_core::cli::PageArgs;
-use social_core::{Ctx, Data, Result};
+use social_core::{Data, Result};
 
-use crate::{aweme, library, live};
+use crate::api::Api;
+use crate::{library, posts, rooms};
 
 #[derive(Debug, clap::Subcommand)]
-pub enum Extra {
+pub enum Command {
   /// Posts of a mix (合集)
   Mix {
     /// Mix id or douyin.com/collection/… link
@@ -34,26 +35,26 @@ pub enum Extra {
   },
 }
 
-pub async fn run(ctx: &Ctx, command: Extra) -> Result<Data> {
+pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
-    Extra::Mix { mix, page } => Data::Posts(
+    Command::Mix { mix, page } => Data::Posts(
       page
-        .collect(async |r| library::mix(ctx, &mix, &r).await)
+        .collect(async |r| library::mix(api, &mix, &r).await)
         .await?,
     ),
-    Extra::Music { music, page } => Data::Posts(
+    Command::Music { music, page } => Data::Posts(
       page
-        .collect_dated(async |r| library::music(ctx, &music, &r).await)
+        .collect_dated(async |r| library::music(api, &music, &r).await)
         .await?,
     ),
-    Extra::Related { post, page } => {
-      let post = ctx.post_ref(&post)?;
+    Command::Related { post, page } => {
+      let post = api.ctx.post_ref(&post)?;
       Data::Posts(
         page
-          .collect(async |r| aweme::related(ctx, &post, &r).await)
+          .collect(async |r| posts::related(api, &post, &r).await)
           .await?,
       )
     }
-    Extra::Live { room } => Data::Post(Box::new(live::room(ctx, &room).await?)),
+    Command::Live { room } => Data::Post(Box::new(rooms::room(api, &room).await?)),
   })
 }

@@ -1,10 +1,11 @@
 //! Search, the hot boards and the feeds.
 
 use social_core::{
-  Ctx, Error, ErrorCode, Page, PageReq, Post, Query, Result, User, Value, ValueExt, json,
+  Error, ErrorCode, Page, PageReq, Post, Query, Result, User, Value, ValueExt, json,
 };
 
-use crate::{api, parse};
+use crate::api::Api;
+use crate::parse;
 
 const SEARCH_VIDEO: &str = "/aweme/v1/web/search/item/";
 const SEARCH_GENERAL: &str = "/aweme/v1/web/general/search/single/";
@@ -53,15 +54,15 @@ fn next_search(v: &Value, offset: u64, got: usize) -> Option<String> {
 
 /// `filter_selected`: the sort plus at most one time / type / length /
 /// range filter.
-fn filters(q: &Query) -> Result<Option<String>> {
-  let sort = match q.sort.as_deref() {
+fn filters(query: &Query) -> Result<Option<String>> {
+  let sort = match query.sort.as_deref() {
     None | Some("general") => "0",
     Some("likes") => "1",
     Some("latest") => "2",
     Some(other) => return Err(Error::input(format!("unknown sort: {other}"))),
   };
   let (mut time, mut kind, mut length, mut range) = ("0", "0", "", "0");
-  match q.filter.as_deref() {
+  match query.filter.as_deref() {
     None => {}
     Some("day") => time = "1",
     Some("week") => time = "7",
@@ -75,7 +76,7 @@ fn filters(q: &Query) -> Result<Option<String>> {
     Some("following") => range = "3",
     Some(other) => return Err(Error::input(format!("unknown filter: {other}"))),
   }
-  if sort == "0" && q.filter.is_none() {
+  if sort == "0" && query.filter.is_none() {
     return Ok(None);
   }
   Ok(Some(
@@ -90,39 +91,37 @@ fn filters(q: &Query) -> Result<Option<String>> {
   ))
 }
 
-pub async fn search(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<Post>> {
+pub async fn search(api: &Api, query: &Query, page: &PageReq) -> Result<Page<Post>> {
   let (offset, search_id) = search_cursor(page);
-  let filter = filters(q)?;
+  let filter = filters(query)?;
   // Image posts only show up in the general channel.
-  let general = q.filter.as_deref() == Some("images");
-  let mut call = api::get(
-    ctx,
-    if general {
+  let general = query.filter.as_deref() == Some("images");
+  let mut call = api
+    .get(if general {
       SEARCH_GENERAL
     } else {
       SEARCH_VIDEO
-    },
-  )
-  .arg(
-    "search_channel",
-    if general {
-      "aweme_general"
-    } else {
-      "aweme_video_web"
-    },
-  )
-  .arg("enable_history", "1")
-  .arg("keyword", &q.keyword)
-  .arg("search_source", "normal_search")
-  .arg("query_correct_type", "1")
-  .arg("is_filter_search", if filter.is_some() { "1" } else { "0" })
-  .arg("from_group_id", "")
-  .arg("disable_rs", "0")
-  .arg("offset", offset)
-  .arg("count", page.size_within(20))
-  .arg("need_filter_settings", if offset == 0 { "1" } else { "0" })
-  .arg("list_type", "single")
-  .arg("search_id", search_id.unwrap_or_default());
+    })
+    .arg(
+      "search_channel",
+      if general {
+        "aweme_general"
+      } else {
+        "aweme_video_web"
+      },
+    )
+    .arg("enable_history", "1")
+    .arg("keyword", &query.keyword)
+    .arg("search_source", "normal_search")
+    .arg("query_correct_type", "1")
+    .arg("is_filter_search", if filter.is_some() { "1" } else { "0" })
+    .arg("from_group_id", "")
+    .arg("disable_rs", "0")
+    .arg("offset", offset)
+    .arg("count", page.size_within(20))
+    .arg("need_filter_settings", if offset == 0 { "1" } else { "0" })
+    .arg("list_type", "single")
+    .arg("search_id", search_id.unwrap_or_default());
   if let Some(f) = &filter {
     call = call.arg("filter_selected", f);
   }
@@ -147,11 +146,12 @@ pub async fn search(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<Post>> 
   Ok(Page::new(items, next))
 }
 
-pub async fn search_users(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<User>> {
+pub async fn search_users(api: &Api, query: &Query, page: &PageReq) -> Result<Page<User>> {
   let (offset, search_id) = search_cursor(page);
-  let v = api::get(ctx, SEARCH_USER)
+  let v = api
+    .get(SEARCH_USER)
     .arg("search_channel", "aweme_user_web")
-    .arg("keyword", &q.keyword)
+    .arg("keyword", &query.keyword)
     .arg("search_source", "normal_search")
     .arg("query_correct_type", "1")
     .arg("is_filter_search", "0")
@@ -174,7 +174,7 @@ pub async fn search_users(ctx: &Ctx, q: &Query, page: &PageReq) -> Result<Page<U
 
 /// The hot boards. The signed web board carries view counts and covers;
 /// when it is walled, the open billboard (words and heat) stands in.
-pub async fn hot(ctx: &Ctx, category: Option<&str>, _page: &PageReq) -> Result<Page<Post>> {
+pub async fn hot(api: &Api, category: Option<&str>, _page: &PageReq) -> Result<Page<Post>> {
   let (board, sub) = match category.unwrap_or("all") {
     "all" => ("0", ""),
     "entertainment" => ("2", "2"),
@@ -182,7 +182,8 @@ pub async fn hot(ctx: &Ctx, category: Option<&str>, _page: &PageReq) -> Result<P
     "challenge" => ("2", "hotspot_challenge"),
     other => return Err(Error::input(format!("unknown hot category: {other}"))),
   };
-  let web = api::get(ctx, HOT)
+  let web = api
+    .get(HOT)
     .arg("detail_list", "1")
     .arg("source", "6")
     .arg("board_type", board)
@@ -195,7 +196,7 @@ pub async fn hot(ctx: &Ctx, category: Option<&str>, _page: &PageReq) -> Result<P
     Ok(v) => v,
     Err(e) if board == "0" => {
       tracing::debug!("hot board walled ({e}); using the open billboard");
-      ctx.http.get(BILLBOARD).no_cookies().value().await?
+      api.ctx.http.get(BILLBOARD).no_cookies().value().await?
     }
     Err(e) => return Err(e),
   };
@@ -211,48 +212,29 @@ pub async fn hot(ctx: &Ctx, category: Option<&str>, _page: &PageReq) -> Result<P
   Ok(Page::last(items))
 }
 
-pub async fn feed(ctx: &Ctx, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+pub async fn feed(api: &Api, kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
   let count = page.size_within(20);
+  let pull_type = if page.cursor.is_none() { "0" } else { "2" };
   let v = match kind.unwrap_or("recommend") {
-    "recommend" => {
-      let index = page.number_or(1);
-      let v = api::get(ctx, RECOMMEND)
-        .arg("count", count)
-        .arg("video_type_select", "1")
-        .arg("aweme_pc_rec_raw_data", r#"{"is_client":false}"#)
-        .arg("globalwid", "")
-        .arg("pull_type", if index == 1 { "0" } else { "2" })
-        .arg("min_window", "0")
-        .arg("free_right", "0")
-        .arg("ug_source", "")
-        .arg("creative_id", "")
-        .arg("refresh_index", index)
-        .send()
-        .await?;
-      let items: Vec<Post> = v
-        .list("aweme_list")
-        .iter()
-        .filter_map(parse::aweme)
-        .collect();
-      let next = (!items.is_empty()).then(|| (index + 1).to_string());
-      return Ok(Page::new(items, next));
-    }
+    "recommend" => return recommended(api, page).await,
     "following" => {
-      api::require_login(ctx)?;
-      api::get(ctx, FOLLOWING)
+      api.require_login()?;
+      api
+        .get(FOLLOWING)
         .arg("cursor", page.number_or(0))
         .arg("level", "1")
         .arg("count", count)
-        .arg("pull_type", if page.cursor.is_none() { "0" } else { "2" })
+        .arg("pull_type", pull_type)
         .send()
         .await?
     }
     "friends" => {
-      api::require_login(ctx)?;
-      api::get(ctx, FRIENDS)
+      api.require_login()?;
+      api
+        .get(FRIENDS)
         .arg("max_cursor", page.number_or(0))
         .arg("count", count)
-        .arg("pull_type", if page.cursor.is_none() { "0" } else { "2" })
+        .arg("pull_type", pull_type)
         .send()
         .await?
     }
@@ -268,5 +250,31 @@ pub async fn feed(ctx: &Ctx, kind: Option<&str>, page: &PageReq) -> Result<Page<
   let next = (v.i64("has_more") == Some(1))
     .then(|| v.first_str(&["cursor", "max_cursor"]))
     .flatten();
+  Ok(Page::new(items, next))
+}
+
+/// The recommended feed, paged by refresh index.
+async fn recommended(api: &Api, page: &PageReq) -> Result<Page<Post>> {
+  let index = page.number_or(1);
+  let v = api
+    .get(RECOMMEND)
+    .arg("count", page.size_within(20))
+    .arg("video_type_select", "1")
+    .arg("aweme_pc_rec_raw_data", r#"{"is_client":false}"#)
+    .arg("globalwid", "")
+    .arg("pull_type", if index == 1 { "0" } else { "2" })
+    .arg("min_window", "0")
+    .arg("free_right", "0")
+    .arg("ug_source", "")
+    .arg("creative_id", "")
+    .arg("refresh_index", index)
+    .send()
+    .await?;
+  let items: Vec<Post> = v
+    .list("aweme_list")
+    .iter()
+    .filter_map(parse::aweme)
+    .collect();
+  let next = (!items.is_empty()).then(|| (index + 1).to_string());
   Ok(Page::new(items, next))
 }
