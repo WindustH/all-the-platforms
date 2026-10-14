@@ -193,6 +193,16 @@ pub async fn run<P: Platform>(global: GlobalArgs, matches: ArgMatches) -> ExitCo
   }
 }
 
+/// Run one platform command without printing: the data (without `raw`
+/// payloads unless `--raw`) or the error.
+pub async fn call<P: Platform>(global: GlobalArgs, matches: ArgMatches) -> Result<Data> {
+  let (mut data, _) = execute::<P>(&global, &matches).await?;
+  if !global.raw {
+    data.strip_raw();
+  }
+  Ok(data)
+}
+
 async fn execute<P: Platform>(
   global: &GlobalArgs,
   matches: &ArgMatches,

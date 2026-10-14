@@ -21,23 +21,30 @@ use crate::output::{self, Format};
 use crate::platform::{Cap, Platform, PlatformInfo};
 
 type RunFuture = Pin<Box<dyn Future<Output = ExitCode>>>;
+pub(crate) type CallFuture = Pin<Box<dyn Future<Output = crate::error::Result<Data>>>>;
 
-struct Entry {
-  info: PlatformInfo,
-  command: fn() -> clap::Command,
+pub(crate) struct Entry {
+  pub info: PlatformInfo,
+  pub command: fn() -> clap::Command,
   extras: fn() -> Vec<String>,
   run: fn(GlobalArgs, ArgMatches) -> RunFuture,
+  /// Run without printing: the data or the error, for the MCP server.
+  pub call: fn(GlobalArgs, ArgMatches) -> CallFuture,
 }
 
 pub struct App {
   name: &'static str,
-  version: &'static str,
+  pub(crate) version: &'static str,
   about: &'static str,
   platforms: Vec<Entry>,
 }
 
 fn run_boxed<P: Platform + 'static>(global: GlobalArgs, matches: ArgMatches) -> RunFuture {
   Box::pin(cli::run::<P>(global, matches))
+}
+
+fn call_boxed<P: Platform + 'static>(global: GlobalArgs, matches: ArgMatches) -> CallFuture {
+  Box::pin(cli::call::<P>(global, matches))
 }
 
 impl App {
@@ -56,18 +63,23 @@ impl App {
       command: cli::command::<P>,
       extras: cli::extra_commands::<P>,
       run: run_boxed::<P>,
+      call: call_boxed::<P>,
     });
     self
   }
 
-  fn find(&self, name: &str) -> Option<&Entry> {
+  pub(crate) fn platforms(&self) -> &[Entry] {
+    &self.platforms
+  }
+
+  pub(crate) fn find(&self, name: &str) -> Option<&Entry> {
     self
       .platforms
       .iter()
       .find(|e| e.info.id == name || e.info.aliases.contains(&name))
   }
 
-  fn command(&self) -> clap::Command {
+  pub(crate) fn command(&self) -> clap::Command {
     let mut cmd = GlobalArgs::augment_args(clap::Command::new(self.name))
       .version(self.version)
       .about(self.about)
@@ -85,6 +97,16 @@ impl App {
           )
           .visible_alias("docs")
           .arg(clap::Arg::new("topic").help("A topic or a platform; omit to list them")),
+      )
+      .subcommand(
+        clap::Command::new("mcp")
+          .about("Serve every platform to AI agents over MCP (stdio)")
+          .arg(
+            clap::Arg::new("read-only")
+              .long("read-only")
+              .action(clap::ArgAction::SetTrue)
+              .help("Offer only commands that read; no likes, posts, messages or downloads"),
+          ),
       );
     for e in &self.platforms {
       cmd = cmd.subcommand((e.command)());
@@ -123,18 +145,14 @@ impl App {
     if name == "guide" {
       return self.print_guide(sub.get_one::<String>("topic").map(String::as_str));
     }
-    let Some(entry) = self.find(name) else {
+    let Some(runtime) = runtime() else {
       return ExitCode::FAILURE;
     };
-    let runtime = match tokio::runtime::Builder::new_current_thread()
-      .enable_all()
-      .build()
-    {
-      Ok(rt) => rt,
-      Err(e) => {
-        eprintln!("error: cannot start the async runtime: {e}");
-        return ExitCode::FAILURE;
-      }
+    if name == "mcp" {
+      return runtime.block_on(crate::mcp::serve(&self, sub.get_flag("read-only")));
+    }
+    let Some(entry) = self.find(name) else {
+      return ExitCode::FAILURE;
     };
     runtime.block_on((entry.run)(global, sub.clone()))
   }
@@ -160,23 +178,28 @@ impl App {
     ExitCode::SUCCESS
   }
 
+  /// Every platform with its capabilities and own commands.
+  pub(crate) fn platforms_value(&self) -> serde_json::Value {
+    let list: Vec<_> = self
+      .platforms
+      .iter()
+      .map(|e| {
+        json!({
+          "id": e.info.id,
+          "name": e.info.name,
+          "aliases": e.info.aliases,
+          "home": e.info.home,
+          "capabilities": e.info.caps.iter().map(|c| c.name()).collect::<Vec<_>>(),
+          "extra_commands": (e.extras)(),
+        })
+      })
+      .collect();
+    json!({ "platforms": list })
+  }
+
   fn print_platforms(&self, format: Format) {
     if format != Format::Table {
-      let list: Vec<_> = self
-        .platforms
-        .iter()
-        .map(|e| {
-          json!({
-            "id": e.info.id,
-            "name": e.info.name,
-            "aliases": e.info.aliases,
-            "home": e.info.home,
-            "capabilities": e.info.caps.iter().map(|c| c.name()).collect::<Vec<_>>(),
-            "extra_commands": (e.extras)(),
-          })
-        })
-        .collect();
-      output::emit(format, None, &Data::Value(json!({ "platforms": list })));
+      output::emit(format, None, &Data::Value(self.platforms_value()));
       return;
     }
     let mut t = Table::new();
@@ -209,6 +232,19 @@ impl App {
           extras.join(", ")
         );
       }
+    }
+  }
+}
+
+fn runtime() -> Option<tokio::runtime::Runtime> {
+  match tokio::runtime::Builder::new_current_thread()
+    .enable_all()
+    .build()
+  {
+    Ok(rt) => Some(rt),
+    Err(e) => {
+      eprintln!("error: cannot start the async runtime: {e}");
+      None
     }
   }
 }

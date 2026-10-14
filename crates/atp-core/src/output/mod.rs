@@ -148,6 +148,39 @@ pub fn emit_error(format: Format, platform: Option<&str>, error: &Error) {
   }
 }
 
+thread_local! {
+  /// Events of live commands collected instead of printed (MCP server).
+  static CAPTURED: std::cell::RefCell<Option<Vec<crate::model::Post>>> =
+    const { std::cell::RefCell::new(None) };
+}
+
+/// From now on, collect live events instead of printing them.
+pub(crate) fn capture() {
+  CAPTURED.set(Some(Vec::new()));
+}
+
+/// The events collected since [`capture`]; printing resumes.
+pub(crate) fn captured() -> Vec<crate::model::Post> {
+  CAPTURED.take().unwrap_or_default()
+}
+
+/// The envelope of a result as JSON, the way `--json` prints it.
+pub(crate) fn envelope(platform: Option<&str>, result: &Result<Data, Error>) -> serde_json::Value {
+  let (data, error) = match result {
+    Ok(data) => (Some(data), None),
+    Err(e) => (None, Some(e)),
+  };
+  serde_json::to_value(Envelope {
+    ok: error.is_none(),
+    schema_version: SCHEMA_VERSION,
+    platform,
+    fetched_at: jiff::Timestamp::now(),
+    data,
+    error,
+  })
+  .unwrap_or_default()
+}
+
 /// Live output of `listen`: each event is printed the moment it arrives, as
 /// a line for people or one JSON object (`jsonl`, `json`, `csv`) or YAML
 /// document (`yaml`) per event, with `platform` and `fetched_at` added.
@@ -168,6 +201,14 @@ impl Stream {
   }
 
   pub fn post(&self, post: &crate::model::Post) {
+    if CAPTURED.with_borrow(Option::is_some) {
+      let mut post = post.clone();
+      if !self.raw {
+        post.raw = None;
+      }
+      CAPTURED.with_borrow_mut(|c| c.get_or_insert_default().push(post));
+      return;
+    }
     if !self.raw && post.raw.is_some() {
       let mut post = post.clone();
       post.raw = None;

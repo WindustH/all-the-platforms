@@ -20,6 +20,7 @@ pub mod guide;
 pub mod http;
 pub mod json;
 pub mod live;
+mod mcp;
 pub mod model;
 pub mod output;
 pub mod paging;

@@ -57,6 +57,11 @@ pub const TOPICS: &[Topic] = &[
     body: include_str!("../guide/interact.md"),
   },
   Topic {
+    name: "mcp",
+    summary: "Serving every platform to AI agents over MCP (`atp mcp`)",
+    body: include_str!("../guide/mcp.md"),
+  },
+  Topic {
     name: "config",
     summary: "Global options, environment variables, files, exit codes",
     body: include_str!("../guide/config.md"),

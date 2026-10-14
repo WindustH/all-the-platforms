@@ -43,6 +43,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 - **Made for agents and scripts.** Every result comes in one envelope with
   stable fields and error codes; piped output switches to YAML by itself.
   Posts, messages, users and comments share one shape across platforms.
+  `atp mcp` serves every platform to AI agents over MCP.
 - **Ready for analysis.** Creator analytics (`insights`: trends, traffic
   sources, audience), who liked and reposted a post, complete comment
   threads, chat exports, `--since` / `--until`, and CSV or JSON Lines output
@@ -158,6 +159,12 @@ atp feishu listen -f jsonl                     # events, as they arrive
 Each platform also answers to shorter names (`bilibili`, `x`, `xiaohongshu`,
 `zh`, `rd`, `yt` ...). Link the binary as `bili`, `xhs`, `twitter`, `zhihu`,
 `reddit` or `youtube` to skip the platform word entirely: `ln -s $(which atp) ~/.local/bin/bili`.
+
+From an AI agent, over MCP:
+
+```sh
+claude mcp add atp -- atp mcp              # or: atp mcp --read-only
+```
 
 ## Documentation
 

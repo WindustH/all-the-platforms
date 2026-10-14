@@ -40,6 +40,7 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
   `atp platforms` 列出各平台支持的功能。
 - **为 Agent 和脚本设计。** 所有结果都装在同一个信封里，字段和错误码稳定；
   输出被管道接走时自动切换为 YAML。帖子、消息、用户、评论在各平台是同一种结构。
+  `atp mcp` 把所有平台作为 MCP 服务提供给 AI Agent。
 - **直接用于数据分析。** 创作者后台数据（`insights`：趋势、流量来源、观众画像）、
   点赞和转发的人、完整的评论楼中楼、聊天记录导出、`--since` / `--until` 时间过滤，
   以及可直接导入 pandas / DuckDB 的 CSV、JSON Lines 输出。
@@ -149,6 +150,12 @@ atp feishu listen -f jsonl                     # 实时输出事件
 每个平台还有更短的名字（`bilibili`、`x`、`xiaohongshu`、`zh`、`rd`、`yt` 等）。把程序链接成
 `bili`、`xhs`、`twitter`、`zhihu`、`reddit` 或 `youtube`，就能省掉平台名：
 `ln -s $(which atp) ~/.local/bin/bili`。
+
+在 AI Agent 里通过 MCP 使用：
+
+```sh
+claude mcp add atp -- atp mcp              # 或 atp mcp --read-only（只读）
+```
 
 ## 文档
 

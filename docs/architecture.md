@@ -44,6 +44,8 @@ line in `src/main.rs`.
 | `live` | `listen` helpers: polling with de-duplication, reconnect back-off |
 | `socket` | websocket connections through the same client |
 | `qr` | login QR codes in the terminal, from a URL or a QR image |
+| `verify` | human checks by hand: a Chromium-family browser over DevTools with the session cookies, then one retry (`chrome`, `cdp`) |
+| `mcp` | `atp mcp`: JSON-RPC over stdio; tools `platforms`, `help`, `read`, `run` calling commands without printing |
 
 ### The Platform contract
 
