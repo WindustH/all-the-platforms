@@ -58,6 +58,11 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 
 ## 支持的平台
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/platforms-dark.svg">
+  <img src="docs/assets/platforms-light.svg" alt="支持的平台" width="100%">
+</picture>
+
 | | 平台 | 命令 | 主要能力 | 登录方式 |
 | --- | --- | --- | --- | --- |
 | 社交 | 知乎 | `zhihu` | 回答、文章、想法、提问、创作者数据 | 扫码、浏览器 |

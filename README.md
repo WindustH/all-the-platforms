@@ -67,6 +67,11 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 
 ## Platforms
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/platforms-dark.svg">
+  <img src="docs/assets/platforms-light.svg" alt="Supported platforms" width="100%">
+</picture>
+
 | | Platform | Command | Highlights | Sign in |
 | --- | --- | --- | --- | --- |
 | Social | Zhihu 知乎 | `zhihu` | answers, articles, pins, questions, creator analytics | QR, browser |
