@@ -19,7 +19,8 @@ pub struct LoginArgs {
   /// Import cookies from a local browser; all known browsers when no name is given
   #[arg(long, num_args = 0..=1, default_missing_value = "auto", value_name = "BROWSER")]
   pub browser: Option<String>,
-  /// Use a cookie header copied from the browser's developer tools (`name=value; ...`)
+  /// Use a cookie header copied from the browser's developer tools
+  /// (`name=value; ...`; `-` reads it from stdin)
   #[arg(long, value_name = "COOKIES")]
   pub cookie: Option<String>,
   /// Use an access token or API credentials (`-` reads it from stdin)

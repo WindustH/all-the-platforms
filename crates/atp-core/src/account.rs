@@ -71,7 +71,7 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
   let source = if let Some(raw) = args.token {
     token_login(p, raw).await?
   } else if let Some(raw) = args.cookie {
-    cookie_login(ctx, &raw)?
+    cookie_login(ctx, &stdin_for_dash(raw)?)?
   } else if use_qr {
     qr_login(p).await?;
     "qrcode".to_owned()
@@ -108,11 +108,7 @@ async fn token_login<P: Platform>(p: &P, raw: String) -> Result<String> {
   if !P::INFO.supports(Cap::TokenLogin) {
     return Err(Error::unsupported("login --token").with_hint(p.ctx().login_hint()));
   }
-  let token = if raw == "-" {
-    std::io::read_to_string(std::io::stdin())?
-  } else {
-    raw
-  };
+  let token = stdin_for_dash(raw)?;
   if token.trim().is_empty() {
     return Err(Error::input("the token is empty"));
   }
@@ -120,7 +116,16 @@ async fn token_login<P: Platform>(p: &P, raw: String) -> Result<String> {
   Ok("token".to_owned())
 }
 
-/// `--cookie 'name=value; ...'`.
+/// A secret argument, or standard input for `-` (out of the shell history).
+fn stdin_for_dash(raw: String) -> Result<String> {
+  if raw == "-" {
+    Ok(std::io::read_to_string(std::io::stdin())?)
+  } else {
+    Ok(raw)
+  }
+}
+
+/// `--cookie 'name=value; ...'` (`-` reads it from stdin).
 fn cookie_login(ctx: &Ctx, raw: &str) -> Result<String> {
   let cookies = browser::parse_cookie_string(raw);
   if cookies.is_empty() {

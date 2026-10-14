@@ -24,7 +24,8 @@ end lists every platform.
   (Chrome, Chromium, Edge, Brave, Firefox, LibreWolf, Zen, Vivaldi, Opera,
   Arc). Only the platform's own domains are read. Log in on the website first.
 - **Cookie string**: copy the `Cookie` request header from the browser's
-  developer tools (Network tab, any request to the site).
+  developer tools (Network tab, any request to the site); `--cookie -`
+  reads it from stdin.
 - **Token**: bot tokens, API keys or app credentials, in the form each
   platform names (`atp <platform> login --token '...'`; `-` reads it from
   stdin). Several platforms also read them from environment variables.

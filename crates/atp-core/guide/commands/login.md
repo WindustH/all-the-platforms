@@ -16,7 +16,7 @@ cookies (tokens, API keys, OAuth apps) names its ways to log in instead.
   zen, vivaldi, opera or arc. Without NAME each one is tried and the first
   holding a complete session wins.
 - `--cookie 'a=1; b=2'` takes a `Cookie` header copied from the browser's
-  developer tools.
+  developer tools; `-` reads it from standard input.
 - `--token TOKEN` takes an access token or API credentials in the form the
   platform names; `-` reads it from standard input, keeping it out of the
   shell history.
