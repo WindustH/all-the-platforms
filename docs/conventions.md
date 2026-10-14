@@ -93,6 +93,9 @@ Use these instead of writing another copy:
 | text and file arguments, confirmations | `cli::{read_text, check_images, check_files, confirm}` |
 | HTTP errors | `http::status_error`, `Req::retries` |
 
+Session cookies go only to the hosts in `PlatformInfo::cookie_domains` (and
+their subdomains), so list every domain the session is used on.
+
 When a crate needs something a second crate already has, move it into
 atp-core first.
 
