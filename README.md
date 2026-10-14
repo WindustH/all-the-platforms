@@ -98,7 +98,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | Video | Bilibili 哔哩哔哩 | `bili` | videos, danmaku, subtitles, coins, creator data | QR, browser |
 | | Douyin 抖音 | `douyin` | videos, image posts, hot boards, live danmaku, no-watermark downloads | QR, phone, browser |
 | | YouTube | `youtube` | videos, Shorts, transcripts, playlists, analytics | browser |
-| | TikTok | `tiktok` | videos, sounds, hashtags, ads | QR, browser |
+| | TikTok | `tiktok` | videos, sounds, hashtags, live comments, ads | QR, browser |
 | | Kuaishou 快手 | `kuaishou` | videos, image sets, comments, hot board, live rooms | QR, browser |
 | Music / podcasts | NetEase Cloud Music 网易云音乐 | `ncm` | songs, lyrics with translations, playlists, charts, comments, your cloud drive | QR, browser |
 | | QQ Music QQ 音乐 | `qqmusic` | songs, lyrics with translations, playlists, charts, comments | QR, browser |

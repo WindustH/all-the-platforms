@@ -6,6 +6,9 @@
 //! RC4-encrypted User-Agent, a timestamp and a fixed canvas value, XOR
 //! checksummed, RC4-encrypted again and mapped through a custom alphabet.
 //! Newer pages also send `X-Gnarly`, which is not reproduced here.
+//!
+//! The live rooms' websocket carries a `frontierSign` instead
+//! ([`webcast_signature`]).
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -16,6 +19,13 @@ const ALPHABET: &[u8; 65] = b"Dkdpgh4ZKsQB80/Mfvw36XI1R25-WUAlEi7NLboqYTOPuzmFjJ
 const UA_KEY: [u8; 3] = [0, 1, 12];
 const CANVAS: u32 = 536_919_696;
 const TOKEN_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+/// The `X-Bogus` of the webcast websocket. The page signs an empty
+/// `X-MS-PAYLOAD` where Douyin signs an `X-MS-STUB`, so the stub is the MD5
+/// of nothing. TikTok accepts the connection without checking it today.
+pub fn webcast_signature() -> String {
+  atp_bytedance::webcast::frontier::sign(&md5(b""))
+}
 
 /// A fresh `msToken` for a session the server has not handed one yet.
 pub fn ms_token() -> String {

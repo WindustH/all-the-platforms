@@ -27,6 +27,7 @@ secret (`TIKTOK_ADS_APP_ID`, `TIKTOK_ADS_SECRET`).
 
 Pages: `read` (videos and photo posts, with exact counters, the stream
 ladder and the sound), `user`, `insights` of a post, and `download`.
+`listen` follows live rooms without a login too.
 TikTok puts a proof-of-work check in front of pages now and then; it is
 solved like the browser does.
 
@@ -79,6 +80,8 @@ expired Marketing API token fails `ads` with `not_authenticated` as well.
 - Playlists: the id or a `/@user/playlist/<name>-<id>` link.
 - Favorites collections: the id or a `/@user/collection/<name>-<id>` link.
 - Comments: the comment id.
+- Live rooms (`listen`): the host's `@handle`, `live:@handle`, a
+  `https://www.tiktok.com/@handle/live` link, or the room id.
 
 ## Commands
 
@@ -190,6 +193,22 @@ metric names are the Marketing API's (`report/integrated/get`).
 `ads raw PATH key=value …` calls any other Marketing API endpoint (the
 path after `/open_api/v1.3`); values that parse as JSON are sent as JSON,
 `--post` sends a JSON body.
+
+### listen
+
+`listen @HANDLE …` follows live rooms over TikTok's webcast websocket,
+without a login. Each event is a post whose `kind` is `message` (a
+comment), `gift` (name × count, `extra.count`), `like` (`extra.likes`,
+`extra.likes_total`), `enter` (someone joined, `extra.audience`),
+`follow`, `share`, `stats` (viewers now, `extra.viewers`, and in all,
+`extra.viewers_total`; one every 30 s at most) or `offline` (the live
+ended, which ends the stream); `extra.chat` is `live:@handle`. The first
+events may be the room's latest few comments. A host who is not live now
+is `not_found`; a dropped connection is opened again.
+
+The connection carries the web SDK's `frontierSign`, computed the way the
+page does (no signing service is involved); TikTok does not check it
+today.
 
 ### download
 

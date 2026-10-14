@@ -218,6 +218,28 @@ impl Api {
     check(path, v)
   }
 
+  /// GET a `www` endpoint the web client calls without a signature
+  /// (`/api-live/...`).
+  pub async fn unsigned(
+    &self,
+    path: &str,
+    params: &[(&str, &str)],
+    referer: &str,
+  ) -> Result<Value> {
+    let v = self
+      .ctx
+      .http
+      .get(format!("{WWW}{path}"))
+      .queries(params.iter().copied())
+      .header("referer", referer)
+      .header("sec-fetch-site", "same-origin")
+      .header("sec-fetch-mode", "cors")
+      .header("sec-fetch-dest", "empty")
+      .value()
+      .await?;
+    check(path, v)
+  }
+
   /// The browser's device block, the parameters, then the `msToken`,
   /// percent-encoded the way the web client sends them.
   async fn query(&self, params: &[(&str, String)]) -> Result<String> {

@@ -1,6 +1,6 @@
 //! References: video / photo links and ids, short links (`vm.tiktok.com`,
-//! `vt.tiktok.com`, `/t/`), `@handle`s and secUids, `#hashtags`, sounds and
-//! playlists.
+//! `vt.tiktok.com`, `/t/`), `@handle`s and secUids, `#hashtags`, sounds,
+//! playlists and live rooms.
 
 use atp_core::{Error, Result};
 use url::Url;
@@ -221,4 +221,43 @@ pub fn video_url(author: &str, id: &str, photo: bool) -> String {
 
 pub fn user_url(handle: &str) -> String {
   format!("{WWW}/@{handle}")
+}
+
+/// A live room: its host's handle, or the room id itself.
+#[derive(Debug, Clone)]
+pub enum LiveRef {
+  Handle(String),
+  Room(String),
+}
+
+/// A live room from `@handle`, a `/@handle/live` link or a room id, with
+/// or without `live:` before it.
+pub fn live(arg: &str) -> Result<LiveRef> {
+  let arg = arg.trim();
+  let arg = arg.strip_prefix("live:").unwrap_or(arg);
+  let bad = || {
+    Error::input(format!(
+      "not a TikTok live room: {arg} (expected @handle, a tiktok.com/@handle/live link or a room id)"
+    ))
+  };
+  if let Some(url) = parse_url(arg) {
+    let segs = segments(&url);
+    let handle = segs.first().and_then(|s| s.strip_prefix('@'));
+    return handle
+      .filter(|h| !h.is_empty())
+      .map(|h| LiveRef::Handle(decode(h)))
+      .ok_or_else(bad);
+  }
+  if arg.len() >= 15 && arg.bytes().all(|b| b.is_ascii_digit()) {
+    return Ok(LiveRef::Room(arg.to_owned()));
+  }
+  let handle = arg.trim_start_matches('@');
+  if handle.is_empty() || handle.contains(['/', ' ', '?']) {
+    return Err(bad());
+  }
+  Ok(LiveRef::Handle(handle.to_owned()))
+}
+
+pub fn live_url(handle: &str) -> String {
+  format!("{WWW}/@{handle}/live")
 }

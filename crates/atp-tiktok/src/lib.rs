@@ -4,15 +4,18 @@
 //! sounds) and the web client's signed API for lists (comments, a user's
 //! videos, search, followers ...), with the browser session cookies
 //! (`sessionid`) when logged in. Ad accounts go through the official
-//! Marketing API (`ads`), with an access token.
+//! Marketing API (`ads`), with an access token. `listen` follows live
+//! rooms over the webcast websocket.
 
 mod ads;
 mod api;
 mod extra;
 mod insights;
+mod live;
 mod login;
 mod parse;
 mod refs;
+mod rooms;
 mod sign;
 mod users;
 mod videos;
@@ -21,6 +24,7 @@ mod write;
 
 use std::time::Duration;
 
+use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Insights, Media, Page, PageReq, Platform,
   PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User,
@@ -37,7 +41,7 @@ impl Platform for TikTok {
     id: "tiktok",
     name: "TikTok",
     aliases: &["tt"],
-    about: "TikTok: videos, photo posts, comments, users, sounds, hashtags and ads",
+    about: "TikTok: videos, photo posts, comments, users, sounds, hashtags, live comments and ads",
     home: "https://www.tiktok.com/",
     cookie_domains: &["tiktok.com"],
     required_cookies: &["sessionid"],
@@ -68,6 +72,7 @@ impl Platform for TikTok {
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
+      Cap::Listen,
     ],
     choices: Choices {
       search_filter: &["general", "video"],
@@ -82,7 +87,7 @@ impl Platform for TikTok {
       "TIKTOK_ADS_SECRET",
       "TIKTOK_ADS_ADVERTISER_ID",
     ],
-    guest: "read, user, download; search, comments and lists often refused",
+    guest: "read, user, download, listen; search, comments and lists often refused",
     guide: include_str!("../GUIDE.md"),
   };
 
@@ -239,6 +244,10 @@ impl Platform for TikTok {
 
   async fn insights(&self, post: Option<&str>, _days: u32) -> Result<Insights> {
     insights::insights(&self.api, post).await
+  }
+
+  async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
+    live::listen(&self.api, chats, out).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

@@ -1273,14 +1273,17 @@ dependencies = [
 name = "atp-tiktok"
 version = "0.1.0"
 dependencies = [
+ "atp-bytedance",
  "atp-core",
  "base64 0.22.1",
  "clap",
+ "futures-util",
  "jiff",
  "md-5",
  "rand 0.9.5",
  "serde_json",
  "sha2 0.10.9",
+ "tokio",
  "tracing",
  "url",
 ]
