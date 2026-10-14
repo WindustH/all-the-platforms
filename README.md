@@ -93,6 +93,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Meituan 美团 | `meituan` | 联盟 deals and rankings, shop reviews, city lookup | key, browser |
 | | Dianping 大众点评 | `dianping` | shops, scores, reviews, discovery notes | QR, browser |
 | Maps | Amap 高德地图 | `amap` | places, geocoding, routes, weather, traffic | key |
+| Drives | Quark Drive 夸克网盘 | `quark` | files and folders, resumable downloads, instant uploads, shares, saving shared files | QR, browser |
 | Chat | WeChat 微信 (ClawBot) | `wechat` | receive and answer messages | QR |
 | | Telegram | `telegram` | chats, channels, groups, bots, channel stats | QR, phone, bot |
 | | Discord | `discord` | servers, channels, DMs, search | QR, token |

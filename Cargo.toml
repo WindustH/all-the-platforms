@@ -65,6 +65,7 @@ atp-mtsec = { path = "crates/atp-mtsec" }
 atp-meituan = { path = "crates/atp-meituan" }
 atp-dianping = { path = "crates/atp-dianping" }
 atp-dewu = { path = "crates/atp-dewu" }
+atp-quark = { path = "crates/atp-quark" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -130,6 +131,7 @@ atp-pinduoduo.workspace = true
 atp-meituan.workspace = true
 atp-dianping.workspace = true
 atp-dewu.workspace = true
+atp-quark.workspace = true
 
 [profile.release]
 lto = "thin"

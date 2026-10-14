@@ -20,6 +20,17 @@ Examples:
     atp x download https://x.com/NASA/status/2104695667180380260
     atp yt download dQw4w9WgXcQ --audio-only
 
+## Cloud drives
+
+    atp quark download /Movies/a.mkv -o ~/Downloads
+    atp quark download /Movies                  # the folder, recursively
+
+On a drive, `download` takes a file or a folder (path, id or `#N`) and
+saves it under the drive's names, a folder as a directory tree. Bytes go
+to `NAME.part` first: running the same download again continues where it
+stopped, and a file already there with the right size is skipped. One
+connection, one range at a time; the speed is the account's.
+
 ## Requirements
 
 - `ffmpeg` on PATH for merging, audio extraction from videos, and `--split`.

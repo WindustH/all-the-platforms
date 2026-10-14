@@ -1,0 +1,18 @@
+[package]
+name = "atp-quark"
+description = "Quark Drive (夸克网盘) support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+base64.workspace = true
+clap.workspace = true
+jiff.workspace = true
+md-5.workspace = true
+rand.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
