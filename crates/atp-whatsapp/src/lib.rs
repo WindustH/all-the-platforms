@@ -1,4 +1,4 @@
-//! WhatsApp for all-the-platforms, in two modes:
+//! WhatsApp for ATP, in two modes:
 //!
 //! - a **personal account** as a linked device ([`personal`], whatsapp-rust):
 //!   QR-code or pairing-code login, chats, messages, groups, sending,

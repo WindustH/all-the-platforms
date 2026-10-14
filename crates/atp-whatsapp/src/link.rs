@@ -367,7 +367,7 @@ fn fatal(event: &Event) -> Option<Error> {
       format!("WhatsApp temporarily banned this account: {b:?}"),
     )),
     Event::ClientOutdated(_) => Some(Error::upstream(
-      "WhatsApp rejects this client version; update all-the-platforms",
+      "WhatsApp rejects this client version; update ATP",
     )),
     Event::StreamReplaced(_) => Some(Error::upstream(
       "another connection of this linked device took over (is `atp whatsapp listen` running elsewhere?)",

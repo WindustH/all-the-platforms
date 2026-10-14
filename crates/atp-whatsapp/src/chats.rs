@@ -71,7 +71,7 @@ pub async fn messages(link: &mut Link, chat: &str, page: &PageReq) -> Result<Pag
   if records.is_empty() && start == 0 {
     return Err(
       Error::not_found("nothing of this chat is archived yet").with_hint(
-        "WhatsApp keeps no history on its servers: the archive fills from the phone's history sync at login and from messages that arrive while all-the-platforms is connected (`listen`)",
+        "WhatsApp keeps no history on its servers: the archive fills from the phone's history sync at login and from messages that arrive while ATP is connected (`listen`)",
       ),
     );
   }

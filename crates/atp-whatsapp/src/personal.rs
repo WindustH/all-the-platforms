@@ -146,7 +146,7 @@ pub fn pair_failure(event: &Event) -> Option<Error> {
       "the phone's WhatsApp is too old for linked devices; update it",
     )),
     Event::ClientOutdated(_) => Some(Error::upstream(
-      "WhatsApp rejects this client version; update all-the-platforms",
+      "WhatsApp rejects this client version; update ATP",
     )),
     Event::TemporaryBan(b) => Some(Error::auth(format!(
       "WhatsApp temporarily banned this account: {b:?}"
