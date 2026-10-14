@@ -83,6 +83,7 @@ Use these instead of writing another copy:
 | --- | --- |
 | environment variables, `login --token` fields, saved credentials, keys shown masked | `credentials::{env, env_any, fields, expect, saved, save, mask}` |
 | access tokens that expire | `token::AccessToken` |
+| logins that come back through the browser to a local address | `oauth::{open_consent, redirect}` |
 | files to upload, MIME types, image sizes | `file::{Upload, Image, mime_for, sniff}`, `Upload::size` |
 | `CHAT/MESSAGE` ids | `chat::{message_id, split_message_id, expect_message_id}` |
 | `listen` by polling (fixed or random interval), reconnect delays | `live::{poll, poll_between, Seen, Backoff}` |
@@ -98,6 +99,7 @@ Use these instead of writing another copy:
 | lyrics and track lists of music platforms | `music::{Lyrics, with_tracks}` |
 | text and file arguments, confirmations | `cli::{read_text, check_images, check_files, confirm}` |
 | HTTP errors | `http::status_error`, `Req::retries` |
+| a declared client name for open APIs that challenge look-alike browsers | `http::TOOL_USER_AGENT` |
 
 Session cookies go only to the hosts in `PlatformInfo::cookie_domains` (and
 their subdomains), so list every domain the session is used on.

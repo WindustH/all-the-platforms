@@ -79,6 +79,7 @@ pub enum PlatformKind {
   Local,
   Drive,
   Music,
+  Developer,
 }
 
 impl PlatformKind {
@@ -90,6 +91,7 @@ impl PlatformKind {
     Self::Local,
     Self::Drive,
     Self::Music,
+    Self::Developer,
   ];
 
   /// Lowercase name, as in `atp platforms --json`.
@@ -102,6 +104,7 @@ impl PlatformKind {
       Self::Local => "local",
       Self::Drive => "drive",
       Self::Music => "music",
+      Self::Developer => "developer",
     }
   }
 
@@ -115,6 +118,7 @@ impl PlatformKind {
       Self::Local => "Maps, local life and travel",
       Self::Drive => "Cloud drives",
       Self::Music => "Music",
+      Self::Developer => "Developer communities",
     }
   }
 }

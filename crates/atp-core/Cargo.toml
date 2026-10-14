@@ -33,7 +33,7 @@ serde.workspace = true
 serde-saphyr = "1"
 serde_json.workspace = true
 sha1 = { workspace = true, features = ["compress"] }
-tokio.workspace = true
+tokio = { workspace = true, features = ["net"] }
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-width = "0.2"

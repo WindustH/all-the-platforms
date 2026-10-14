@@ -8,14 +8,13 @@
 use std::net::Ipv4Addr;
 use std::time::Duration;
 
-use atp_core::oauth;
+use atp_core::oauth::{self, Via};
 use atp_core::{Error, ErrorCode, Result, credentials};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rand::Rng;
 use sha2::{Digest, Sha256};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 
 use crate::api::{Api, CLIENT_ID, ENV_CLIENT_ID};
 
@@ -66,11 +65,14 @@ pub async fn token(api: &Api, arg: &str) -> Result<()> {
     "The app must list {redirect} under Redirect URIs; if Spotify says \"Invalid redirect \
      URI\", add it in the dashboard, stop this with Ctrl-C and log in again."
   ));
-  let code = tokio::time::timeout(CONSENT_WAIT, wait_for_code(&listener, &state))
+  let back = oauth::redirect(&listener, "/callback", &state, Via::Query, "Spotify");
+  let code = tokio::time::timeout(CONSENT_WAIT, back)
     .await
-    .map_err(|_| {
-      Error::auth("timed out waiting for the browser to come back; run login again")
-    })??;
+    .map_err(|_| Error::auth("timed out waiting for the browser to come back; run login again"))??
+    .remove("code")
+    .ok_or_else(|| {
+      Error::auth("the browser came back from another login attempt; run login again")
+    })?;
   let form = [
     ("grant_type", "authorization_code"),
     ("code", code.as_str()),
@@ -148,59 +150,4 @@ fn random(len: usize) -> String {
 /// The S256 challenge of a verifier: base64url of its SHA-256, unpadded.
 fn challenge(verifier: &str) -> String {
   URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
-}
-
-/// Accept connections until the browser brings `/callback`; its code, or
-/// why there is none.
-async fn wait_for_code(listener: &TcpListener, state: &str) -> Result<String> {
-  loop {
-    let (mut stream, _) = listener.accept().await?;
-    if let Some(result) = answer(&mut stream, state).await {
-      return result;
-    }
-  }
-}
-
-/// Read one request and answer it: `Some` when it was the redirect.
-async fn answer(stream: &mut TcpStream, state: &str) -> Option<Result<String>> {
-  let mut buf = vec![0u8; 8192];
-  let n = stream.read(&mut buf).await.ok()?;
-  let request = String::from_utf8_lossy(&buf[..n]);
-  let target = request.split_whitespace().nth(1)?;
-  let url = url::Url::parse(&format!("http://127.0.0.1{target}")).ok()?;
-  if url.path() != "/callback" {
-    reply(stream, "404 Not Found", "Not found.").await;
-    return None;
-  }
-  let get = |key: &str| {
-    url
-      .query_pairs()
-      .find(|(k, _)| k == key)
-      .map(|(_, v)| v.into_owned())
-  };
-  let result = match (get("state"), get("code"), get("error")) {
-    (Some(s), Some(code), _) if s == state => Ok(code),
-    (Some(s), _, Some(error)) if s == state => Err(Error::auth(format!(
-      "Spotify did not grant access: {error}"
-    ))),
-    _ => Err(Error::auth(
-      "the browser came back from another login attempt; run login again",
-    )),
-  };
-  let text = match &result {
-    Ok(_) => "ATP has Spotify's answer. You can close this tab and return to the terminal.",
-    Err(_) => "The Spotify login did not complete; see the terminal.",
-  };
-  reply(stream, "200 OK", text).await;
-  Some(result)
-}
-
-async fn reply(stream: &mut TcpStream, status: &str, text: &str) {
-  let page = format!(
-    "HTTP/1.1 {status}\r\ncontent-type: text/plain; charset=utf-8\r\ncontent-length: {}\r\n\
-     connection: close\r\n\r\n{text}",
-    text.len()
-  );
-  let _ = stream.write_all(page.as_bytes()).await;
-  let _ = stream.shutdown().await;
 }

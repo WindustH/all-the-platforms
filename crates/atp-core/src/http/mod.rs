@@ -26,6 +26,14 @@ pub const CHROME_VERSION: u32 = 149;
 
 pub const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
 
+/// The User-Agent of a declared tool, for open APIs whose guards
+/// (Cloudflare, Anubis) challenge clients that claim to be a browser.
+pub const TOOL_USER_AGENT: &str = concat!(
+  "ATP/",
+  env!("CARGO_PKG_VERSION"),
+  " (all-the-platforms; +https://github.com/WindustH/atp)"
+);
+
 pub const SEC_CH_UA: &str = r#""Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24""#;
 
 pub const SEC_CH_UA_PLATFORM: &str = r#""macOS""#;

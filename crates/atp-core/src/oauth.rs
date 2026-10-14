@@ -1,7 +1,8 @@
 //! OAuth 2.0 for a command line: the device-code login (RFC 8628), where
 //! the user confirms a code or scans a QR code on another device while atp
 //! polls; the consent page of a login that comes back through the browser
-//! ([`open_consent`]); and tokens kept with the session.
+//! ([`open_consent`]) and the one-shot local listener it comes back to
+//! ([`redirect`]); and tokens kept with the session.
 //!
 //! The tokens live in the session extras next to the cookies, so one
 //! session can carry both (a drive's web cookies and its open-platform
@@ -23,6 +24,10 @@ use crate::error::{Error, ErrorCode, Result};
 use crate::json::ValueExt;
 use crate::output::note;
 use crate::qr;
+
+mod redirect;
+
+pub use self::redirect::{Via, redirect};
 
 /// Session extras the tokens are kept under.
 pub const ACCESS_TOKEN: &str = "oauth_access_token";
