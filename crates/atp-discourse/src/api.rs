@@ -198,13 +198,13 @@ impl Api {
   fn check(&self, resp: Resp) -> Result<Value> {
     if is_challenge(&resp) {
       let forum = self.forum();
+      // Requests go without cookies and the challenge is bound to the
+      // browser that passes it, so a browser pass cannot clear it.
       return Err(
-        Error::new(
-          ErrorCode::VerificationRequired,
-          format!("{forum} answered with a browser check (Cloudflare)"),
-        )
-        .with_url(&forum)
-        .with_hint("the forum checks clients before its API; it may let logged-in requests through, or try again later or from another network"),
+        Error::verification(format!("{forum} answered with a browser check (Cloudflare)"))
+          .with_url(&forum)
+          .with_hint("the forum checks clients before its API; it may let logged-in requests through, or try again later or from another network")
+          .unclearable(),
       );
     }
     let status = resp.status.as_u16();

@@ -40,6 +40,13 @@ pub trait Platform: Sized {
   /// `--coord`.
   const COORD: Option<crate::geo::System> = None;
 
+  /// Whether a `verification_required` error may be passed in the person's
+  /// browser and the command retried with the cookies it set. A platform
+  /// without session cookies (`cookie_domains` empty) has none to take
+  /// back, so by default only cookie platforms get the browser; single
+  /// errors opt out with [`Error::unclearable`].
+  const BROWSER_CHECKS: bool = !Self::INFO.cookie_domains.is_empty();
+
   /// Platform-only commands, merged next to the shared ones.
   type Extra: clap::Subcommand;
 

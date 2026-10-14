@@ -35,9 +35,10 @@ supported: it serves a merchant's own bids and orders, no market prices.
 Dewu's user agreement forbids crawlers and automated tools; keep to the
 odd lookup by hand. ATP waits three seconds between requests and never
 pages further than `--limit`. A captcha demand on the site (code 485) is
-`verification_required` with the page in `error.url`, which ATP opens in a
-browser on a terminal (see `atp guide login`); see "Signing and refusals"
-below for which calls meet it.
+`verification_required` with the page in `error.url`. ATP does not open it
+in a browser: its requests carry no cookies and lack the site's device
+headers, so a check passed there would not clear it. See "Signing and
+refusals" below for which calls meet it.
 
 ## References
 

@@ -59,9 +59,9 @@ through Cloudflare). ATP asks as its browser-like client first and, when
 the check stops that, once more under its own declared User-Agent, which
 some checks let through (that forum is then asked that way first for a
 day). When both are stopped, commands fail with `verification_required`
-and the forum's address. On a terminal ATP offers to open the check in
-a browser, but a passed check stays with that browser and does not
-reach ATP: answer `q`, or pass `--no-verify`. Whether a forum lets
+and the forum's address in `error.url`. ATP does not open the check in a
+browser: a passed check stays with that browser and does not reach ATP,
+whose requests carry no cookies. Whether a forum lets
 requests with a User API Key through its check is the forum's setting
 and not known to ATP.
 

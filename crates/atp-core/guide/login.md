@@ -81,3 +81,10 @@ tied to cookies may need a new `login`. `ATP_BROWSER` picks the browser (a
 path or a command name). Pipes, scripts and `--no-verify` (`ATP_NO_VERIFY=1`)
 get the error with the page in `error.url` instead. ATP never solves
 captchas itself.
+
+Some checks a browser cannot clear for ATP, so none is opened and the
+error comes with its page at once: on platforms whose requests carry no
+session cookies (tokens, API keys, public reads), for challenges bound to
+the browser that passed them (Cloudflare in front of a forum's API, such
+as linux.do), and where a site wants device headers ATP does not make
+(Dewu). Wait, change network, or use the site in the browser instead.

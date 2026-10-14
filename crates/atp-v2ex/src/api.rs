@@ -110,11 +110,9 @@ impl Api {
     let message = v.str("message").unwrap_or_default();
     if status == 403 && resp.text().contains("Just a moment") {
       return Err(
-        Error::new(
-          ErrorCode::VerificationRequired,
-          "V2EX's Cloudflare check stopped the request",
-        )
-        .with_hint("retry later, or from another network"),
+        Error::verification("V2EX's Cloudflare check stopped the request")
+          .with_hint("retry later, or from another network")
+          .unclearable(),
       );
     }
     match status {

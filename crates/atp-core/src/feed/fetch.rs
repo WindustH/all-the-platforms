@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 
 use crate::ctx::Ctx;
-use crate::error::{Error, ErrorCode, Result};
+use crate::error::{Error, Result};
 use crate::http::{Resp, TOOL_USER_AGENT, status_error};
 
 const ACCEPT: &str = "application/rss+xml, application/atom+xml, application/feed+json, \
@@ -115,11 +115,14 @@ fn refused(resp: &Resp) -> Error {
     .ok()
     .and_then(|url| url.host_str().map(str::to_owned))
     .unwrap_or_default();
-  Error::new(
-    ErrorCode::PermissionDenied,
-    format!("{host} answered with a browser check (Cloudflare), which feed readers cannot pass"),
-  )
+  // Feeds go out without cookies, and the check is tied to the browser
+  // that passes it: a browser pass cannot clear it for ATP.
+  Error::verification(format!(
+    "{host} answered with a browser check (Cloudflare), which feed readers cannot pass"
+  ))
+  .with_url(&resp.url)
   .with_hint("the feed is closed to readers; look for another address of it")
+  .unclearable()
 }
 
 /// The first feed a web page announces with `<link rel="alternate"

@@ -67,7 +67,7 @@ error:
 | Code | What to do |
 | --- | --- |
 | `not_authenticated` | log in (`atp <platform> login`) |
-| `verification_required` | the platform wants a captcha or check: pass it in a browser, retry later |
+| `verification_required` | the platform wants a captcha or check (`url`): pass it in a browser, retry later; on a terminal ATP opens it itself where a browser pass clears it for ATP |
 | `ip_blocked` | switch network |
 | `rate_limited` | wait before retrying |
 | `signature_error` | the request signature was rejected; update all-the-platforms |

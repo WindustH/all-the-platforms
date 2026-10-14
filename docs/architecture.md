@@ -51,7 +51,7 @@ line in `src/main.rs`.
 | `live` | `listen` helpers: polling with de-duplication, `Backoff` (reconnect delays, task polling) |
 | `socket` | websocket connections through the same client |
 | `qr` | login QR codes in the terminal, from a URL or a QR image |
-| `verify` | human checks by hand: a Chromium-family browser over DevTools with the session cookies, then one retry (`chrome`, `cdp`) |
+| `verify` | human checks by hand: a Chromium-family browser over DevTools with the session cookies, then one retry (`chrome`, `cdp`); skipped for checks a browser cannot clear (`Error::unclearable`, `Platform::BROWSER_CHECKS`) |
 | `mcp` | `atp mcp`: JSON-RPC over stdio; tools `platforms`, `help`, `read`, `run` calling commands without printing; the guide as resources (`atp://guide/…`) |
 
 ### The Platform contract
@@ -75,6 +75,10 @@ A platform crate exports one type implementing `atp_core::Platform`:
   `Post.url` / `User.url`, because that is what `#N` resolves to).
 - `type Extra: clap::Subcommand` holds platform-only commands; `run_extra`
   returns `Data` like everything else.
+- `const BROWSER_CHECKS: bool`: whether a `verification_required` error
+  may be passed in the person's browser and retried with its cookies; by
+  default platforms with session cookies (`cookie_domains`) only. Single
+  errors opt out with `Error::unclearable()`.
 - `const COORD: Option<geo::System>`: map platforms name the coordinate
   system they work in; it is the default of the `--coord` option they get.
 

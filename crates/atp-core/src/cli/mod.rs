@@ -276,7 +276,7 @@ async fn execute<P: Platform>(
   let info: PlatformInfo = P::INFO;
   let mut loaded = crate::account::load_session(&info, &Store::new(info.id))?;
   let error = match attempt::<P>(global, matches, &loaded, false).await {
-    Err(e) if e.code == ErrorCode::VerificationRequired && verify::wanted(global.no_verify) => e,
+    Err(e) if browser_clears::<P>(&e) && verify::wanted(global.no_verify) => e,
     done => return done,
   };
   let session = &loaded.session.cookies;
@@ -286,6 +286,13 @@ async fn execute<P: Platform>(
   };
   loaded.session.cookies.extend(cookies);
   attempt::<P>(global, matches, &loaded, true).await
+}
+
+/// Whether passing `error` in the person's browser can clear it: a human
+/// check whose cookies the platform's requests carry back. Others are
+/// printed with their page at once.
+fn browser_clears<P: Platform>(error: &Error) -> bool {
+  error.code == ErrorCode::VerificationRequired && !error.unclearable && P::BROWSER_CHECKS
 }
 
 /// Run the command once on `loaded`; `verified` saves the session even when

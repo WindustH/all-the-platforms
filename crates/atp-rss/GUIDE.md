@@ -40,8 +40,10 @@ FreshRSS (its Google Reader API) is not supported yet.
 RSSHub routes (`rsshub:/github/trending/daily`, `hub ROUTE`) go to
 `RSSHUB_INSTANCE` when set, else https://rsshub.app. The public
 rsshub.app can answer with a Cloudflare browser check, which no feed
-reader passes (the command then fails with `permission_denied`); public
-instances also limit requests and leave some routes out. Your own
+reader passes: the command fails with `verification_required` and the
+page in `error.url`, without opening a browser, since passing the check
+there does not clear it for ATP. Public instances also limit requests and
+leave some routes out. Your own
 instance has none of that. `hub --instance URL` picks one for a single
 command.
 

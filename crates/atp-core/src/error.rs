@@ -61,6 +61,10 @@ pub struct Error {
   /// A page that clears the error in a browser: a captcha, a risk check.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub url: Option<String>,
+  /// A human check that passing it in the person's browser cannot clear
+  /// (see [`Error::unclearable`]).
+  #[serde(skip)]
+  pub unclearable: bool,
 }
 
 impl Error {
@@ -70,6 +74,7 @@ impl Error {
       message: message.into(),
       hint: None,
       url: None,
+      unclearable: false,
     }
   }
 
@@ -80,6 +85,15 @@ impl Error {
 
   pub fn with_url(mut self, url: impl Into<String>) -> Self {
     self.url = Some(url.into());
+    self
+  }
+
+  /// A check a browser pass cannot clear: the request carried no cookies,
+  /// the challenge is bound to the browser's fingerprint, or the site wants
+  /// device headers ATP does not make. The CLI then prints the error with
+  /// its page instead of opening it and retrying.
+  pub fn unclearable(mut self) -> Self {
+    self.unclearable = true;
     self
   }
 
@@ -96,6 +110,12 @@ impl Error {
 
   pub fn auth(message: impl Into<String>) -> Self {
     Self::new(ErrorCode::NotAuthenticated, message)
+  }
+
+  /// A captcha or risk check (`verification_required`); add its page with
+  /// [`Error::with_url`].
+  pub fn verification(message: impl Into<String>) -> Self {
+    Self::new(ErrorCode::VerificationRequired, message)
   }
 
   pub fn input(message: impl Into<String>) -> Self {

@@ -110,6 +110,25 @@ their subdomains), so list every domain the session is used on.
 When a crate needs something a second crate already has, move it into
 atp-core first.
 
+## Human checks
+
+Captchas and risk checks are `verification_required` (`Error::verification`)
+with the page in `with_url`. On a terminal the CLI opens that page in the
+person's browser with the session cookies and retries with the cookies the
+check set. That only works when the platform's requests carry cookies the
+browser can set, so:
+
+- mark a check a browser pass cannot clear with `.unclearable()`: requests
+  sent without cookies (`no_cookies`), challenges bound to the browser's
+  fingerprint (Cloudflare in front of an API, as on Discourse forums such
+  as linux.do), demands for device headers ATP does not make (Dewu). The
+  CLI then prints the error and its page at once;
+- `Platform::BROWSER_CHECKS` is the platform-wide default: on for
+  platforms with `cookie_domains`, off for the others, which send no
+  session cookies. Override it only when a whole platform's checks differ.
+
+Never solve a check in code, and say in the GUIDE whether ATP opens it.
+
 ## Documentation
 
 `atp guide`, the MCP `help` tool and the `atp://guide/…` resources are

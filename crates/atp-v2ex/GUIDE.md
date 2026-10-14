@@ -42,7 +42,8 @@ the limit commands fail with `rate_limited`. Deleting a notification waits
 half a second to a second and a half first. Requests name ATP as their
 client (`User-Agent`): V2EX's Cloudflare stops clients that look like a
 browser but run no JavaScript. Should it stop ATP too, commands fail with
-`verification_required`.
+`verification_required` at once: a check passed in a browser does not
+reach ATP, so none is opened.
 
 ### Environment
 

@@ -154,10 +154,13 @@ fn check(resp: Resp, path: &str, page: &str) -> Result<Value> {
   Err(refusal(&v, path, page))
 }
 
+/// A check before a call. Requests go without cookies and the site wants
+/// device headers atp does not make, so passing it in a browser cannot clear it.
 fn check_error(message: String, page: &str) -> Error {
-  Error::new(ErrorCode::VerificationRequired, message)
+  Error::verification(message)
     .with_url(page)
     .with_hint(CHECK_HINT)
+    .unclearable()
 }
 
 /// The atp error for a failed envelope, by its wording.
