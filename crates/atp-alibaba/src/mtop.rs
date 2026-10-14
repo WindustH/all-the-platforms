@@ -128,7 +128,7 @@ async fn send(ctx: &Ctx, gateway: &Gateway, call: &Call<'_>, token: &str) -> Res
   let t = jiff::Timestamp::now().as_millisecond().to_string();
   let sign = sign(token, &t, gateway.app_key, &call.data);
   let mut query: Vec<(&str, String)> = vec![
-    ("jsv", "2.7.2".into()),
+    ("jsv", "2.7.3".into()),
     ("appKey", gateway.app_key.into()),
     ("t", t),
     ("sign", sign),
