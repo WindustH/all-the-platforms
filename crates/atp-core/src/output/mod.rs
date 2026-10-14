@@ -242,6 +242,20 @@ impl Stream {
   }
 }
 
+/// A byte-counting progress bar on stderr, labelled `label`; its length is
+/// set once known.
+pub(crate) fn progress(label: &str) -> indicatif::ProgressBar {
+  let bar = indicatif::ProgressBar::new(0);
+  bar.set_style(
+    indicatif::ProgressStyle::with_template(
+      "{msg:40!} {bytes:>10}/{total_bytes:10} {bar:24} {bytes_per_sec:>10}",
+    )
+    .unwrap_or_else(|_| indicatif::ProgressStyle::default_bar()),
+  );
+  bar.set_message(label.to_owned());
+  bar
+}
+
 /// Progress / status line for people, on stderr so it never mixes with data.
 pub fn note(message: &str) {
   human::note(message);

@@ -47,6 +47,8 @@ pub enum Cap {
   React,
   Edit,
   Listen,
+  /// A drive: `search`, `read` and `download` work on files and folders.
+  Files,
 }
 
 impl Cap {
@@ -91,6 +93,7 @@ impl Cap {
     Cap::React,
     Cap::Edit,
     Cap::Listen,
+    Cap::Files,
   ];
 
   pub fn name(self) -> &'static str {
@@ -135,6 +138,7 @@ impl Cap {
       Cap::React => "react",
       Cap::Edit => "edit",
       Cap::Listen => "listen",
+      Cap::Files => "files",
     }
   }
 }

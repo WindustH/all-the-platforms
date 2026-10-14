@@ -1,6 +1,7 @@
 //! Terminal rendering of [`Data`] for people.
 
 mod cards;
+mod files;
 mod insights;
 mod tables;
 
@@ -15,6 +16,7 @@ use owo_colors::{OwoColorize, Stream};
 
 pub use self::cards::stream_line;
 use self::cards::*;
+use self::files::*;
 use self::insights::*;
 use self::tables::*;
 
@@ -25,8 +27,10 @@ pub fn render(data: &Data) {
     Data::Comments(page) => list(page, comment_tree),
     Data::Collections(page) => list(page, collection_table),
     Data::Notifications(page) => list(page, notification_table),
+    Data::Files(page) => list(page, file_table),
     Data::Post(post) => post_card(post),
     Data::User(user) => user_card(user),
+    Data::File(file) => file_card(file),
     Data::Action(action) => action_line(action),
     Data::Auth(auth) => auth_line(auth),
     Data::Counts(counts) => {

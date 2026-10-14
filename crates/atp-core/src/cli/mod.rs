@@ -153,7 +153,54 @@ pub fn command<P: Platform>() -> clap::Command {
   cmd = with_choices(cmd, "hot", "category", ch.hot_category);
   cmd = with_choices(cmd, "feed", "kind", ch.feed_kind);
   cmd = with_choices(cmd, "comments", "sort", ch.comment_sort);
-  with_choices(cmd, "notifications", "kind", ch.notification_kind)
+  cmd = with_choices(cmd, "notifications", "kind", ch.notification_kind);
+  if info.supports(Cap::Files) {
+    cmd = drive_words(cmd, info.id);
+  }
+  cmd
+}
+
+/// On a drive the shared commands handle files, not posts.
+fn drive_words(cmd: clap::Command, id: &str) -> clap::Command {
+  let download = format!(
+    "Examples:\n  atp {id} download /Movies/a.mkv -o ~/Downloads\n  atp {id} download /Movies\n\n\
+     A download that stopped continues when run again.\nMore: atp guide download"
+  );
+  let search = format!("Examples:\n  atp {id} search report\n  atp {id} read '#1'");
+  cmd
+    .mut_subcommand("read", |c| {
+      file_arg(c).about("Show a file or folder (path or id), or a share link")
+    })
+    .mut_subcommand("delete", |c| {
+      file_arg(c).about("Move a file or folder to the recycle bin")
+    })
+    .mut_subcommand("download", |c| {
+      let c = hide_arg(hide_arg(file_arg(c), "audio_only"), "split");
+      c.about("Download a file, or a folder with everything in it")
+        .after_long_help(download)
+    })
+    .mut_subcommand("search", |c| {
+      hide_arg(c, "kind")
+        .about("Search the names of your files and folders")
+        .after_long_help(search)
+    })
+}
+
+/// `POST` shown as `FILE`.
+fn file_arg(cmd: clap::Command) -> clap::Command {
+  if cmd.get_arguments().any(|a| a.get_id() == "post") {
+    cmd.mut_arg("post", |a| a.value_name("FILE"))
+  } else {
+    cmd
+  }
+}
+
+fn hide_arg(cmd: clap::Command, arg: &str) -> clap::Command {
+  if cmd.get_arguments().any(|a| a.get_id() == arg) {
+    cmd.mut_arg(arg, |a| a.hide(true))
+  } else {
+    cmd
+  }
 }
 
 /// Names and aliases of the platform-only commands.
@@ -292,6 +339,15 @@ fn remember(ctx: &Ctx, data: &Data) {
         .items
         .iter()
         .map(|u| u.reference().to_owned())
+        .collect(),
+    ),
+    // A drive's `read`, `download` and `delete` take files where others take posts.
+    Data::Files(page) => ctx.store.remember(
+      RefKind::Post,
+      page
+        .items
+        .iter()
+        .map(|f| f.reference().to_owned())
         .collect(),
     ),
     Data::Collections(page) => ctx.store.remember(

@@ -5,9 +5,9 @@ use std::path::PathBuf;
 use clap::Subcommand;
 
 use crate::download::{self, DownloadOpts};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::model::Data;
-use crate::platform::Platform;
+use crate::platform::{Cap, Platform};
 
 #[derive(Debug, clap::Args)]
 pub struct DownloadArgs {
@@ -32,6 +32,9 @@ pub enum MediaCommand {
 
 pub(super) async fn run<P: Platform>(p: &P, cmd: MediaCommand) -> Result<Data> {
   let MediaCommand::Download(args) = cmd;
+  if P::INFO.supports(Cap::Files) {
+    return files(p, args).await;
+  }
   let ctx = p.ctx();
   let audio_only = args.audio_only || args.split.is_some();
   let (post, media) = p.media(&ctx.post_ref(&args.post)?, audio_only).await?;
@@ -47,6 +50,26 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: MediaCommand) -> Result<Data> {
     &media,
     &opts,
     async |m, dir, name| p.save_media(m, dir, name).await,
+  )
+  .await?;
+  Ok(Data::Downloads(saved))
+}
+
+/// A drive's file, or a folder with everything in it.
+async fn files<P: Platform>(p: &P, args: DownloadArgs) -> Result<Data> {
+  if args.audio_only || args.split.is_some() {
+    return Err(Error::input(
+      "--audio-only and --split apply to media, not to drive files",
+    ));
+  }
+  let ctx = p.ctx();
+  let root = p.file(&ctx.post_ref(&args.post)?).await?;
+  let saved = download::files(
+    ctx,
+    &root,
+    &args.dir,
+    async |folder, req| p.files(folder, &req).await,
+    async |file, renew| p.file_link(file, renew).await,
   )
   .await?;
   Ok(Data::Downloads(saved))

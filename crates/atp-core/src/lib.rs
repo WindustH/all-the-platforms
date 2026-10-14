@@ -22,14 +22,17 @@ pub mod json;
 pub mod live;
 mod mcp;
 pub mod model;
+pub mod oauth;
 pub mod output;
 pub mod paging;
 pub mod platform;
 pub mod qr;
 pub mod socket;
 pub mod store;
+pub mod task;
 pub mod text;
 pub mod token;
+pub mod upload;
 mod verify;
 
 pub use app::App;

@@ -23,6 +23,7 @@ imagesize = "0.14"
 indicatif = "0.18"
 jiff.workspace = true
 libc = "0.2"
+md-5.workspace = true
 owo-colors = { version = "4", features = ["supports-colors"] }
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 rand.workspace = true
@@ -31,6 +32,7 @@ rookie = { version = "0.5", optional = true }
 serde.workspace = true
 serde-saphyr = "1"
 serde_json.workspace = true
+sha1 = { workspace = true, features = ["compress"] }
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

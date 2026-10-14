@@ -123,7 +123,7 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: ReadCommand) -> Result<Data> {
     ReadCommand::Search(args) => search(p, args).await,
     ReadCommand::Hot { category, page } => hot(p, category.as_deref(), page).await,
     ReadCommand::Feed { kind, page } => feed(p, kind.as_deref(), page).await,
-    ReadCommand::Read { post } => Ok(Data::Post(Box::new(p.read(&ctx.post_ref(&post)?).await?))),
+    ReadCommand::Read { post } => read(p, &ctx.post_ref(&post)?).await,
     ReadCommand::Comments {
       post,
       sort,
@@ -154,6 +154,14 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: ReadCommand) -> Result<Data> {
     ReadCommand::Followers { user, page } => followers(p, &user_or_me(p, user).await?, page).await,
     ReadCommand::Following { user, page } => following(p, &user_or_me(p, user).await?, page).await,
   }
+}
+
+/// One post, or one file of a drive.
+async fn read<P: Platform>(p: &P, post: &str) -> Result<Data> {
+  if P::INFO.supports(Cap::Files) {
+    return Ok(Data::File(Box::new(p.file(post).await?)));
+  }
+  Ok(Data::Post(Box::new(p.read(post).await?)))
 }
 
 async fn hot<P: Platform>(p: &P, category: Option<&str>, page: PageArgs) -> Result<Data> {
@@ -230,6 +238,10 @@ async fn search<P: Platform>(p: &P, args: SearchArgs) -> Result<Data> {
   };
   let (q, page) = (&query, args.page);
   Ok(match args.kind {
+    // A drive's posts are its files.
+    SearchKind::Post if P::INFO.supports(Cap::Files) => {
+      Data::Files(page.collect(async |r| p.search_files(q, &r).await).await?)
+    }
     SearchKind::Post => Data::Posts(page.collect_dated(async |r| p.search(q, &r).await).await?),
     SearchKind::User => Data::Users(page.collect(async |r| p.search_users(q, &r).await).await?),
     SearchKind::Topic => {

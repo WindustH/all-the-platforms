@@ -34,6 +34,21 @@ pub fn fmt_count(n: u64) -> String {
   }
 }
 
+/// Bytes in binary units, as drives show them: `512 B`, `1.5 KB`, `3.2 GB`.
+pub fn fmt_size(bytes: u64) -> String {
+  const UNITS: [&str; 5] = ["KB", "MB", "GB", "TB", "PB"];
+  if bytes < 1024 {
+    return format!("{bytes} B");
+  }
+  let mut value = bytes as f64 / 1024.0;
+  let mut unit = 0;
+  while value >= 1024.0 && unit < UNITS.len() - 1 {
+    value /= 1024.0;
+    unit += 1;
+  }
+  format!("{} {}", trim_dot(format!("{value:.1}")), UNITS[unit])
+}
+
 fn trim_dot(s: String) -> String {
   s.strip_suffix(".0").map(str::to_owned).unwrap_or(s)
 }

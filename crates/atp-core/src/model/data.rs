@@ -36,8 +36,11 @@ pub enum Data {
   Comments(Page<Comment>),
   Collections(Page<Collection>),
   Notifications(Page<Notification>),
+  /// Files and folders of a drive, or its shares.
+  Files(Page<FileEntry>),
   Post(Box<Post>),
   User(Box<User>),
+  File(Box<FileEntry>),
   Action(Action),
   Auth(AuthStatus),
   Counts(BTreeMap<String, u64>),
@@ -86,6 +89,8 @@ impl Data {
           user(a);
         }
       }),
+      Data::Files(p) => p.items.iter_mut().for_each(|f| f.raw = None),
+      Data::File(f) => f.raw = None,
       Data::Post(p) => post(p),
       Data::User(u) => user(u),
       Data::Auth(a) => {

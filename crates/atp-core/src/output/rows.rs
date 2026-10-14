@@ -72,6 +72,7 @@ pub fn rows(data: &Data) -> Vec<Value> {
     Data::Users(p) => each(&p.items),
     Data::Collections(p) => each(&p.items),
     Data::Notifications(p) => each(&p.items),
+    Data::Files(p) => each(&p.items),
     Data::Comments(p) => {
       let mut out = Vec::new();
       comments(&p.items, None, 0, &mut out);
@@ -79,6 +80,7 @@ pub fn rows(data: &Data) -> Vec<Value> {
     }
     Data::Post(x) => vec![value(x)],
     Data::User(x) => vec![value(x)],
+    Data::File(x) => vec![value(x)],
     Data::Action(x) => vec![value(x)],
     Data::Auth(x) => vec![value(x)],
     Data::Counts(x) => vec![value(x)],

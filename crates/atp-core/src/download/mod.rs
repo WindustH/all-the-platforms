@@ -1,8 +1,10 @@
 //! Download the media of a post: images, videos (merging split audio/video
-//! with ffmpeg), audio-only extraction and ASR-ready WAV segments.
+//! with ffmpeg), audio-only extraction and ASR-ready WAV segments; and the
+//! files and folders of a drive ([`files`]).
 
 mod fetch;
 mod ffmpeg;
+mod files;
 
 use tokio::io::AsyncReadExt;
 
@@ -15,6 +17,7 @@ use std::path::{Path, PathBuf};
 
 use self::fetch::*;
 use self::ffmpeg::*;
+pub use self::files::{Link, files};
 
 #[derive(Debug, Clone)]
 pub struct DownloadOpts {
