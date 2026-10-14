@@ -182,12 +182,15 @@ impl<'a> Req<'a> {
     Ok(url.into())
   }
 
-  fn build(&self, url: &str) -> Result<wreq::RequestBuilder> {
+  fn build(&self, hop: &Hop) -> Result<wreq::RequestBuilder> {
     let mut headers = self.http.headers.clone();
     for (k, v) in &self.headers {
       headers.insert(k.clone(), v.clone());
     }
-    if self.cookies {
+    if !hop.same_host {
+      headers.remove("authorization");
+    }
+    if self.cookies && hop.same_site {
       let cookie = self.http.cookie_header();
       if !cookie.is_empty() {
         headers.insert(
@@ -196,10 +199,24 @@ impl<'a> Req<'a> {
         );
       }
     }
-    let mut rb = self.http.client.request(self.method.clone(), url);
+    let mut rb = self
+      .http
+      .client
+      .request(hop.method.clone(), hop.url.as_str());
     if let Some(t) = self.timeout {
       rb = rb.timeout(t);
     }
+    if hop.body {
+      rb = self.with_body(rb, &mut headers)?;
+    }
+    Ok(rb.headers(headers))
+  }
+
+  fn with_body(
+    &self,
+    mut rb: wreq::RequestBuilder,
+    headers: &mut HeaderMap,
+  ) -> Result<wreq::RequestBuilder> {
     match &self.body {
       Body::Empty => {}
       Body::Bytes(data, ct) => {
@@ -228,7 +245,7 @@ impl<'a> Req<'a> {
         rb = rb.multipart(form);
       }
     }
-    Ok(rb.headers(headers))
+    Ok(rb)
   }
 
   async fn execute(&self) -> Result<wreq::Response> {
@@ -238,23 +255,10 @@ impl<'a> Req<'a> {
       if self.throttle {
         self.http.throttle().await;
       }
-      let started = Instant::now();
-      let result = self.build(&url)?.send().await;
+      let result = self.follow(&url).await?;
       self.http.last.set(Some(Instant::now()));
       match result {
         Ok(resp) => {
-          tracing::debug!(
-            "{} {} -> {} ({} ms)",
-            self.method,
-            redact(&url),
-            resp.status(),
-            started.elapsed().as_millis()
-          );
-          // A request sent without the jar must not write into it either:
-          // a site's guest cookies would replace the session's (X's `ct0`).
-          if self.cookies {
-            self.http.absorb_cookies(&resp);
-          }
           let status = resp.status();
           let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
           if retryable && attempt < self.retries {
@@ -279,6 +283,47 @@ impl<'a> Req<'a> {
         }
       }
     }
+  }
+
+  /// Send, following redirects like a browser: every hop's cookies go into
+  /// the jar, 301/302/303 turn into GET, and cookies / `Authorization` go
+  /// along only within the same site / host.
+  async fn follow(&self, url: &str) -> Result<std::result::Result<wreq::Response, wreq::Error>> {
+    let mut hop = Hop {
+      url: url::Url::parse(url).map_err(|e| Error::input(format!("bad url {url}: {e}")))?,
+      method: self.method.clone(),
+      body: true,
+      same_site: true,
+      same_host: true,
+    };
+    let origin = hop.url.clone();
+    for _ in 0..=MAX_REDIRECTS {
+      let started = Instant::now();
+      let resp = match self.build(&hop)?.send().await {
+        Ok(resp) => resp,
+        Err(e) => return Ok(Err(e)),
+      };
+      tracing::debug!(
+        "{} {} -> {} ({} ms)",
+        hop.method,
+        redact(hop.url.as_str()),
+        resp.status(),
+        started.elapsed().as_millis()
+      );
+      // A request sent without the jar must not write into it either:
+      // a site's guest cookies would replace the session's (X's `ct0`).
+      if self.cookies {
+        self.http.absorb_cookies(&resp);
+      }
+      match hop.next(&resp, &origin) {
+        Some(next) => hop = next,
+        None => return Ok(Ok(resp)),
+      }
+    }
+    Err(Error::network(format!(
+      "too many redirects from {}",
+      redact(url)
+    )))
   }
 
   pub async fn send(self) -> Result<Resp> {
@@ -380,4 +425,56 @@ fn redact(url: &str) -> String {
     }
     _ => url.to_owned(),
   }
+}
+
+const MAX_REDIRECTS: usize = 10;
+
+/// One request of a redirect chain.
+struct Hop {
+  url: url::Url,
+  method: Method,
+  /// Whether the body goes along (307 / 308 keep it).
+  body: bool,
+  /// Same site as the first request: cookies go along.
+  same_site: bool,
+  /// Same host as the first request: `Authorization` goes along.
+  same_host: bool,
+}
+
+impl Hop {
+  /// The request a redirect response asks for, if it is one.
+  fn next(&self, resp: &wreq::Response, origin: &url::Url) -> Option<Hop> {
+    let status = resp.status();
+    if !status.is_redirection() {
+      return None;
+    }
+    let location = resp.headers().get("location")?.to_str().ok()?;
+    let url = self.url.join(location).ok()?;
+    let keep = matches!(status.as_u16(), 307 | 308);
+    let method = if keep || self.method == Method::HEAD {
+      self.method.clone()
+    } else {
+      Method::GET
+    };
+    Some(Hop {
+      same_site: site(&url) == site(origin),
+      same_host: url.host_str() == origin.host_str(),
+      url,
+      method,
+      body: keep && self.body,
+    })
+  }
+}
+
+/// The registrable part of a host, roughly: `www.example.com` →
+/// `example.com`, `a.b.com.cn` → `b.com.cn`.
+fn site(url: &url::Url) -> String {
+  let host = url.host_str().unwrap_or_default();
+  let labels: Vec<&str> = host.split('.').collect();
+  let second_level = ["com", "net", "org", "gov", "edu", "co", "ac"];
+  let keep = match labels.as_slice() {
+    [.., sld, tld] if tld.len() == 2 && second_level.contains(sld) => 3,
+    _ => 2,
+  };
+  labels[labels.len().saturating_sub(keep)..].join(".")
 }

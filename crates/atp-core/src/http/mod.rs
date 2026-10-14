@@ -70,7 +70,8 @@ impl Http {
       .emulation(emulation)
       .timeout(cfg.timeout)
       .connect_timeout(Duration::from_secs(15))
-      .redirect(wreq::redirect::Policy::limited(10));
+      // Redirects are followed in `Req::execute`, keeping each hop's cookies.
+      .redirect(wreq::redirect::Policy::none());
     if let Some(proxy) = &cfg.proxy {
       builder = builder.proxy(
         wreq::Proxy::all(proxy.as_str()).map_err(|e| Error::input(format!("bad proxy: {e}")))?,
