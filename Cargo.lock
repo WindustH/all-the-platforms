@@ -103,6 +103,7 @@ dependencies = [
  "atp-telegram",
  "atp-tieba",
  "atp-tiktok",
+ "atp-toutiao",
  "atp-twitter",
  "atp-vocechat",
  "atp-wechat",
@@ -428,6 +429,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "atp-bytedance"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "jiff",
+ "rand 0.9.5",
+ "serde",
+ "sm3",
+ "tracing",
+]
+
+[[package]]
 name = "atp-core"
 version = "0.1.0"
 dependencies = [
@@ -497,15 +510,14 @@ dependencies = [
 name = "atp-douyin"
 version = "0.1.0"
 dependencies = [
+ "atp-bytedance",
  "atp-core",
  "clap",
  "jiff",
  "md-5",
- "rand 0.9.5",
  "regex",
  "serde",
  "serde_json",
- "sm3",
  "tokio",
  "tracing",
  "url",
@@ -804,6 +816,21 @@ dependencies = [
  "rand 0.9.5",
  "serde_json",
  "sha2 0.10.9",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-toutiao"
+version = "0.1.0"
+dependencies = [
+ "atp-bytedance",
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "regex",
+ "serde_json",
  "tracing",
  "url",
 ]

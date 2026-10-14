@@ -7,7 +7,6 @@
 
 mod api;
 mod comments;
-mod device;
 mod discover;
 mod extra;
 mod library;
@@ -87,7 +86,7 @@ impl Platform for Douyin {
   }
 
   async fn prepare_login(&self) -> Result<()> {
-    device::ensure(&self.api).await;
+    atp_bytedance::visitor::ensure(&self.api.ctx).await;
     Ok(())
   }
 

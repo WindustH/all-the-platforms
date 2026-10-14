@@ -288,7 +288,11 @@ pub fn hot_word(v: &Value, rank: usize) -> Option<Post> {
     v.str("sentence_id").map(Value::from),
   );
   put(&mut extra, "group_id", v.str("group_id").map(Value::from));
-  let search = format!("{}/search/{}", crate::api::WWW, crate::sign::encode(&word));
+  let search = format!(
+    "{}/search/{}",
+    crate::api::WWW,
+    atp_bytedance::query::encode(&word)
+  );
   Some(Post {
     id: v
       .first_str(&["sentence_id", "group_id"])
