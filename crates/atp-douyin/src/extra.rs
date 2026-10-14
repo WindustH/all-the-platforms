@@ -24,6 +24,7 @@ pub enum Command {
   },
   /// Posts Douyin recommends next to one
   Related {
+    /// Post: aweme id, douyin.com link, v.douyin.com short link, shared text or #N
     post: String,
     #[command(flatten)]
     page: PageArgs,

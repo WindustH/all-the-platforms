@@ -10,6 +10,7 @@ use crate::{insights, posts, rooms};
 pub enum Command {
   /// Posts Kuaishou recommends next to one
   Related {
+    /// Post: photo id, short-video or share link, v.kuaishou.com link, shared text or #N
     post: String,
     #[command(flatten)]
     page: PageArgs,
@@ -30,6 +31,7 @@ pub enum Command {
     room: String,
   },
   /// Replays of a user's past live streams
+  #[command(after_long_help = EX_REPLAYS)]
   Replays {
     /// User id (3x…), profile link or `me`
     user: String,
@@ -42,6 +44,12 @@ pub enum Command {
     page: PageArgs,
   },
 }
+
+const EX_REPLAYS: &str = "\
+Examples:
+  atp kuaishou replays me
+  atp kuaishou replays 3xabcdefgh12345
+  atp kuaishou replays https://www.kuaishou.com/profile/3xabcdefgh12345";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

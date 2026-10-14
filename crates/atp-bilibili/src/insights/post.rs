@@ -61,7 +61,7 @@ const TREND: &[(&str, &str)] = &[
 pub async fn post(api: &Api, post: &PostRef, days: u32) -> Result<Insights> {
   match post {
     PostRef::Video(v) => of_video(api, v, days).await,
-    PostRef::Article(id) => Err(atp_core::Error::unsupported(&format!(
+    PostRef::Article(id) => Err(atp_core::Error::unsupported(format!(
       "insights for articles (cv{id}); `read` shows their counters"
     ))),
     PostRef::Dynamic(id) => {
