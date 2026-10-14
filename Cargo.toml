@@ -55,6 +55,9 @@ atp-instagram = { path = "crates/atp-instagram" }
 atp-whatsapp = { path = "crates/atp-whatsapp" }
 atp-kuaishou = { path = "crates/atp-kuaishou" }
 atp-toutiao = { path = "crates/atp-toutiao" }
+atp-alibaba = { path = "crates/atp-alibaba" }
+atp-xianyu = { path = "crates/atp-xianyu" }
+atp-taobao = { path = "crates/atp-taobao" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -112,6 +115,8 @@ atp-instagram.workspace = true
 atp-whatsapp.workspace = true
 atp-kuaishou.workspace = true
 atp-toutiao.workspace = true
+atp-xianyu.workspace = true
+atp-taobao.workspace = true
 
 [profile.release]
 lto = "thin"
