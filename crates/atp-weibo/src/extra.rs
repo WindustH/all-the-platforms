@@ -12,6 +12,7 @@ pub enum Command {
   /// Repost (转发) a post, optionally with your own text
   #[command(after_long_help = EX_REPOST)]
   Repost {
+    /// Post: id, short id (`bid`), link or #N
     post: String,
     /// Your text; `-` reads it from stdin
     text: Option<String>,
@@ -31,8 +32,9 @@ pub enum Command {
   /// Your feed groups (ids for `group`)
   Groups,
   /// Latest posts of one of your feed groups
+  #[command(after_long_help = EX_GROUP)]
   Group {
-    /// Group id from `groups`
+    /// Group id from `groups`, or #N after it
     gid: String,
     #[command(flatten)]
     page: PageArgs,
@@ -42,7 +44,16 @@ pub enum Command {
 const EX_REPOST: &str = "\
 Examples:
   atp weibo repost '#3'
-  atp weibo repost https://weibo.com/2761630725/RmbnfkgUR '说得好' --comment";
+  atp weibo repost https://weibo.com/2761630725/RmbnfkgUR '说得好' --comment
+
+More: atp guide weibo repost";
+
+const EX_GROUP: &str = "\
+Examples:
+  atp weibo groups
+  atp weibo group '#2'
+
+More: atp guide weibo groups";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;

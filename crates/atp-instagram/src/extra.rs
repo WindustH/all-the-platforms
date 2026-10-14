@@ -12,6 +12,7 @@ use crate::{stories, topics};
 pub enum Command {
   /// Posts of a hashtag
   Tag {
+    /// Hashtag: `#tag` or `tag`
     tag: String,
     /// Newest instead of top posts
     #[arg(long)]
@@ -21,22 +22,41 @@ pub enum Command {
   },
   /// Posts of a place (id or /explore/locations/ link)
   Location {
+    /// Place: id, /explore/locations/ link or #N
     location: String,
+    /// Newest instead of top posts
     #[arg(long)]
     recent: bool,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Current stories of a user
-  Stories { user: String },
+  Stories {
+    /// User: name, @name, profile link, numeric id or #N
+    user: String,
+  },
   /// Story highlights of a user
-  Highlights { user: String },
+  #[command(after_long_help = EX_HIGHLIGHTS)]
+  Highlights {
+    /// User: name, @name, profile link, numeric id or #N
+    user: String,
+  },
   /// The stories inside one highlight
-  Highlight { highlight: String },
+  Highlight {
+    /// Highlight: id or `highlight:ID` from `highlights`, or #N after it
+    highlight: String,
+  },
   /// Marketing API: ad accounts, campaigns, ad sets, ads, insights reports
   #[command(subcommand)]
   Ads(atp_meta::ads::Command),
 }
+
+const EX_HIGHLIGHTS: &str = "\
+Examples:
+  atp instagram highlights @natgeo
+  atp instagram highlight '#2'
+
+More: atp guide instagram highlights";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

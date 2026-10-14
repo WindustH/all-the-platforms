@@ -57,7 +57,7 @@ impl Api {
   /// Fail unless `user` is unset or the logged-in account.
   pub fn require_own(&self, user: Option<&str>, what: &str) -> Result<()> {
     if user.is_some_and(|u| Some(u.to_owned()) != self.my_id()) {
-      return Err(Error::unsupported(&format!("{what} of another account")));
+      return Err(Error::unsupported(format!("{what} of another account")));
     }
     Ok(())
   }

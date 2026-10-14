@@ -15,7 +15,7 @@ pub enum Command {
   /// Threads of a forum (吧), by last reply, newest or 精品 only
   #[command(visible_alias = "f", after_long_help = EX_FORUM)]
   Forum {
-    /// Forum name or /f?kw= link
+    /// Forum: name, /f?kw= link or #N
     forum: String,
     /// Order of the threads
     #[arg(short, long, default_value = "reply",
@@ -25,10 +25,16 @@ pub enum Command {
     page: PageArgs,
   },
   /// A forum's details: members, threads, posts, category, managers
-  ForumInfo { forum: String },
-  /// Search threads inside one forum
-  ForumSearch {
+  ForumInfo {
+    /// Forum: name, /f?kw= link or #N
     forum: String,
+  },
+  /// Search threads inside one forum
+  #[command(after_long_help = EX_FORUM_SEARCH)]
+  ForumSearch {
+    /// Forum: name, /f?kw= link or #N
+    forum: String,
+    /// Words to search for
     query: String,
     /// Result order
     #[arg(short, long, default_value = "relevant",
@@ -42,6 +48,7 @@ pub enum Command {
     page: PageArgs,
   },
   /// Threads of a hot topic (an item of `hot`)
+  #[command(after_long_help = EX_TOPIC)]
   Topic {
     /// Topic id, `#N` of `hot`, or a hottopic link
     topic: String,
@@ -50,23 +57,30 @@ pub enum Command {
   },
   /// Replies a user wrote in threads (yours when USER is omitted)
   UserReplies {
+    /// User: uid, portrait (`tb.1.…`), home link, @name or #N
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Follow (关注) a forum
   FollowForum {
+    /// Forum: name, /f?kw= link or #N
     forum: String,
     /// Leave the forum instead
     #[arg(long)]
     undo: bool,
   },
   /// Leave a forum
-  UnfollowForum { forum: String },
+  UnfollowForum {
+    /// Forum: name, /f?kw= link or #N
+    forum: String,
+  },
   /// Sign in (签到) to forums, or to every followed forum with --all
   #[command(after_long_help = EX_SIGN)]
   Sign {
+    /// Forums: names, /f?kw= links or #N
     forums: Vec<String>,
+    /// Sign in to every forum you follow
     #[arg(long, conflicts_with = "forums")]
     all: bool,
   },
@@ -164,9 +178,27 @@ const EX_FORUM: &str = "\
 Examples:
   atp tieba forum rust -n 50
   atp tieba forum 李毅 --sort good
-  atp tieba read '#1'";
+  atp tieba read '#1'
+
+More: atp guide tieba forum";
+
+const EX_FORUM_SEARCH: &str = "\
+Examples:
+  atp tieba forum-search rust 生命周期
+  atp tieba forum-search rust 所有权 --sort new --filter posts
+
+More: atp guide tieba forum-search";
+
+const EX_TOPIC: &str = "\
+Examples:
+  atp tieba hot
+  atp tieba topic '#1'
+
+More: atp guide tieba topic";
 
 const EX_SIGN: &str = "\
 Examples:
   atp tieba sign rust 原神      # these forums
-  atp tieba sign --all          # every forum you follow";
+  atp tieba sign --all          # every forum you follow
+
+More: atp guide tieba sign";

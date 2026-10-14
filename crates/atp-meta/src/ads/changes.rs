@@ -9,21 +9,31 @@ use crate::graph::{Graph, Params};
 #[derive(Debug, clap::Subcommand)]
 pub enum ChangeCommand {
   /// Create a campaign (paused unless --status ACTIVE)
+  #[command(after_long_help = EX_CREATE_CAMPAIGN)]
   CreateCampaign(NewCampaign),
   /// Change fields of an object: `ads update ID name=Spring daily_budget=5000`
   Update {
+    /// Campaign, ad set, ad or other object id
     id: String,
     /// key=value pairs
     #[arg(required = true)]
     fields: Vec<String>,
   },
   /// Pause campaigns, ad sets or ads
-  Pause { ids: Vec<String> },
+  Pause {
+    /// Campaign, ad set or ad ids
+    ids: Vec<String>,
+  },
   /// Turn campaigns, ad sets or ads on
-  Activate { ids: Vec<String> },
+  Activate {
+    /// Campaign, ad set or ad ids
+    ids: Vec<String>,
+  },
   /// Delete campaigns, ad sets, ads, creatives or audiences
   Delete {
+    /// Ids of campaigns, ad sets, ads, creatives or audiences
     ids: Vec<String>,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
@@ -31,25 +41,38 @@ pub enum ChangeCommand {
 
 #[derive(Debug, clap::Args)]
 pub struct NewCampaign {
+  /// Ad account id (`act_` optional; default: META_AD_ACCOUNT_ID or `ads use`)
   #[arg(short, long, value_name = "ID")]
   account: Option<String>,
+  /// Campaign name
   #[arg(long)]
   name: String,
   /// OUTCOME_AWARENESS, OUTCOME_TRAFFIC, OUTCOME_ENGAGEMENT, OUTCOME_LEADS,
   /// OUTCOME_APP_PROMOTION or OUTCOME_SALES
   #[arg(long)]
   objective: String,
+  /// Status to start with: PAUSED or ACTIVE
   #[arg(long, default_value = "PAUSED")]
   status: String,
   /// Daily budget in the account currency's minor unit (cents)
   #[arg(long)]
   daily_budget: Option<u64>,
+  /// Lifetime budget in the account currency's minor unit (cents)
   #[arg(long)]
   lifetime_budget: Option<u64>,
   /// HOUSING, EMPLOYMENT, CREDIT, ISSUES_ELECTIONS_POLITICS ... (repeatable; none by default)
   #[arg(long = "special-ad-category")]
   special: Vec<String>,
 }
+
+const EX_CREATE_CAMPAIGN: &str = "\
+Examples:
+  atp fb ads create-campaign --name 'Spring sale' --objective OUTCOME_TRAFFIC --daily-budget 5000
+  atp fb ads create-campaign -a 1234567890 --name Leads --objective outcome_leads \\
+    --special-ad-category employment
+  atp fb ads activate 120211234567890
+
+More: atp guide facebook ads";
 
 pub async fn run(ctx: &Ctx, graph: &Graph<'_>, command: ChangeCommand) -> Result<Data> {
   match command {

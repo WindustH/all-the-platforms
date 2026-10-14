@@ -28,6 +28,7 @@ pub enum ReportCommand {
 pub struct Report {
   /// Campaign, ad set or ad id (default: the ad account)
   object: Option<String>,
+  /// Ad account id (`act_` optional; default: META_AD_ACCOUNT_ID or `ads use`)
   #[arg(short, long, value_name = "ID")]
   account: Option<String>,
   /// account, campaign, adset or ad
@@ -39,6 +40,7 @@ pub struct Report {
   /// First day, YYYY-MM-DD (with --until; replaces --date-preset)
   #[arg(long)]
   since: Option<String>,
+  /// Last day, YYYY-MM-DD (with --since)
   #[arg(long)]
   until: Option<String>,
   /// Comma-separated fields
@@ -51,6 +53,7 @@ pub struct Report {
   /// 1 for daily rows, 7 weekly, monthly, all_days
   #[arg(long)]
   time_increment: Option<String>,
+  /// How many rows (0 = all)
   #[arg(short = 'n', long, default_value_t = 500)]
   limit: usize,
 }
