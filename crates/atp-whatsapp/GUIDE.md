@@ -139,7 +139,8 @@ admin.
 ### follow, unfollow
 
 `follow INVITE_LINK` joins a group by its `chat.whatsapp.com` invite link;
-`unfollow GROUP` (or `follow GROUP --undo`) leaves it.
+`unfollow GROUP` (or `follow GROUP --undo`) leaves it. `#N` is a chat of
+the last `chats` list.
 
 ### listen
 

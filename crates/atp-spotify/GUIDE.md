@@ -133,7 +133,8 @@ The artists you follow (Spotify lists followed artists only, not users).
 ### follow, unfollow
 
 `follow ARTIST|USER|PLAYLIST [--undo]`: follows an artist or a user, or
-follows (saves) a playlist into your library. It goes through Spotify's
+follows (saves) a playlist into your library. `#N` takes from whichever
+list came last: users (artists, users) or posts (playlists). It goes through Spotify's
 library endpoint (`/me/library`), which replaced the follow endpoints in
 February 2026; its reference lists user and playlist URIs but no artist
 URIs, so whether Spotify follows artists through it for every app is not

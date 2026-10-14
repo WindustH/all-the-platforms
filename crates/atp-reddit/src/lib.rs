@@ -255,6 +255,10 @@ impl Platform for Reddit {
     subreddits::subscribe(&self.api, user, undo).await
   }
 
+  fn follow_ref(&self, arg: &str) -> Result<String> {
+    refs::follow_target(&self.api.ctx, arg)
+  }
+
   async fn publish(&self, draft: &Draft) -> Result<Action> {
     write::publish(&self.api, draft).await
   }

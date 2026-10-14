@@ -145,6 +145,11 @@ impl Platform for WhatsApp {
     self.api.on_device("follow (join a group)", follow).await
   }
 
+  /// `follow` joins and leaves groups: `#N` comes from the last chat list.
+  fn follow_ref(&self, arg: &str) -> Result<String> {
+    self.ctx().collection_ref(arg)
+  }
+
   async fn delete(&self, post: &str) -> Result<Action> {
     let delete = async |link: &mut link::Link| messages::delete(link, post).await;
     self.api.on_device("delete", delete).await

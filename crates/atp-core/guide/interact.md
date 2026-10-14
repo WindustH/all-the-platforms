@@ -17,6 +17,10 @@ All of these need a login and act as your account.
   `comment-images` in `atp platforms`); the text may then be left out.
 - `delete` and `delete-comment` ask for confirmation on a terminal; scripts
   pass `-y`.
+- `follow '#N'` takes from the last user list. Where following joins a
+  chat, group or community it takes from that list instead (Telegram,
+  WhatsApp and Matrix chats), or from whichever came last where it takes
+  both (Reddit users or subreddits, Spotify users or playlists).
 - The result is an Action with the id and link of anything created.
 - Writes pause a moment first on platforms that flag bursts.
 

@@ -209,6 +209,14 @@ pub trait Platform: Sized {
     unsupported!("follow")
   }
 
+  /// The argument of `follow` / `unfollow` with `#N` resolved: from the
+  /// last user list by default. Platforms where following joins a chat or
+  /// a community, or takes several kinds, pick the list here
+  /// ([`Ctx::collection_ref`], [`Ctx::newest_ref`]).
+  fn follow_ref(&self, arg: &str) -> Result<String> {
+    self.ctx().user_ref(arg)
+  }
+
   async fn publish(&self, draft: &Draft) -> Result<Action> {
     unsupported!("post")
   }

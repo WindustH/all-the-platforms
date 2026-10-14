@@ -190,6 +190,11 @@ impl Platform for Matrix {
     chats::join(&self.api, room, undo).await
   }
 
+  /// `#N` of `follow` comes from the last room list.
+  fn follow_ref(&self, arg: &str) -> Result<String> {
+    self.ctx().collection_ref(arg)
+  }
+
   async fn delete(&self, post: &str) -> Result<Action> {
     messages::delete(&self.api, post).await
   }

@@ -26,6 +26,7 @@ mod users;
 
 use std::time::Duration;
 
+use atp_core::store::RefKind;
 use atp_core::{
   Action, Cap, Choices, Ctx, Data, Error, Insights, Page, PageReq, Platform, PlatformInfo,
   PlatformKind, Post, Query, Result, User,
@@ -163,6 +164,12 @@ impl Platform for Spotify {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     users::follow(&self.api, user, undo).await
+  }
+
+  /// Artists and users are users, playlists posts: `#N` comes from the
+  /// newer of the two lists.
+  fn follow_ref(&self, arg: &str) -> Result<String> {
+    self.ctx().newest_ref(&[RefKind::User, RefKind::Post], arg)
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {

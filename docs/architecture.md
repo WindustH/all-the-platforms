@@ -79,6 +79,8 @@ A platform crate exports one type implementing `atp_core::Platform`:
   may be passed in the person's browser and retried with its cookies; by
   default platforms with session cookies (`cookie_domains`) only. Single
   errors opt out with `Error::unclearable()`.
+- `follow_ref` picks the `#N` list `follow` takes from: users by default,
+  chats or communities where following joins one.
 - `const COORD: Option<geo::System>`: map platforms name the coordinate
   system they work in; it is the default of the `--coord` option they get.
 

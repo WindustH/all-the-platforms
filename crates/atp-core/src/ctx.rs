@@ -89,6 +89,15 @@ impl Ctx {
     self.store.resolve(RefKind::Collection, arg)
   }
 
+  /// Resolve `#N` against whichever of these lists was printed last, for
+  /// arguments that take several kinds (a user or a community).
+  pub fn newest_ref(&self, kinds: &[RefKind], arg: &str) -> Result<String> {
+    match self.store.newest(kinds) {
+      Some(kind) => self.store.resolve(kind, arg),
+      None => Ok(arg.trim().to_owned()),
+    }
+  }
+
   /// Fail with `not_authenticated` (and a login hint) unless these cookies are present.
   pub fn require_login(&self, required: &[&str]) -> Result<()> {
     match required.iter().find(|c| !self.http.has_cookie(c)) {

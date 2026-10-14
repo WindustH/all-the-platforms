@@ -140,8 +140,8 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: WriteCommand) -> Result<Data> {
       confirm(yes, &format!("delete comment {comment}"))?;
       p.delete_comment(&ctx.post_ref(&post)?, &comment).await?
     }
-    WriteCommand::Follow { user, undo } => p.follow(&ctx.user_ref(&user)?, undo).await?,
-    WriteCommand::Unfollow { user } => p.follow(&ctx.user_ref(&user)?, true).await?,
+    WriteCommand::Follow { user, undo } => p.follow(&p.follow_ref(&user)?, undo).await?,
+    WriteCommand::Unfollow { user } => p.follow(&p.follow_ref(&user)?, true).await?,
     WriteCommand::Publish(args) => publish(p, args).await?,
     WriteCommand::Delete { post, yes } => {
       let post = ctx.post_ref(&post)?;

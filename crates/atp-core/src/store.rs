@@ -33,7 +33,7 @@ pub struct Session {
 }
 
 /// Which short-index list an argument refers to.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefKind {
   Post,
   User,
@@ -211,6 +211,21 @@ impl Store {
     if !refs.is_empty() {
       self.cache_put(kind.file().trim_end_matches(".json"), &refs);
     }
+  }
+
+  /// Which of `kinds` was printed last; the first when none was.
+  pub fn newest(&self, kinds: &[RefKind]) -> Option<RefKind> {
+    let printed = |kind: RefKind| {
+      let meta = fs::metadata(self.cache_dir.join(kind.file())).ok()?;
+      Some((meta.modified().ok()?, kind))
+    };
+    let newest = kinds
+      .iter()
+      .filter_map(|k| printed(*k))
+      .max_by_key(|(at, _)| *at);
+    newest
+      .map(|(_, kind)| kind)
+      .or_else(|| kinds.first().copied())
   }
 
   /// Resolve `#N` / `N` (1-3 digits) against the last list; anything else passes through.

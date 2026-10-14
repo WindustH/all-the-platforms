@@ -77,7 +77,7 @@ pages itself.
 ### follow, unfollow, join, leave
 
 `follow ROOM` / `join ROOM` joins, `follow ROOM --undo` / `unfollow ROOM` /
-`leave ROOM` leaves.
+`leave ROOM` leaves. `#N` is a room of the last `chats` list.
 
 ### search
 

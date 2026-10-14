@@ -134,7 +134,8 @@ the vote.
 ### follow, unfollow
 
 `follow r/<sub>` subscribes to a subreddit; `follow u/<user>` (or a bare
-name) follows a user's profile.
+name) follows a user's profile. `#N` takes from whichever list came last:
+subreddits (`collections`, `search -t topic`) or users.
 
 ### post
 

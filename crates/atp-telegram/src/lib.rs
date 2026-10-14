@@ -181,6 +181,11 @@ impl Platform for Telegram {
     chats::join(&self.api, user, undo).await
   }
 
+  /// `follow` joins chats: `#N` comes from the last chat list.
+  fn follow_ref(&self, arg: &str) -> Result<String> {
+    self.api.ctx.collection_ref(arg)
+  }
+
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
     chats::unread(&self.api).await
   }

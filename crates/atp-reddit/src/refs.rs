@@ -2,6 +2,7 @@
 //! np / m / sh reddit.com links, `redd.it`, share and `v.redd.it` links),
 //! comments, users and subreddits; plus the canonical URLs we hand out.
 
+use atp_core::store::RefKind;
 use atp_core::{Ctx, Error, Result};
 use url::Url;
 
@@ -179,6 +180,20 @@ pub fn subreddit(arg: &str) -> Result<String> {
 pub enum Target {
   Subreddit(String),
   User(String),
+}
+
+/// What `follow` takes: `#N` comes from the newer of the last user and
+/// subreddit lists, and a listed subreddit (its bare name) gets its `r/`.
+pub fn follow_target(ctx: &Ctx, arg: &str) -> Result<String> {
+  if ctx.store.newest(&[RefKind::User, RefKind::Collection]) != Some(RefKind::Collection) {
+    return ctx.user_ref(arg);
+  }
+  let found = ctx.collection_ref(arg)?;
+  // Unchanged: no `#N`, so the argument says what it is.
+  if found == arg.trim() {
+    return Ok(found);
+  }
+  Ok(format!("r/{found}"))
 }
 
 /// `r/name` and community links are subreddits; anything else is a user.

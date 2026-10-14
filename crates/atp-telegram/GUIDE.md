@@ -142,8 +142,8 @@ their role and custom title.
 ### follow, unfollow
 
 `follow CHAT` joins a channel or supergroup, or any group by its invite
-link; `--undo` or `unfollow` leaves a channel or supergroup. User accounts
-only.
+link; `--undo` or `unfollow` leaves a channel or supergroup. `#N` is a
+chat of the last chat list (`chats`). User accounts only.
 
 ### unread, mark-read
 
