@@ -83,11 +83,12 @@ Use these instead of writing another copy:
 | files to upload, MIME types, image sizes | `file::{Upload, Image, mime_for, sniff}`, `Upload::size` |
 | `CHAT/MESSAGE` ids | `chat::{message_id, split_message_id, expect_message_id}` |
 | `listen` by polling (fixed or random interval), reconnect delays | `live::{poll, poll_between, Seen, Backoff}` |
-| websockets | `socket::Socket` via `Http::websocket` |
+| websockets (default User-Agent included; `next_json_lenient` skips non-JSON frames) | `socket::Socket` via `Http::websocket` |
 | proxy for non-HTTP connections | `Http::proxy` |
 | JSON access | `json::ValueExt` |
 | media kind of a MIME type | `MediaKind::from_mime` |
-| times, counts, text | `text::{from_secs, from_millis, parse_count, html_to_text, emoji_shortcode …}` |
+| prices of products, listings, deals, tickets | `Post.price` (`Price::cny`, `original`, `label`); never in `extra` |
+| times, counts, text | `text::{from_secs, from_millis, from_beijing, parse_count, html_to_text, encode_uri_component, emoji_shortcode …}` |
 | listings | `cli::PageArgs`, `paging` (`paging::slice` for lists held in memory), `PageReq` |
 | text and file arguments, confirmations | `cli::{read_text, check_images, check_files, confirm}` |
 | HTTP errors | `http::status_error`, `Req::retries` |

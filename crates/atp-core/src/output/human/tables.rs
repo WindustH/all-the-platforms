@@ -7,7 +7,11 @@ pub(super) fn post_table(posts: &[Post]) {
   let likes = posts.iter().any(|p| p.metrics.likes.is_some());
   let comments = posts.iter().any(|p| p.metrics.comments.is_some());
   let views = posts.iter().any(|p| p.metrics.views.is_some());
+  let prices = posts.iter().any(|p| p.price.is_some());
   let mut header = vec!["#", "Content", "Author"];
+  if prices {
+    header.push("Price");
+  }
   if likes {
     header.push("Likes");
   }
@@ -30,6 +34,10 @@ pub(super) fn post_table(posts: &[Post]) {
           .unwrap_or_default(),
       ),
     ];
+    if prices {
+      let price = p.price.as_ref().map(Price::display).unwrap_or_default();
+      row.push(Cell::new(price).set_alignment(CellAlignment::Right));
+    }
     if likes {
       row.push(num(p.metrics.likes));
     }

@@ -40,7 +40,7 @@ impl Platform for Weibo {
     aliases: &["wb", "sina"],
     about: "Sina Weibo (微博)",
     home: api::HOME,
-    cookie_domains: &["weibo.com"],
+    cookie_domains: &["weibo.com", "weibo.cn", "sina.com.cn"],
     required_cookies: &[api::LOGIN_COOKIE],
     caps: &[
       Cap::QrLogin,

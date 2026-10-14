@@ -48,9 +48,9 @@ pub fn search_item(v: &Value) -> Option<Post> {
     raw: Some(v.clone()),
     ..Post::default()
   };
+  post.price = price(v.first_str(&["price", "view_price"]), None);
   let extra = &mut post.extra;
   for (key, value) in [
-    ("price", price(v.first_str(&["price", "view_price"]))),
     (
       "sales",
       v.first_str(&["realSales", "view_sales"]).map(Value::from),
@@ -106,10 +106,8 @@ pub fn item(data: &Value, id: &str) -> Option<Post> {
     ..Post::default()
   };
   let prices = data.at("skuCore.sku2info.0.price");
+  post.price = price(prices.str("priceText"), None);
   let extra = &mut post.extra;
-  if let Some(p) = price(prices.str("priceText")) {
-    extra.insert("price".into(), p);
-  }
   if let Some(sales) = data.first_str(&["item.vagueSellCount", "item.sellCount", "vagueSellCount"])
   {
     extra.insert("sales".into(), json!(sales));

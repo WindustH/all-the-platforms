@@ -47,6 +47,13 @@ impl Http {
       rb = rb.header(*k, *v);
       names.insert(k.to_string());
     }
+    // The client's own User-Agent and language unless the caller set them.
+    for default in ["user-agent", "accept-language"] {
+      let given = headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(default));
+      if let (false, Some(value)) = (given, self.default_header(default)) {
+        rb = rb.header(default, value);
+      }
+    }
     for name in [
       "Sec-WebSocket-Version",
       "Accept-Language",
@@ -92,6 +99,22 @@ impl Socket {
       }
     }
     Ok(None)
+  }
+
+  /// The next frame that parses as JSON, skipping frames that do not
+  /// (keep-alive strings, protocol text); `None` once the server closed.
+  pub async fn next_json_lenient(&mut self) -> Result<Option<Value>> {
+    loop {
+      let text = match self.next().await? {
+        None => return Ok(None),
+        Some(Frame::Text(t)) => t,
+        Some(Frame::Binary(b)) => String::from_utf8_lossy(&b).into_owned(),
+      };
+      match serde_json::from_str(&text) {
+        Ok(v) => return Ok(Some(v)),
+        Err(_) => tracing::debug!("skipped a non-JSON frame ({} bytes)", text.len()),
+      }
+    }
   }
 
   /// The next frame parsed as JSON (binary frames as UTF-8 JSON too).

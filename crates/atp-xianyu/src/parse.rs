@@ -63,15 +63,9 @@ pub fn search_item(v: &Value) -> Option<Post> {
     raw: Some(v.clone()),
     ..Post::default()
   };
-  insert(
-    &mut post.extra,
-    "price",
-    price(Some(shown).filter(|s| !s.is_empty())),
-  );
-  insert(
-    &mut post.extra,
-    "original_price",
-    price(ex.str("originalPrice")),
+  post.price = price(
+    Some(shown).filter(|s| !s.is_empty()),
+    ex.str("originalPrice"),
   );
   insert(&mut post.extra, "location", ex.str("area").map(Value::from));
   Some(post)
@@ -111,13 +105,11 @@ pub fn item(data: &Value) -> Option<Post> {
     raw: Some(data.clone()),
     ..Post::default()
   };
-  let extra = &mut post.extra;
-  insert(
-    extra,
-    "price",
-    price(it.first_str(&["soldPrice", "minPrice"])),
+  post.price = price(
+    it.first_str(&["soldPrice", "minPrice"]),
+    it.str("originalPrice"),
   );
-  insert(extra, "original_price", price(it.str("originalPrice")));
+  let extra = &mut post.extra;
   insert(extra, "status", status(it));
   insert(
     extra,
@@ -180,17 +172,11 @@ pub fn card(v: &Value) -> Option<Post> {
     ..Post::default()
   };
   post.metrics.views = d.count("browseCount");
+  post.price = price(
+    d.first_str(&["priceInfo.price", "price"]),
+    d.first_str(&["priceInfo.oriPrice", "originalPrice"]),
+  );
   let extra = &mut post.extra;
-  insert(
-    extra,
-    "price",
-    price(d.first_str(&["priceInfo.price", "price"])),
-  );
-  insert(
-    extra,
-    "original_price",
-    price(d.first_str(&["priceInfo.oriPrice", "originalPrice"])),
-  );
   insert(extra, "status", status(d));
   insert(
     extra,

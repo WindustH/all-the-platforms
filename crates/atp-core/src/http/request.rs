@@ -190,7 +190,8 @@ impl<'a> Req<'a> {
     if !hop.same_host {
       headers.remove("authorization");
     }
-    if self.cookies && hop.same_site {
+    if self.cookies && hop.same_site && self.http.sends_cookies_to(hop.url.host_str().unwrap_or(""))
+    {
       let cookie = self.http.cookie_header();
       if !cookie.is_empty() {
         headers.insert(

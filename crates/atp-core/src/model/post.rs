@@ -137,6 +137,9 @@ pub struct Post {
   pub updated_at: Option<Timestamp>,
   #[serde(skip_serializing_if = "Metrics::is_empty")]
   pub metrics: Metrics,
+  /// What it costs, for products, listings, deals, tickets and rooms.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub price: Option<Price>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   pub media: Vec<Media>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -154,5 +157,50 @@ impl Post {
   /// What other commands should receive to refer back to this post.
   pub fn reference(&self) -> &str {
     self.url.as_deref().unwrap_or(&self.id)
+  }
+}
+
+/// A price as the platform shows it.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Price {
+  /// In the currency's main unit (yuan, not fen).
+  pub amount: f64,
+  /// ISO code, `CNY` unless the platform says otherwise.
+  pub currency: String,
+  /// The crossed-out price before a discount.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub original: Option<f64>,
+  /// The platform's own wording when it is more than a number (`¥99起`, `券后`).
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub label: Option<String>,
+}
+
+impl Price {
+  pub fn cny(amount: f64) -> Self {
+    Self {
+      amount,
+      currency: "CNY".into(),
+      ..Self::default()
+    }
+  }
+
+  /// `¥12.5`, `$3`, `€9.99`; whole amounts without decimals.
+  pub fn display(&self) -> String {
+    let symbol = match self.currency.as_str() {
+      "CNY" | "JPY" => "¥",
+      "USD" => "$",
+      "EUR" => "€",
+      "GBP" => "£",
+      "HKD" => "HK$",
+      other => other,
+    };
+    let amount = if self.amount.fract() == 0.0 {
+      format!("{:.0}", self.amount)
+    } else {
+      format!("{:.2}", self.amount)
+        .trim_end_matches('0')
+        .to_owned()
+    };
+    format!("{symbol}{amount}")
   }
 }

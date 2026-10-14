@@ -37,6 +37,9 @@ pub struct HttpConfig {
   pub timeout: Duration,
   /// Minimum gap between two throttled requests (jitter is added on top).
   pub min_interval: Duration,
+  /// Domains the session cookies are sent to (and their subdomains); empty
+  /// means every host.
+  pub cookie_domains: &'static [&'static str],
 }
 
 impl Default for HttpConfig {
@@ -45,6 +48,7 @@ impl Default for HttpConfig {
       proxy: None,
       timeout: Duration::from_secs(30),
       min_interval: Duration::ZERO,
+      cookie_domains: &[],
     }
   }
 }
@@ -57,6 +61,7 @@ pub struct Http {
   last: Cell<Option<Instant>>,
   min_interval: Duration,
   proxy: Option<String>,
+  cookie_domains: &'static [&'static str],
 }
 
 impl Http {
@@ -100,6 +105,7 @@ impl Http {
       last: Cell::new(None),
       min_interval: cfg.min_interval,
       proxy: cfg.proxy.clone(),
+      cookie_domains: cfg.cookie_domains,
     })
   }
 
@@ -194,6 +200,25 @@ impl Http {
       .or_else(|| var("ATP_PROXY"))
       .or_else(|| var("ALL_PROXY"))
       .or_else(|| var("HTTPS_PROXY"))
+  }
+
+  /// Whether the session cookies go to `host`: the platform's own domains
+  /// only, so CDNs, logging hosts and other sites never see them.
+  pub fn sends_cookies_to(&self, host: &str) -> bool {
+    self.cookie_domains.is_empty()
+      || self
+        .cookie_domains
+        .iter()
+        .any(|d| host == *d || host.ends_with(&format!(".{d}")))
+  }
+
+  /// A default header (`user-agent`, `accept-language` ...), if set.
+  pub fn default_header(&self, name: &str) -> Option<String> {
+    self
+      .headers
+      .get(name)
+      .and_then(|v| v.to_str().ok())
+      .map(str::to_owned)
   }
 
   pub(crate) fn client(&self) -> &wreq::Client {

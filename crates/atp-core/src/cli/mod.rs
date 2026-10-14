@@ -199,6 +199,7 @@ async fn execute<P: Platform>(
   let store = Store::new(info.id);
   let loaded = crate::account::load_session(&info, &store)?;
   let config = HttpConfig {
+    cookie_domains: info.cookie_domains,
     proxy: global.proxy.clone(),
     timeout: std::time::Duration::from_secs(global.timeout),
     min_interval: global

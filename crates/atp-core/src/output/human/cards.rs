@@ -117,6 +117,9 @@ pub(super) fn post_card(p: &Post) {
   if !metrics.is_empty() {
     println!("{metrics}");
   }
+  if let Some(price) = &p.price {
+    price_line(price);
+  }
   if let Some(url) = &p.url {
     println!("{}", url.if_supports_color(Stream::Stdout, |t| t.cyan()));
   }
@@ -139,6 +142,21 @@ pub(super) fn post_card(p: &Post) {
   if let Some(q) = &p.quoted {
     quoted(q);
   }
+}
+
+fn price_line(price: &Price) {
+  let mut line = price.display();
+  if let Some(original) = price.original {
+    let before = Price {
+      amount: original,
+      ..price.clone()
+    };
+    line.push_str(&format!(" (was {})", before.display()));
+  }
+  if let Some(label) = &price.label {
+    line.push_str(&format!(" · {label}"));
+  }
+  println!("{}", line.if_supports_color(Stream::Stdout, |t| t.bold()));
 }
 
 fn media_lines(p: &Post) {

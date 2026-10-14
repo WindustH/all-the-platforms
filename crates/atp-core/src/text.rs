@@ -226,3 +226,32 @@ pub fn emoji_shortcode(emoji: &str) -> String {
   };
   name.to_owned()
 }
+
+/// `encodeURIComponent`: everything but `A-Z a-z 0-9 - _ . ! ~ * ' ( )` is
+/// percent-encoded as UTF-8.
+pub fn encode_uri_component(s: &str) -> String {
+  let mut out = String::with_capacity(s.len());
+  for b in s.bytes() {
+    if b.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&b) {
+      out.push(b as char);
+    } else {
+      out.push_str(&format!("%{b:02X}"));
+    }
+  }
+  out
+}
+
+/// A Beijing (UTC+8) wall-clock time such as `2026-10-14 08:30:00` or
+/// `2026-10-14 08:30`.
+pub fn from_beijing(local: &str) -> Option<Timestamp> {
+  let local = local.trim();
+  ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"]
+    .iter()
+    .find_map(|fmt| {
+      let with_zone = format!("{local} +0800");
+      jiff::fmt::strtime::parse(format!("{fmt} %z"), &with_zone)
+        .ok()?
+        .to_timestamp()
+        .ok()
+    })
+}

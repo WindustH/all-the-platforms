@@ -7,7 +7,7 @@ mod tables;
 use crate::error::Error;
 use crate::model::{
   Action, AuthStatus, Collection, Comment, Data, Downloaded, Insights, Metrics, Notification, Page,
-  Post, Transcript, User,
+  Post, Price, Transcript, User,
 };
 use crate::text::{fmt_count, fmt_duration, fmt_time, one_line, truncate};
 use comfy_table::{Attribute, Cell, CellAlignment, ContentArrangement, Table, presets};
