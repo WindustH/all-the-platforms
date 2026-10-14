@@ -97,6 +97,7 @@ dependencies = [
  "atp-misskey",
  "atp-mp",
  "atp-onebot",
+ "atp-pinduoduo",
  "atp-qq",
  "atp-reddit",
  "atp-rocketchat",
@@ -740,6 +741,22 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-pinduoduo"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "flate2",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
  "url",
 ]
 

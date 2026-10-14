@@ -1,0 +1,18 @@
+[package]
+name = "atp-pinduoduo"
+description = "Pinduoduo (拼多多) support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+flate2 = "1"
+jiff.workspace = true
+md-5.workspace = true
+rand.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
