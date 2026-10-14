@@ -23,8 +23,9 @@ cookies (tokens, API keys, OAuth apps) names its ways to log in instead.
 - One way per call; `--qrcode` or `--token` on a platform without them
   answers `unsupported_operation`.
 - Before saving, ATP checks that the session has the cookies the platform
-  requires and asks the platform who you are (`whoami`). A session that
-  fails either check is not saved (`not_authenticated`).
+  requires and asks the platform who you are (`whoami`; after `--token`,
+  whom the token belongs to, even where cookies are saved too). A session
+  that fails either check is not saved (`not_authenticated`).
 - The result is Auth: `authenticated`, `user`, `source` (`qrcode`,
   `cookie`, `browser:NAME`, `token`), `saved_at`.
 - For one run without saving, set `ATP_<ID>_COOKIE` (`ATP_BILI_COOKIE`).

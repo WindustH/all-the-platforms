@@ -77,9 +77,16 @@ pub trait Platform: Sized {
   }
 
   /// Keep an access token or API credentials (`login --token`) in the
-  /// session; `whoami` verifies them afterwards.
+  /// session; [`Platform::token_whoami`] verifies them afterwards.
   async fn login_token(&self, token: &str) -> Result<()> {
     unsupported!("login --token")
+  }
+
+  /// The account behind the token `login --token` just kept: what `login`
+  /// checks before saving. `whoami` by default; a platform whose `whoami`
+  /// prefers a cookie session overrides it, so the token is what gets checked.
+  async fn token_whoami(&self) -> Result<User> {
+    self.whoami().await
   }
 
   async fn qr_start(&self) -> Result<QrTicket> {

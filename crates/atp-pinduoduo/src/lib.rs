@@ -89,6 +89,10 @@ impl Platform for Pinduoduo {
     users::login_token(&self.api, token).await
   }
 
+  async fn token_whoami(&self) -> Result<User> {
+    users::app(&self.api).await
+  }
+
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
     search::search(&self.api, query, page).await
   }

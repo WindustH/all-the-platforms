@@ -105,6 +105,10 @@ impl Platform for TikTok {
     ads::login_token(&self.api, token)
   }
 
+  async fn token_whoami(&self) -> Result<User> {
+    ads::token_owner(&self.api).await
+  }
+
   async fn qr_start(&self) -> Result<QrTicket> {
     login::qr_start(&self.api).await
   }

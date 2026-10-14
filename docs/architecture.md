@@ -81,6 +81,9 @@ A platform crate exports one type implementing `atp_core::Platform`:
   errors opt out with `Error::unclearable()`.
 - `follow_ref` picks the `#N` list `follow` takes from: users by default,
   chats or communities where following joins one.
+- `token_whoami` is the account `login --token` checks: `whoami` by
+  default; platforms whose `whoami` prefers a cookie session check the
+  token instead.
 - `const COORD: Option<geo::System>`: map platforms name the coordinate
   system they work in; it is the default of the `--coord` option they get.
 

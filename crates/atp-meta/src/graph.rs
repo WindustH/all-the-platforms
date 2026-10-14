@@ -63,6 +63,15 @@ pub async fn login(ctx: &Ctx, host: &str, token: &str) -> Result<()> {
   Ok(())
 }
 
+/// Whom the token `login --token` just kept belongs to: that token is what
+/// `login` checks, even beside a cookie session or a token in the environment.
+pub async fn token_owner(ctx: &Ctx, names: &str) -> Result<User> {
+  let token = ctx
+    .extra(TOKEN_KEY)
+    .ok_or_else(|| atp_core::Error::auth("no Graph API token kept"))?;
+  me(&Graph::new(ctx, host_for(&token), token), names).await
+}
+
 /// The person, Page or system user a token belongs to.
 pub async fn me(graph: &Graph<'_>, names: &str) -> Result<User> {
   let v = graph.get("me", &fields(names)).await?;

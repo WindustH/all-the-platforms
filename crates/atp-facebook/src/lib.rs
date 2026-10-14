@@ -107,6 +107,10 @@ impl Platform for Facebook {
     atp_meta::graph::login(&self.api.ctx, FACEBOOK, token).await
   }
 
+  async fn token_whoami(&self) -> Result<User> {
+    atp_meta::graph::token_owner(&self.api.ctx, "id,name,link").await
+  }
+
   async fn whoami(&self) -> Result<User> {
     users::whoami(&self.api).await
   }

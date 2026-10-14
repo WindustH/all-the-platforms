@@ -31,6 +31,16 @@ pub fn login_token(api: &Api, token: &str) -> Result<()> {
   Ok(())
 }
 
+/// Whom the token `login --token` just kept belongs to: that token is
+/// checked, not the cookie session or `TIKTOK_ADS_ACCESS_TOKEN`.
+pub async fn token_owner(api: &Api) -> Result<User> {
+  let token = api
+    .ctx
+    .extra(TOKEN_KEY)
+    .ok_or_else(|| Error::auth("no TikTok Marketing API access token").with_hint(TOKEN_HINT))?;
+  Ads { api, token }.me().await
+}
+
 /// Whether an access token is configured.
 pub fn configured(api: &Api) -> bool {
   token(api).is_some()

@@ -80,8 +80,9 @@ pub async fn login_token(api: &Api, token: &str) -> Result<()> {
   app(api).await.map(|_| ())
 }
 
-/// The DDK app behind the credentials, with its configured pid.
-async fn app(api: &Api) -> Result<User> {
+/// The DDK app behind the credentials, with its configured pid: what
+/// `login --token` checks, also beside an H5 session.
+pub async fn app(api: &Api) -> Result<User> {
   let creds = api
     .ddk
     .creds(&api.ctx)

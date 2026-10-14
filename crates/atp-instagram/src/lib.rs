@@ -111,6 +111,10 @@ impl Platform for Instagram {
     graph::login(&self.api.ctx, host_for(token), token).await
   }
 
+  async fn token_whoami(&self) -> Result<User> {
+    graph::token_owner(&self.api.ctx, "id,name").await
+  }
+
   async fn whoami(&self) -> Result<User> {
     if self.api.has_session() {
       return users::whoami(&self.api).await;

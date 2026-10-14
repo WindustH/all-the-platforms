@@ -17,7 +17,9 @@ Marketing API with the session, for `ads` only: a long-term token of a
 Marketing API app from https://business-api.tiktok.com (a token has no
 spaces). It does not log in to tiktok.com. A session with a token and no
 cookies counts as logged in: `login` checks the token by asking whom it
-belongs to, and `whoami` shows that person (`source: marketing-api`).
+belongs to (also when the session has cookies, which it leaves alone),
+and `whoami` shows that person (`source: marketing-api`) when there are
+no cookies.
 Listing the ad accounts a token manages also needs the app's id and
 secret (`TIKTOK_ADS_APP_ID`, `TIKTOK_ADS_SECRET`).
 

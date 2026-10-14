@@ -88,7 +88,12 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
       "login incomplete: cookie `{c}` is missing"
     )));
   }
-  let user = p.whoami().await.map_err(|e| refused(e, &source))?;
+  let user = if source == "token" {
+    p.token_whoami().await
+  } else {
+    p.whoami().await
+  };
+  let user = user.map_err(|e| refused(e, &source))?;
   let saved_at = Timestamp::now();
   let mut session = ctx.session();
   session.source = Some(source.clone());
