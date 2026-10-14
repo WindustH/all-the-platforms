@@ -13,18 +13,33 @@ use crate::posts::TIME_RANGES;
 pub enum MultiCommand {
   /// Your multireddits, or a user's public ones
   #[command(visible_alias = "multireddits")]
-  Multis { user: Option<String> },
+  Multis {
+    /// User: name, `u/name` or profile link
+    user: Option<String>,
+  },
   /// Posts of a multireddit (`u/USER/m/NAME`, a link or `#N` after `multis`)
+  #[command(after_long_help = EX_MULTI)]
   Multi {
+    /// Multireddit: `u/USER/m/NAME`, `USER/NAME`, link or #N
     multireddit: String,
+    /// Order of the posts
     #[arg(short, long, default_value = "hot", value_parser = SORTS)]
     sort: String,
+    /// Time range of `top` and `controversial`
     #[arg(short, long, value_parser = PossibleValuesParser::new(TIME_RANGES.iter().copied()))]
     time: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
 }
+
+const EX_MULTI: &str = "\
+Examples:
+  atp reddit multis spez
+  atp reddit multi '#1'
+  atp reddit multi u/spez/m/tech --sort top --time month
+
+More: atp guide reddit multi";
 
 pub(super) async fn run(api: &Api, command: MultiCommand) -> Result<Data> {
   let ctx = &api.ctx;

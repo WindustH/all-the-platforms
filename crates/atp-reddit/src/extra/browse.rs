@@ -11,7 +11,7 @@ use crate::{posts, subreddits};
 #[derive(Debug, clap::Subcommand)]
 pub enum BrowseCommand {
   /// Posts of one subreddit
-  #[command(visible_alias = "r")]
+  #[command(visible_alias = "r", after_long_help = EX_SUB)]
   Sub {
     /// Name, r/name or link
     subreddit: String,
@@ -26,15 +26,27 @@ pub enum BrowseCommand {
     page: PageArgs,
   },
   /// About a subreddit: description, subscribers and active users
-  Subreddit { subreddit: String },
+  Subreddit {
+    /// Name, r/name or link
+    subreddit: String,
+  },
   /// Popular, new or default subreddits
   Subreddits {
+    /// Which list
     #[arg(default_value = "popular", value_parser = ["popular", "new", "default"])]
     which: String,
     #[command(flatten)]
     page: PageArgs,
   },
 }
+
+const EX_SUB: &str = "\
+Examples:
+  atp reddit sub rust
+  atp reddit r r/AskHistorians --sort top --time week
+  atp reddit sub https://www.reddit.com/r/rust/ --sort new --limit 50
+
+More: atp guide reddit sub";
 
 pub(super) async fn run(api: &Api, command: BrowseCommand) -> Result<Data> {
   Ok(match command {

@@ -24,7 +24,9 @@ pub enum QuestionCommand {
     page: PageArgs,
   },
   /// Ask a question (提问)
+  #[command(after_long_help = EX_ASK)]
   Ask {
+    /// The question
     title: String,
     /// Question description
     #[arg(short, long, default_value = "")]
@@ -37,6 +39,7 @@ pub enum QuestionCommand {
     images: Vec<PathBuf>,
   },
   /// Answer a question (回答)
+  #[command(after_long_help = EX_ANSWER)]
   Answer {
     /// Question id, q:<id> or URL
     question: String,
@@ -50,7 +53,9 @@ pub enum QuestionCommand {
     images: Vec<PathBuf>,
   },
   /// Publish a column article (文章)
+  #[command(after_long_help = EX_ARTICLE)]
   Article {
+    /// Article title
     title: String,
     /// Body text; `-` reads it from stdin
     body: String,
@@ -73,6 +78,28 @@ pub enum QuestionCommand {
     undo: bool,
   },
 }
+
+const EX_ASK: &str = "\
+Examples:
+  atp zhihu ask '如何入门 Rust？'
+  atp zhihu ask '如何入门 Rust？' -d '有 C++ 基础' -t 19551388 -i shot.png
+
+More: atp guide zhihu ask";
+
+const EX_ANSWER: &str = "\
+Examples:
+  atp zhihu answer q:123456 '我的回答'
+  atp zhihu answer https://www.zhihu.com/question/123456 - -m < answer.md
+  atp zhihu answer 123456 '见图' -i chart.png
+
+More: atp guide zhihu answer";
+
+const EX_ARTICLE: &str = "\
+Examples:
+  atp zhihu article '标题' - -m < post.md
+  atp zhihu article '标题' '正文' -t 19551388 -i cover.png
+
+More: atp guide zhihu article";
 
 pub async fn run(api: &Api, command: QuestionCommand) -> Result<Data> {
   match command {
