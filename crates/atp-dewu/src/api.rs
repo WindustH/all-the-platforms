@@ -13,11 +13,8 @@
 //! `verification_required`, a refusal (`请求已拒绝`, code 7999, which the
 //! site answers to calls without its device headers) `upstream_error`.
 
-use std::sync::LazyLock;
-
 use atp_core::http::Resp;
 use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
-use regex::Regex;
 use serde_json::Map;
 
 use crate::open::Open;
@@ -35,10 +32,6 @@ const CHECK_HINT: &str = "Dewu wants a check before this call; the site also sen
 const REFUSED_HINT: &str = "Dewu refuses this call from clients without the device headers of its \
   pceptor.js, which atp does not make (it answers the same to addresses it blocks); open the page \
   in a browser";
-
-static NEXT_DATA: LazyLock<Regex> = LazyLock::new(|| {
-  Regex::new(r#"(?s)<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>"#).expect("valid")
-});
 
 pub struct Api {
   pub ctx: Ctx,
@@ -120,10 +113,8 @@ impl Api {
       .await?
       .check()?;
     let html = resp.text();
-    let data = NEXT_DATA
-      .captures(&html)
-      .ok_or_else(|| Error::upstream(format!("the share page of {trend} carried no post data")))?;
-    Ok(serde_json::from_str(&data[1])?)
+    atp_core::json::next_data(&html)
+      .ok_or_else(|| Error::upstream(format!("the share page of {trend} carried no post data")))
   }
 }
 

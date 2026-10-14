@@ -90,6 +90,7 @@ Use these instead of writing another copy:
 | websockets (default User-Agent included; `next_json_lenient` skips non-JSON frames) | `socket::Socket` via `Http::websocket` |
 | proxy for non-HTTP connections | `Http::proxy` |
 | JSON access | `json::ValueExt` |
+| the props a Next.js page was rendered from (`__NEXT_DATA__`) | `json::next_data` |
 | media kind of a MIME type | `MediaKind::from_mime` |
 | prices of products, listings, deals, tickets | `Post.price` (`Price::cny`, `original`, `label`); never in `extra` |
 | map platforms: points in their system, places, routes, distances, static map sizes | `geo::{Coord, System, Place, Routes, Route, Step, Distance, Polyline, image_size, save_map}`; a place is `Post.place`, never `extra`; `Platform::COORD` for `--coord` |

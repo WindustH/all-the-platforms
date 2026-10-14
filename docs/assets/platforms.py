@@ -46,6 +46,7 @@ GROUPS = [
         ("bangumi", "番组计划", "Bangumi", "github:bangumi", ""),
         ("douban", "豆瓣", "Douban", "douban", "#2D963D"),
         ("weread", "微信读书", "WeRead", "weread", "#37A7FF"),
+        ("jike", "即刻", "Jike", "app:966129812", ""),
         ("rss", "RSS", "RSSHub · Miniflux", "rss", "#FFA500"),
     ]),
     ("视频", "VIDEO", [
@@ -60,6 +61,7 @@ GROUPS = [
         ("qqmusic", "QQ音乐", "QQ Music", "app:414603431", ""),
         ("spotify", "Spotify", "Spotify", "spotify", "#1ED760"),
         ("podcast", "播客", "Podcasts", "applepodcasts", "#9933CC"),
+        ("xiaoyuzhou", "小宇宙", "Xiaoyuzhou", "app:1488894313", ""),
     ]),
     ("购物与生活", "SHOPPING", [
         ("taobao", "淘宝", "Taobao", "taobao", "#FF5000"),
@@ -109,10 +111,9 @@ GROUPS = [
     ]),
 ]
 
-COMING = [
-    ("小宇宙", "Xiaoyuzhou", "app:1488894313", ""),
-    ("即刻", "Jike", "app:966129812", ""),
-]
+# (name, latin name, icon, tile color) of platforms on the way; the
+# section is left out while this is empty.
+COMING = []
 
 THEMES = {
     "dark": dict(panel="#16181D", chip="#1F232B", line="#2C313B", text="#E6E8EB",
@@ -274,8 +275,9 @@ def heading(t, shipped, soon):
     prompt = (f'<text x="{PAD + 44}" y="52" font-family="{MONO}" font-size="17">'
               f'<tspan fill="{t["accent"]}">$</tspan>'
               f'<tspan dx="10" fill="{t["text"]}" font-weight="600">atp platforms</tspan></text>')
+    counts = f"{shipped} supported" + (f" · {soon} on the way" if soon else "")
     summary = (f'<text x="{WIDTH - PAD}" y="52" text-anchor="end" fill="{t["prompt"]}" '
-               f'font-family="{MONO}" font-size="13">{shipped} supported · {soon} on the way</text>')
+               f'font-family="{MONO}" font-size="13">{counts}</text>')
     rule = f'<line x1="{PAD}" y1="76" x2="{WIDTH - PAD}" y2="76" stroke="{t["line"]}"/>'
     return logo + prompt + summary + rule
 
@@ -288,12 +290,13 @@ def draw(t):
         block, bottom = flow([(c, n, i, col) for c, n, _, i, col in items], y, t)
         parts.append(block)
         y = max(bottom, y + 40) + 24
-    parts.append(f'<line x1="{PAD}" y1="{y - 6}" x2="{WIDTH - PAD}" y2="{y - 6}" '
-                 f'stroke="{t["line"]}" stroke-dasharray="2 6"/>')
-    y += 16
-    parts.append(label(y, "即将支持", "Coming", len(COMING), t, t["accent"]))
-    block, bottom = flow([("", n, i, col) for n, _, i, col in COMING], y, t, soon=True)
-    parts.append(block)
+    if COMING:
+        parts.append(f'<line x1="{PAD}" y1="{y - 6}" x2="{WIDTH - PAD}" y2="{y - 6}" '
+                     f'stroke="{t["line"]}" stroke-dasharray="2 6"/>')
+        y += 16
+        parts.append(label(y, "即将支持", "Coming", len(COMING), t, t["accent"]))
+        block, bottom = flow([("", n, i, col) for n, _, i, col in COMING], y, t, soon=True)
+        parts.append(block)
     height = bottom + PAD
     defs = ('<defs><linearGradient id="ig" x1="0" y1="1" x2="1" y2="0">'
             '<stop offset="0" stop-color="#FEDA75"/><stop offset=".3" stop-color="#FA7E1E"/>'

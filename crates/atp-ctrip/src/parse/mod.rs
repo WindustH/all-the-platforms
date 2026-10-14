@@ -33,14 +33,7 @@ static SIZED: LazyLock<Regex> = LazyLock::new(|| {
   .expect("valid")
 });
 
-/// The `__NEXT_DATA__` of a Next.js page.
-pub fn next_data(html: &str) -> Option<Value> {
-  let start = html.find("id=\"__NEXT_DATA__\"")?;
-  let rest = &html[start..];
-  let body = &rest[rest.find('>')? + 1..];
-  let end = body.find("</script>")?;
-  serde_json::from_str(&body[..end]).ok()
-}
+pub use atp_core::json::next_data;
 
 /// The value of `"key":` in a page's React Server Component chunks.
 pub fn rsc(html: &str, key: &str) -> Option<Value> {

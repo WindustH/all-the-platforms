@@ -10,6 +10,17 @@ use crate::text::parse_count;
 
 static NULL: Value = Value::Null;
 
+/// The `__NEXT_DATA__` of a server-rendered Next.js page: the props the
+/// page was rendered from (`props.pageProps` …), or `None` when the page
+/// carries none.
+pub fn next_data(html: &str) -> Option<Value> {
+  let start = html.find("id=\"__NEXT_DATA__\"")?;
+  let rest = &html[start..];
+  let body = &rest[rest.find('>')? + 1..];
+  let end = body.find("</script>")?;
+  serde_json::from_str(&body[..end]).ok()
+}
+
 pub trait ValueExt {
   /// The value at a dotted path (`a.b.0.c`), or `Null`.
   fn at(&self, path: &str) -> &Value;

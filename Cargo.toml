@@ -89,6 +89,8 @@ atp-discourse = { path = "crates/atp-discourse" }
 atp-douban = { path = "crates/atp-douban" }
 atp-weread = { path = "crates/atp-weread" }
 atp-juejin = { path = "crates/atp-juejin" }
+atp-xiaoyuzhou = { path = "crates/atp-xiaoyuzhou" }
+atp-jike = { path = "crates/atp-jike" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -178,6 +180,8 @@ atp-discourse.workspace = true
 atp-douban.workspace = true
 atp-weread.workspace = true
 atp-juejin.workspace = true
+atp-xiaoyuzhou.workspace = true
+atp-jike.workspace = true
 
 [profile.release]
 lto = "thin"

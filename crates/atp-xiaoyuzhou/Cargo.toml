@@ -1,0 +1,11 @@
+[package]
+name = "atp-xiaoyuzhou"
+description = "Xiaoyuzhou (小宇宙) support for all-the-platforms: the public show, episode and user pages"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+jiff.workspace = true
+url.workspace = true

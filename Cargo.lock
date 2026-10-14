@@ -396,6 +396,7 @@ dependencies = [
  "atp-hackernews",
  "atp-instagram",
  "atp-jd",
+ "atp-jike",
  "atp-juejin",
  "atp-kook",
  "atp-kuaishou",
@@ -439,6 +440,7 @@ dependencies = [
  "atp-whatsapp",
  "atp-xhs",
  "atp-xianyu",
+ "atp-xiaoyuzhou",
  "atp-youtube",
  "atp-zhihu",
 ]
@@ -774,6 +776,17 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "url",
+]
+
+[[package]]
+name = "atp-jike"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "serde_json",
  "url",
 ]
 
@@ -1428,6 +1441,15 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "atp-xiaoyuzhou"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "jiff",
+ "url",
 ]
 
 [[package]]

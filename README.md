@@ -93,6 +93,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Bangumi 番组计划 | `bangumi` | anime, books, music and games, the airing calendar, cast and staff, your collection and progress | token |
 | | Douban 豆瓣 | `douban` | films, books and music with ratings, short comments and reviews, Top 250 and other lists, groups, what users marked | QR, browser |
 | | WeRead 微信读书 | `weread` | store search and rankings, your shelf and reading progress, your highlights and thoughts as Markdown | QR, browser |
+| | Jike 即刻 | `jike` | posts and reposts, comments, the following and recommended feeds, topics (圈子), notifications, posting with pictures | QR, token |
 | | RSS | `rss` | RSS, Atom and JSON feeds, a subscription list with one timeline, RSSHub routes, Miniflux | not needed, Miniflux key |
 | Video | Bilibili 哔哩哔哩 | `bili` | videos, danmaku, subtitles, coins, creator data | QR, browser |
 | | Douyin 抖音 | `douyin` | videos, image posts, hot boards, no-watermark downloads | browser |
@@ -103,6 +104,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | QQ Music QQ 音乐 | `qqmusic` | songs, lyrics with translations, playlists, charts, comments | QR, browser |
 | | Spotify | `spotify` | search, your library and playlists, top tracks and artists, playback control | app |
 | | Podcasts | `podcast` | Apple's directory and charts, episodes with show notes from each feed, resumable downloads, Podcast Index | not needed, key |
+| | Xiaoyuzhou 小宇宙 | `xiaoyuzhou` | shows, episodes with show notes, hot comments, hosts, downloads; read-only | not needed |
 | Shopping | Taobao / Tmall 淘宝 / 天猫 | `taobao` | items, reviews, shops, chats with sellers | QR, browser |
 | | Xianyu 闲鱼 | `xianyu` | second-hand items, sellers, favorites, chats | QR, browser |
 | | JD 京东 | `jd` | items with prices, reviews, shops, hot words | browser |
