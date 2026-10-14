@@ -44,5 +44,7 @@ fn main() -> ExitCode {
   .platform::<atp_amap::Amap>()
   .platform::<atp_jd::Jd>()
   .platform::<atp_pinduoduo::Pinduoduo>()
+  .platform::<atp_meituan::Meituan>()
+  .platform::<atp_dianping::Dianping>()
   .run()
 }

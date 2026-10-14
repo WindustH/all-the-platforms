@@ -82,6 +82,7 @@ dependencies = [
  "atp-amap",
  "atp-bilibili",
  "atp-core",
+ "atp-dianping",
  "atp-dingtalk",
  "atp-discord",
  "atp-douyin",
@@ -94,6 +95,7 @@ dependencies = [
  "atp-line",
  "atp-matrix",
  "atp-mattermost",
+ "atp-meituan",
  "atp-misskey",
  "atp-mp",
  "atp-onebot",
@@ -504,6 +506,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "atp-dianping"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "atp-mtsec",
+ "clap",
+ "regex",
+ "serde_json",
+]
+
+[[package]]
 name = "atp-dingtalk"
 version = "0.1.0"
 dependencies = [
@@ -688,6 +701,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "atp-meituan"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "atp-mtsec",
+ "base64 0.22.1",
+ "clap",
+ "hmac 0.12.1",
+ "jiff",
+ "md-5",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "atp-meta"
 version = "0.1.0"
 dependencies = [
@@ -725,6 +752,19 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-mtsec"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "flate2",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
  "url",
 ]
 
