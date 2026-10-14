@@ -18,6 +18,7 @@ mod reference;
 mod render;
 mod sections;
 
+pub(crate) use self::lookup::did_you_mean;
 pub use self::lookup::page;
 pub use self::platform::platform;
 pub use self::render::print;

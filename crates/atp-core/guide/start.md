@@ -5,8 +5,9 @@ command set:
 
     atp <platform> <command> [arguments] [options]
 
-`atp platforms` lists every platform with its shorter names and the
-commands it supports; `atp guide <platform>` explains one of them.
+`atp platforms` lists every platform with its shorter names, login ways
+and command counts; `atp platforms <id>` and `atp guide <platform>` explain
+one of them.
 
 - Social and news: `zhihu`, `xhs`, `weibo`, `tieba`, `mp` (WeChat
   Official Accounts), `twitter`, `reddit`, `facebook`, `instagram`,

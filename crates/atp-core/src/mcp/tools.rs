@@ -72,7 +72,7 @@ impl<'a> Tools<'a> {
   pub async fn call(&self, params: &Value) -> Reply {
     let args = params.at("arguments");
     let text = match params.str("name").unwrap_or_default().as_str() {
-      "platforms" => Ok(self.app.platforms_value().to_string()),
+      "platforms" => Ok(crate::platforms::value(self.app).to_string()),
       "help" => self.help(args.str("topic").unwrap_or_default().trim()),
       "read" => self.command(args, true).await,
       "run" if !self.read_only => self.command(args, false).await,
@@ -182,7 +182,7 @@ fn platforms_tool() -> Value {
   json!({
     "name": "platforms",
     "title": "List platforms",
-    "description": "Every platform atp supports: id, name, aliases, capabilities and its own extra commands.",
+    "description": "Every platform ATP supports: id, name, aliases, kind, capabilities, its own extra commands and how to log in (ways, token form, cookies, environment variables, what works without an account).",
     "inputSchema": {"type": "object", "properties": {}},
     "annotations": {"readOnlyHint": true, "openWorldHint": false},
   })
