@@ -203,6 +203,21 @@ pub async fn live_tickets(api: &Api) -> Result<()> {
   Ok(())
 }
 
+/// Mint the live site's tickets again from `passToken`: stale ones get no
+/// socket token. Without `passToken` the session is left as it is.
+pub async fn renew_live_tickets(api: &Api) -> Result<()> {
+  if !api.ctx.http.has_cookie("passToken") {
+    return Err(
+      Error::auth("Kuaishou gave no live socket token and the session has no passToken")
+        .with_hint(LOGIN_HINT),
+    );
+  }
+  for name in ["kuaishou.live.web_st", "kuaishou.live.web_ph"] {
+    api.ctx.http.remove_cookie(name);
+  }
+  live_tickets(api).await
+}
+
 /// Make sure the creator center's tickets are there.
 pub async fn cp_tickets(api: &Api) -> Result<()> {
   if api.ctx.http.has_cookie("kuaishou.web.cp.api_ph") {

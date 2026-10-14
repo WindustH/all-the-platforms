@@ -70,8 +70,25 @@ async fn room_loop(api: &Api, room: Post, out: &Stream) -> Result<()> {
   Ok(())
 }
 
-/// The socket token and addresses of a stream.
+/// The socket token and addresses of a stream; the live tickets are
+/// minted again once when Kuaishou gives no token.
 async fn socket_info(api: &Api, room: &str, stream: &str) -> Result<(String, Vec<String>)> {
+  if let Some(info) = try_socket_info(api, room, stream).await? {
+    return Ok(info);
+  }
+  tracing::debug!("websocketinfo gave no token; minting the live tickets again");
+  login::renew_live_tickets(api).await?;
+  try_socket_info(api, room, stream).await?.ok_or_else(|| {
+    Error::auth("Kuaishou gave no live socket token (the live site wants a login)")
+      .with_hint(crate::api::LOGIN_HINT)
+  })
+}
+
+async fn try_socket_info(
+  api: &Api,
+  room: &str,
+  stream: &str,
+) -> Result<Option<(String, Vec<String>)>> {
   let data = api
     .live(SOCKET_INFO)
     .arg("liveStreamId", stream)
@@ -83,13 +100,12 @@ async fn socket_info(api: &Api, room: &str, stream: &str) -> Result<(String, Vec
     .iter()
     .filter_map(|u| u.as_str().map(str::to_owned))
     .collect();
-  match data.str("token") {
-    Some(token) if !urls.is_empty() => Ok((token, urls)),
-    _ => Err(
-      Error::auth("Kuaishou gave no live socket token (the live site wants a login)")
-        .with_hint(crate::api::LOGIN_HINT),
-    ),
-  }
+  Ok(
+    data
+      .str("token")
+      .filter(|_| !urls.is_empty())
+      .map(|token| (token, urls)),
+  )
 }
 
 /// One connection: enter the room, then heartbeat at the interval the

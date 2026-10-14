@@ -103,7 +103,8 @@ streams.
 
 `listen live:ROOM` prints a live room's comments, gifts and notices (not
 likes or shares). It needs a login: the live site hands the socket token
-only to sessions with its tickets.
+only to sessions with its tickets. When it hands none, ATP mints the
+live tickets again from `passToken` once before giving up.
 
 ### insights
 
