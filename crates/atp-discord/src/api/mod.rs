@@ -290,7 +290,7 @@ impl Api {
       return req.header(
         "user-agent",
         format!(
-          "DiscordBot (https://github.com/WindustH/all-the-platforms, {})",
+          "DiscordBot (https://github.com/WindustH/atp, {})",
           env!("CARGO_PKG_VERSION")
         ),
       );

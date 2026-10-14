@@ -1,9 +1,9 @@
 [package]
-name = "all-the-platforms"
+name = "atp"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "One command line for 40+ platforms: social, video, music, chat, shopping, travel and drives — Zhihu, Xiaohongshu, Weibo, Bilibili, Douyin, WeChat, Telegram, Discord, YouTube, TikTok, Reddit, Twitter/X, Taobao, JD and more"
+description = "ATP (all-the-platforms): one command for all the platforms — social, video, music, chat, shopping, travel and drives"
 
 [[bin]]
 name = "atp"

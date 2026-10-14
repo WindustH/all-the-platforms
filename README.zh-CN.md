@@ -1,12 +1,12 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/all-the-platforms-logo-dark.svg">
-    <img src="docs/assets/all-the-platforms-logo-light.svg" alt="all-the-platforms" width="480">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/atp-logo-dark.svg">
+    <img src="docs/assets/atp-logo-light.svg" alt="ATP (all-the-platforms)" width="420">
   </picture>
 </p>
 
 <p align="center">
-  <strong>一个命令行，玩转 40 多个社交、视频、音乐、聊天、购物、出行和网盘平台。</strong>
+  <strong>One command for all the platforms.</strong>
 </p>
 
 <p align="center">
@@ -37,7 +37,7 @@ $ atp bili read '#1'
 $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 ```
 
-## 为什么用 all-the-platforms
+## 为什么用 ATP
 
 - **学一次，到处用。** `search`、`hot`、`feed`、`read`、`comments`、`user`、
   `like`、`comment`、`follow`、`post`、`download` 等命令在每个平台含义相同，
@@ -112,7 +112,7 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 
 ## 快速开始
 
-从 [Releases](https://github.com/WindustH/all-the-platforms/releases) 下载 Linux、macOS 或
+从 [Releases](https://github.com/WindustH/atp/releases) 下载 Linux、macOS 或
 Windows 版本，或从源码构建（需要 Rust 1.88+，以及构建 TLS 库所需的 `cmake` 和 `clang`，
 Windows 上还需要 NASM；`ffmpeg` 可选，用于合并视频和音频）：
 

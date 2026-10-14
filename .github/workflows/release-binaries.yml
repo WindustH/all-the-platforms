@@ -66,7 +66,7 @@ jobs:
 
           version="${{ steps.release.outputs.version }}"
           target="${{ matrix.target }}"
-          package="all-the-platforms-${version}-${target}"
+          package="atp-${version}-${target}"
           staging="dist/${package}"
           exe=""
           if [[ "$target" == *windows* ]]; then

@@ -1,12 +1,12 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/all-the-platforms-logo-dark.svg">
-    <img src="docs/assets/all-the-platforms-logo-light.svg" alt="all-the-platforms" width="480">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/atp-logo-dark.svg">
+    <img src="docs/assets/atp-logo-light.svg" alt="ATP (all-the-platforms)" width="420">
   </picture>
 </p>
 
 <p align="center">
-  <strong>One command line for 40+ platforms: social, video, music, chat, shopping, travel and drives.</strong>
+  <strong>One command for all the platforms.</strong>
 </p>
 
 <p align="center">
@@ -39,7 +39,7 @@ $ atp bili read '#1'
 $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 ```
 
-## Why all-the-platforms
+## Why ATP
 
 - **Learn it once.** `search`, `hot`, `feed`, `read`, `comments`, `user`,
   `like`, `comment`, `follow`, `post`, `download` ... mean the same thing on
@@ -122,7 +122,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 ## Quick start
 
 Download a build for Linux, macOS or Windows from the
-[releases](https://github.com/WindustH/all-the-platforms/releases), or build
+[releases](https://github.com/WindustH/atp/releases), or build
 from source (Rust 1.88+, plus `cmake` and `clang` for the TLS library, and
 NASM on Windows; `ffmpeg` is optional and used for merging video and audio):
 

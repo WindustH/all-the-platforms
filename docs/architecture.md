@@ -1,6 +1,6 @@
 # Architecture
 
-all-the-platforms is one binary (`atp`) that drives social, video and chat platforms through
+ATP (all-the-platforms) is one binary (`atp`) that drives social, video and chat platforms through
 the same command set. The code is split so that each part stays small and
 knows as little as possible about the others.
 

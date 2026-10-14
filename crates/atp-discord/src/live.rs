@@ -116,7 +116,7 @@ async fn connect(api: &Api, token: &Token) -> Result<(Socket, Duration)> {
       BOT_GATEWAY,
       vec![(
         "User-Agent",
-        "DiscordBot (https://github.com/WindustH/all-the-platforms)",
+        "DiscordBot (https://github.com/WindustH/atp)",
       )],
     ),
     Kind::User => (USER_GATEWAY, SOCKET_HEADERS.to_vec()),

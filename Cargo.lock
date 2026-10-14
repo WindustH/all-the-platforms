@@ -76,58 +76,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "all-the-platforms"
-version = "0.1.0"
-dependencies = [
- "atp-amap",
- "atp-baidupan",
- "atp-bilibili",
- "atp-core",
- "atp-ctrip",
- "atp-dewu",
- "atp-dianping",
- "atp-dingtalk",
- "atp-discord",
- "atp-douyin",
- "atp-facebook",
- "atp-feishu",
- "atp-instagram",
- "atp-jd",
- "atp-kook",
- "atp-kuaishou",
- "atp-line",
- "atp-matrix",
- "atp-mattermost",
- "atp-meituan",
- "atp-misskey",
- "atp-mp",
- "atp-netease",
- "atp-onebot",
- "atp-pinduoduo",
- "atp-qq",
- "atp-quark",
- "atp-reddit",
- "atp-rocketchat",
- "atp-satori",
- "atp-slack",
- "atp-taobao",
- "atp-telegram",
- "atp-tieba",
- "atp-tiktok",
- "atp-toutiao",
- "atp-twitter",
- "atp-vocechat",
- "atp-wechat",
- "atp-wecom",
- "atp-weibo",
- "atp-whatsapp",
- "atp-xhs",
- "atp-xianyu",
- "atp-youtube",
- "atp-zhihu",
-]
-
-[[package]]
 name = "alloc-no-stdlib"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -422,6 +370,58 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "atp"
+version = "0.1.0"
+dependencies = [
+ "atp-amap",
+ "atp-baidupan",
+ "atp-bilibili",
+ "atp-core",
+ "atp-ctrip",
+ "atp-dewu",
+ "atp-dianping",
+ "atp-dingtalk",
+ "atp-discord",
+ "atp-douyin",
+ "atp-facebook",
+ "atp-feishu",
+ "atp-instagram",
+ "atp-jd",
+ "atp-kook",
+ "atp-kuaishou",
+ "atp-line",
+ "atp-matrix",
+ "atp-mattermost",
+ "atp-meituan",
+ "atp-misskey",
+ "atp-mp",
+ "atp-netease",
+ "atp-onebot",
+ "atp-pinduoduo",
+ "atp-qq",
+ "atp-quark",
+ "atp-reddit",
+ "atp-rocketchat",
+ "atp-satori",
+ "atp-slack",
+ "atp-taobao",
+ "atp-telegram",
+ "atp-tieba",
+ "atp-tiktok",
+ "atp-toutiao",
+ "atp-twitter",
+ "atp-vocechat",
+ "atp-wechat",
+ "atp-wecom",
+ "atp-weibo",
+ "atp-whatsapp",
+ "atp-xhs",
+ "atp-xianyu",
+ "atp-youtube",
+ "atp-zhihu",
+]
 
 [[package]]
 name = "atp-alibaba"
