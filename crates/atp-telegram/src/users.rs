@@ -20,6 +20,7 @@ pub async fn user(api: &Api, user: &str) -> Result<User> {
     Mode::Bot(b) => b.user(&api.ctx, user).await,
     Mode::Web => match refs::chat(user)? {
       Chat::Username(u) => web::profile(&api.ctx, &u).await,
+      Chat::Me => Err(api.needs_account("`me`")),
       _ => Err(api.needs_account("looking up ids")),
     },
   }

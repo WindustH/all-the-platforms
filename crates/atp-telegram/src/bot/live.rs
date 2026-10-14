@@ -12,9 +12,10 @@ use crate::refs;
 impl Bot {
   /// Long-poll `getUpdates` and print each message, edit and reaction.
   pub async fn listen(&self, ctx: &Ctx, chats: &[String], out: &Stream) -> Result<()> {
+    // Only chats a bot can address (no invite links, no `me`).
     let wanted = chats
       .iter()
-      .map(|c| refs::chat(c))
+      .map(|c| refs::chat(c).and_then(|chat| super::chat_id(&chat).map(|_| chat)))
       .collect::<Result<Vec<_>>>()?;
     let mut offset: Option<i64> = None;
     loop {

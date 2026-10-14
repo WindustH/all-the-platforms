@@ -12,9 +12,14 @@ impl Bot {
     Ok(user(&me))
   }
 
-  /// A chat the bot can see, as a user (profiles of groups and channels too).
+  /// A chat the bot can see, as a user (profiles of groups and channels
+  /// too); `me` is the bot itself.
   pub async fn user(&self, ctx: &Ctx, arg: &str) -> Result<User> {
-    let chat_id = chat_id(&refs::chat(arg)?)?;
+    let chat = refs::chat(arg)?;
+    if chat == refs::Chat::Me {
+      return self.whoami(ctx).await;
+    }
+    let chat_id = chat_id(&chat)?;
     let chat = self
       .call(ctx, "getChat", json!({"chat_id": chat_id}))
       .await?;

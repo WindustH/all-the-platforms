@@ -240,11 +240,9 @@ pub fn boxed(e: Box<dyn std::error::Error + Send + Sync>) -> Error {
 pub async fn peer(conn: &Conn, chat: &Chat) -> Result<PeerRef> {
   let client = &conn.client;
   match chat {
-    Chat::Username(u) if u.eq_ignore_ascii_case("me") || u.eq_ignore_ascii_case("self") => {
-      cached(conn, PeerId::self_user())
-        .await?
-        .ok_or_else(|| Error::auth("the logged-in user is unknown; run `atp telegram whoami`"))
-    }
+    Chat::Me => cached(conn, PeerId::self_user())
+      .await?
+      .ok_or_else(|| Error::auth("the logged-in user is unknown; run `atp telegram whoami`")),
     Chat::Username(u) => {
       let peer = client
         .resolve_username(u)

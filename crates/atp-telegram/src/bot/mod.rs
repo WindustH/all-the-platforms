@@ -124,6 +124,9 @@ pub(super) fn chat_id(chat: &Chat) -> Result<Value> {
     Chat::Invite(_) => Err(Error::input(
       "bots cannot use invite links; use the chat's id or @name",
     )),
+    Chat::Me => Err(Error::input(
+      "`me` is a user account's Saved Messages, which bots do not have; use a chat's id or @name",
+    )),
   }
 }
 
@@ -138,6 +141,6 @@ pub(super) fn same_chat(want: &Chat, chat: &Value) -> bool {
     Chat::Username(u) => chat
       .str("username")
       .is_some_and(|n| n.eq_ignore_ascii_case(u)),
-    Chat::Invite(_) => false,
+    Chat::Invite(_) | Chat::Me => false,
   }
 }

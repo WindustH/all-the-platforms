@@ -73,8 +73,10 @@ the same way, with the hint to get a new one from @BotFather.
   `tg://resolve?domain=name`), an invite link (`t.me/+…`,
   `t.me/joinchat/…`), a private `t.me/c/<id>` link, or the numeric id
   `chats` shows (Bot API form: users positive, groups negative, channels
-  `-100…`). `self` is your Saved Messages. Numeric ids work once the session
-  has seen the chat (after `chats`).
+  `-100…`). `me` or `self` is your own account: your Saved Messages with a
+  user login, the bot itself for `user me` with a bot token (bots have no
+  Saved Messages), and not available without an account. Numeric ids work
+  once the session has seen the chat (after `chats`).
 - Messages: `t.me/name/42`, `t.me/c/<id>/42`, `t.me/name/42?comment=7`,
   `tg://privatepost?channel=…&post=…`, or `CHAT/42` — the `id` every listed
   message carries.

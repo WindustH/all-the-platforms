@@ -3,7 +3,8 @@
 //! Chats: `@name`, `name`, `t.me/name` (also `t.me/s/name`, telegram.me,
 //! `tg://resolve?domain=name`), `t.me/c/<id>` (private supergroups and
 //! channels), Bot API ids (`123` users, `-123` basic groups, `-100…`
-//! supergroups and channels) and invite links (`t.me/+…`, `t.me/joinchat/…`).
+//! supergroups and channels), invite links (`t.me/+…`, `t.me/joinchat/…`)
+//! and `me` / `self` (your own account: Saved Messages).
 //!
 //! Messages: `t.me/name/42`, `t.me/s/name/42`, `t.me/c/<id>/42`, forum links
 //! with the topic before the message id, `?comment=7` for a comment under a
@@ -22,6 +23,8 @@ pub enum Chat {
   Id(i64),
   /// Hash of an invite link.
   Invite(String),
+  /// Your own account (`me`, `self`): Saved Messages for a user account.
+  Me,
 }
 
 impl Chat {
@@ -39,6 +42,7 @@ impl std::fmt::Display for Chat {
       Chat::Username(u) => write!(f, "@{u}"),
       Chat::Id(id) => write!(f, "{id}"),
       Chat::Invite(hash) => write!(f, "https://t.me/+{hash}"),
+      Chat::Me => f.write_str("me"),
     }
   }
 }
@@ -73,11 +77,14 @@ pub fn message(arg: &str) -> Result<Msg> {
   })
 }
 
-/// `@name`, `name` or a Bot API id.
+/// `@name`, `name`, a Bot API id, or `me` / `self`.
 fn plain_chat(arg: &str) -> Option<Chat> {
   let arg = arg.strip_prefix('@').unwrap_or(arg);
   if let Ok(id) = arg.parse::<i64>() {
     return Some(Chat::Id(id));
+  }
+  if ["me", "self"].iter().any(|me| arg.eq_ignore_ascii_case(me)) {
+    return Some(Chat::Me);
   }
   is_username(arg).then(|| Chat::Username(arg.to_owned()))
 }
@@ -193,7 +200,7 @@ fn link_message(link: &Link) -> Option<Msg> {
 
 fn bad_chat(arg: &str) -> Error {
   Error::input(format!(
-    "not a Telegram chat: `{arg}` (expected @name, a t.me link or a numeric id)"
+    "not a Telegram chat: `{arg}` (expected @name, a t.me link, a numeric id or `me`)"
   ))
 }
 
