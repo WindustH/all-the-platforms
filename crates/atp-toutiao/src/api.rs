@@ -1,9 +1,10 @@
-//! Toutiao transport. Four hosts: `www` for JSON APIs (two feeds signed
+//! Toutiao transport. Five hosts: `www` for JSON APIs (two feeds signed
 //! with ByteDance's `a_bogus`, the rest plain), `m` for mobile pages that
 //! carry their data as `RENDER_DATA` (the `www` pages hide theirs behind a
-//! script challenge), `so` for search pages and `mp` for the creator
-//! backend. A signed call whose signature is refused answers an empty body.
-//! [`Api`] owns the context.
+//! script challenge), `so` for search pages, `mp` for the creator backend
+//! and `api.toutiaoapi.com`, the app host whose comment API the share
+//! pages call. A signed call whose signature is refused answers an empty
+//! body. [`Api`] owns the context.
 
 use atp_bytedance::abogus::{self, TOUTIAO};
 use atp_bytedance::query::{encode, query_string};
@@ -15,6 +16,8 @@ pub const WWW: &str = "https://www.toutiao.com";
 pub const MOBILE: &str = "https://m.toutiao.com";
 pub const SEARCH: &str = "https://so.toutiao.com";
 pub const MP: &str = "https://mp.toutiao.com";
+/// The app API host Toutiao's share pages read comments from.
+pub const SHARE: &str = "https://api.toutiaoapi.com";
 /// Cookies of a logged-in session.
 pub const LOGIN_COOKIES: &[&str] = &["sessionid"];
 /// The creator backend's app id.
@@ -44,10 +47,15 @@ impl Api {
 
   /// A plain JSON call on `www`.
   pub async fn get(&self, path: &str, query: &[(&str, String)]) -> Result<Value> {
+    self.get_at(WWW, path, query).await
+  }
+
+  /// A plain JSON call on another host (`base`).
+  pub async fn get_at(&self, base: &str, path: &str, query: &[(&str, String)]) -> Result<Value> {
     let resp = self
       .ctx
       .http
-      .get(format!("{WWW}{path}"))
+      .get(format!("{base}{path}"))
       .queries(query.iter().map(|(k, v)| (*k, v)))
       .send()
       .await?;

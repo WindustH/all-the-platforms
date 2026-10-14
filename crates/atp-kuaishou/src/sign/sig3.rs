@@ -1,7 +1,9 @@
-//! `__NS_sig3` of the creator center: MD5 of the request (here always a
-//! JSON body without query), two SHA-256 compressions with the SDK's own
-//! IVs, four bytes of which go into a 28-byte xor container with the
-//! signer's start time, counter and build number.
+//! `__NS_sig3` of the creator center's web SDK (`cp.kuaishou.com`): MD5 of
+//! the request (here always a JSON body without query), two SHA-256
+//! compressions with the SDK's own IVs, four bytes of which go into a
+//! 28-byte xor container with the signer's start time, counter and build
+//! number. Only the creator center accepts it: the app's `__NS_sig3` is
+//! another, native algorithm (see [`super`]).
 
 use std::cell::Cell;
 

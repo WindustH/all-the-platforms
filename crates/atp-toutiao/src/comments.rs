@@ -1,6 +1,8 @@
 //! Comments of a post and replies to a comment (neither needs a signature).
+//! When `www` answers the comment list with its script challenge
+//! (`__ac_nonce`), the list is read from the app host the share pages use.
 
-use atp_core::{Comment, Page, PageReq, Result, ValueExt};
+use atp_core::{Comment, ErrorCode, Page, PageReq, Result, ValueExt};
 
 use crate::api::{self, Api};
 use crate::parse::comments::comment;
@@ -19,7 +21,18 @@ pub async fn list(api: &Api, post: &str, req: &PageReq) -> Result<Page<Comment>>
     ("group_id", post.id.clone()),
     ("item_id", post.id),
   ];
-  let v = api::check(api.get("/article/v4/tab_comments/", &query).await?)?;
+  let path = "/article/v4/tab_comments/";
+  let answer = match api.get(path, &query).await {
+    Err(e) if e.code == ErrorCode::VerificationRequired => {
+      tracing::debug!(
+        "www walled the comments ({}); asking the share host",
+        e.message
+      );
+      api.get_at(api::SHARE, path, &query).await?
+    }
+    other => other?,
+  };
+  let v = api::check(answer)?;
   let comments: Vec<Comment> = v
     .list("data")
     .iter()

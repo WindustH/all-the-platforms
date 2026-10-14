@@ -22,7 +22,9 @@
   ratings a user received, `extra.rate` good/neutral/bad, `extra.from`
   saying whether a buyer or a seller gave it).
 - `feed` (recommended items) and `favorites` (your own).
-- Everything needs a login: logged out, Xianyu walls every read.
+- `hot`: the words the search box rotates through as hints;
+  `suggest KEYWORD`: the words it suggests for a keyword.
+- `hot` and `suggest` work without a login; everything else needs one.
 
 ## Chats
 

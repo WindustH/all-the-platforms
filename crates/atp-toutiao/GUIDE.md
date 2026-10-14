@@ -14,7 +14,9 @@
   `--type hot|tech|finance|world|sports|entertainment|military|video|all`.
 - `read` shows the article text, its images and, for videos, the best MP4;
   `download` saves them (image and video links expire within a day).
-- `comments POST` and `replies POST COMMENT` need no login.
+- `comments POST` and `replies POST COMMENT` need no login. When
+  www.toutiao.com answers comments with its script challenge, atp reads
+  them from the host Toutiao's share pages use.
 - `user USER` and `user-posts USER` come from the signed user feed; when it
   is refused, `user-posts` falls back to the user's 微头条.
 - `search` reads the result page (`--filter information|video|weitoutiao|synthesis`).

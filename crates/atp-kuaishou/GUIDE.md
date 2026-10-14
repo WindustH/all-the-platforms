@@ -59,3 +59,10 @@ against a live account yet; no publishing, deleting or favorites.
 
 The highest-resolution video, or every image of an image set.
 `--audio-only` is not offered.
+
+## Limits
+
+atp speaks the Kuaishou web: the www, live and creator-center calls, each
+signed the way its web page signs it. The Kuaishou app's own API, where
+private messages live, is signed by the app itself with a different
+algorithm, so atp has no direct messages and does not use app endpoints.

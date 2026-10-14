@@ -3,11 +3,18 @@
 //!
 //! - `__NS_hxfalcon` ([`falcon`], "sig4") on the www paths the web SDK
 //!   lists, on the live site and on the login site, sent with `caver=2`;
-//! - `__NS_sig3` ([`sig3`]) on the creator center;
+//! - `__NS_sig3` ([`sig3`]) on the creator center (`cp.kuaishou.com`);
 //! - the webweapon `kwfv1` cookie and `kww` header ([`weapon`]).
 //!
 //! The signers keep a start time and a call counter, like the page session
 //! of a browser: one [`crate::api::Api`] holds one of each.
+//!
+//! These are the web's signatures and nothing else. The Kuaishou app signs
+//! its own API (`/rest/n/…`, `/rest/nebula/…`, private messages under
+//! `/rest/im/…`) with `sig`, `__NStokensig` and an `__NS_sig3` computed
+//! natively (`libkwsgmain.so`). That `__NS_sig3` shares its name with the
+//! creator center's, not its algorithm: [`sig3`] does not sign app
+//! requests, and atp calls no app endpoint.
 
 pub mod falcon;
 pub mod sig3;
@@ -55,7 +62,7 @@ const LOGIN_SIGNED: &[&str] = &[
   "/pass/kuaishou/login/qr/callback",
 ];
 
-/// Creator-center paths signed with sig3.
+/// Creator-center (web) paths signed with the creator center's sig3.
 const SIG3_MARKERS: &[&str] = &["/rest/cp", "rest/v2/creator", "/rest/kd"];
 
 pub fn www_signed(path: &str) -> bool {

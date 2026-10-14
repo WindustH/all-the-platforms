@@ -1,13 +1,13 @@
-//! QR login through Alibaba's passport for Xianyu (`passport.goofish.com`):
-//! the mini login page hands out a CSRF token, `generate.do` the code,
-//! `query.do` its state. A confirmed scan brings a login token that
-//! `login_token/login.do` trades for the session cookies. When the passport
-//! wants a face or SMS check first, that is `verification_required` with
-//! the page to do it on.
+//! QR login through Alibaba's Havana passport for Xianyu
+//! (`passport.goofish.com`, atp-alibaba's [`havana`]): the mini login page
+//! hands out a CSRF token, `generate.do` the code, `query.do` its state. A
+//! confirmed scan brings a login token that `login_token/login.do` trades
+//! for the session cookies. When the passport wants a face or SMS check
+//! first, that is `verification_required` with the page to do it on.
 
-use atp_alibaba::mtop;
+use atp_alibaba::{havana, mtop};
 use atp_core::http::USER_AGENT;
-use atp_core::{Error, ErrorCode, QrStatus, QrTicket, Result, Value, ValueExt};
+use atp_core::{QrStatus, QrTicket, Result, Value, ValueExt};
 
 use crate::api::{Api, WWW};
 
@@ -73,18 +73,11 @@ pub async fn qr_start(api: &Api) -> Result<QrTicket> {
     .send()
     .await?
     .value()?;
-  let data = v.at("content.data");
-  let (Some(code), Some(t)) = (data.str("codeContent"), data.str("t")) else {
-    return Err(Error::upstream("the Xianyu passport issued no QR code"));
-  };
+  let code = havana::code(&v, "Xianyu")?;
   Ok(QrTicket {
-    url: code,
-    token: t,
-    extra: [
-      ("ck".to_owned(), data.str("ck").unwrap_or_default()),
-      ("csrf".to_owned(), csrf),
-    ]
-    .into(),
+    url: code.content,
+    token: code.t,
+    extra: [("ck".to_owned(), code.ck), ("csrf".to_owned(), csrf)].into(),
     image: None,
   })
 }
@@ -115,22 +108,17 @@ pub async fn qr_poll(api: &Api, ticket: &QrTicket) -> Result<QrStatus> {
     .send()
     .await?
     .value()?;
-  let data = v.at("content.data");
-  Ok(match data.str("qrCodeStatus").as_deref() {
-    Some("SCANED" | "SCANNED") => QrStatus::Scanned,
-    Some("CONFIRMED") => {
-      confirm(api, data).await?;
-      QrStatus::Confirmed
-    }
-    Some("EXPIRED" | "CANCELED" | "CANCELLED") => QrStatus::Expired,
-    _ => QrStatus::Waiting,
-  })
+  let (status, data) = havana::status(&v)?;
+  if status == QrStatus::Confirmed {
+    confirm(api, data).await?;
+  }
+  Ok(status)
 }
 
 /// Trade the confirmed scan for the session cookies.
 async fn confirm(api: &Api, data: &Value) -> Result<()> {
   let http = &api.ctx.http;
-  let mut redirect = redirect_of(data);
+  let mut redirect = havana::redirect(data);
   if let Some(token) = data.first_str(&["token", "lgToken"]) {
     let answer = http
       .post(format!("{PASSPORT}/login_token/login.do"))
@@ -147,30 +135,17 @@ async fn confirm(api: &Api, data: &Value) -> Result<()> {
       .send()
       .await?;
     if let Ok(v) = answer.value() {
-      redirect = redirect.or_else(|| redirect_of(v.at("content.data")));
+      redirect = redirect.or_else(|| havana::redirect(v.at("content.data")));
     }
   }
   if !http.has_cookie("unb") {
-    let hint = match redirect {
-      Some(url) => {
-        format!("open {url} in a browser to finish, then run `atp xianyu login --browser`")
-      }
-      None => {
-        "log in on www.goofish.com in a browser, then run `atp xianyu login --browser`".into()
-      }
-    };
-    return Err(
-      Error::new(
-        ErrorCode::VerificationRequired,
-        "Xianyu wants to confirm this login (a face or SMS check)",
-      )
-      .with_hint(hint),
-    );
+    return Err(havana::check_wanted(
+      "Xianyu",
+      "xianyu",
+      "www.goofish.com",
+      redirect,
+    ));
   }
   // The login changes the signing token; fetch the new one.
   mtop::touch(&api.ctx, &mtop::GOOFISH, "mtop.idle.web.user.page.nav").await
-}
-
-fn redirect_of(data: &Value) -> Option<String> {
-  data.first_str(&["iframeRedirectUrl", "redirectUrl"])
 }

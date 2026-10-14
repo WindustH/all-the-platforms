@@ -1,9 +1,9 @@
 //! Xianyu transport: the goofish mtop gateway (signed calls, each tagged
 //! with the `spm` of the web page that makes it) and the IMPaaS chat socket
 //! with its access token. Logged out, the gateway hands out a signing token
-//! but walls every read (`RGV587_ERROR::SM`), so calls need a login; the QR
-//! login starts from the guest cookies a browser has. [`Api`] owns the
-//! context.
+//! but walls reads (`RGV587_ERROR::SM`), so calls need a login, except
+//! the search box's words, which answer guests. The QR login starts from
+//! the guest cookies a browser has. [`Api`] owns the context.
 
 use atp_alibaba::account;
 use atp_alibaba::impaas::{self, GOOFISH, Im};
@@ -56,6 +56,16 @@ impl Api {
     spm: &str,
   ) -> Result<Value> {
     self.ctx.require_login(LOGIN_COOKIES)?;
+    self.send(api, version, data, spm).await
+  }
+
+  /// A signed call (version 1.0) that guests may make too: the search
+  /// box's words.
+  pub async fn guest_call(&self, api: &str, data: Value, spm: &str) -> Result<Value> {
+    self.send(api, "1.0", data, spm).await
+  }
+
+  async fn send(&self, api: &str, version: &str, data: Value, spm: &str) -> Result<Value> {
     let call = Call::new(api, version, &data).query("spm_cnt", spm);
     mtop::call(&self.ctx, &mtop::GOOFISH, &call)
       .await
@@ -144,4 +154,12 @@ pub fn item_url(id: &str) -> String {
 /// `https://www.goofish.com/personal?userId=<id>`.
 pub fn user_url(id: &str) -> String {
   format!("{WWW}/personal?userId={id}")
+}
+
+/// `https://www.goofish.com/search?q=<words>`.
+pub fn search_url(words: &str) -> String {
+  format!(
+    "{WWW}/search?q={}",
+    atp_core::text::encode_uri_component(words)
+  )
 }

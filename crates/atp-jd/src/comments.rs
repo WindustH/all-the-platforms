@@ -2,8 +2,10 @@
 //! screen (`getLegoWareDetailComment`); later pages come from the review
 //! list (`getCommentListPage`, signed for another app id), which needs the
 //! category and the first review's guid from that screen, so cursors are
-//! `<page>:<category>:<guid>`.
+//! `<page>:<category>:<guid>`. The first screen also carries the review
+//! summary the item page shows (count, good rate, tags): `rating`.
 
+use atp_core::output::note;
 use atp_core::{Comment, Page, PageReq, Result, Value, ValueExt, json};
 
 use crate::api::{Api, Call, From};
@@ -30,24 +32,10 @@ pub async fn list(api: &Api, post: &str, page: &PageReq) -> Result<Page<Comment>
   if let Some(cursor) = page.cursor.as_deref() {
     return later(api, &sku, cursor).await;
   }
-  let body = json!({
-    "shopType": "0", "sku": sku.parse::<u64>().unwrap_or_default(),
-    "commentNum": PAGE_SIZE, "source": "pc",
-  });
-  let v = api
-    .call(Call {
-      function: "getLegoWareDetailComment",
-      appid: "item-v3",
-      path: "/",
-      sign: Some(SIGN_APP),
-      body: Some(body.to_string()),
-      params: vec![("build", "100000".into())],
-      from: From::item(&sku),
-      form: false,
-      time: true,
-      order: ORDER,
-    })
-    .await?;
+  let v = first_screen(api, &sku).await?;
+  if let Some(line) = summary_line(&v) {
+    note(&line);
+  }
   let list = v.list("commentInfoList");
   let next = list.first().and_then(|first| {
     let guid = first.str("guid")?;
@@ -58,6 +46,55 @@ pub async fn list(api: &Api, post: &str, page: &PageReq) -> Result<Page<Comment>
     list.iter().filter_map(parse::comment).collect(),
     next,
   ))
+}
+
+/// The review summary of an item: how many reviews, the good rate and
+/// the review tags with their counts.
+pub async fn rating(api: &Api, post: &str) -> Result<Value> {
+  let sku = refs::sku(api, post).await?;
+  let v = first_screen(api, &sku).await?;
+  let tags: Vec<Value> = v
+    .list("tagStatisticsinfoList")
+    .iter()
+    .filter_map(|t| Some(json!({"name": t.str("name")?, "count": t.at("count")})))
+    .collect();
+  Ok(json!({
+    "item": sku,
+    "reviews": v.str("allCntStr"),
+    "good_rate": v.str("goodRate"),
+    "tags": tags,
+  }))
+}
+
+/// The item page's review screen (`getLegoWareDetailComment`).
+async fn first_screen(api: &Api, sku: &str) -> Result<Value> {
+  let body = json!({
+    "shopType": "0", "sku": sku.parse::<u64>().unwrap_or_default(),
+    "commentNum": PAGE_SIZE, "source": "pc",
+  });
+  api
+    .call(Call {
+      function: "getLegoWareDetailComment",
+      appid: "item-v3",
+      path: "/",
+      sign: Some(SIGN_APP),
+      body: Some(body.to_string()),
+      params: vec![("build", "100000".into())],
+      from: From::item(sku),
+      form: false,
+      time: true,
+      order: ORDER,
+    })
+    .await
+}
+
+/// `12万+ reviews, 98% good`, as the item page heads its reviews.
+fn summary_line(v: &Value) -> Option<String> {
+  let count = v.str("allCntStr").filter(|c| c != "0")?;
+  Some(match v.str("goodRate") {
+    Some(rate) => format!("{count} reviews, {rate} good"),
+    None => format!("{count} reviews"),
+  })
 }
 
 async fn later(api: &Api, sku: &str, cursor: &str) -> Result<Page<Comment>> {

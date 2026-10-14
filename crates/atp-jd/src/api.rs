@@ -50,6 +50,7 @@ impl From {
 }
 
 /// One gateway call. Parameters go out in `order`; the rest follow.
+/// `params` add to the ones every call has or replace them.
 pub struct Call {
   pub function: &'static str,
   pub appid: &'static str,
@@ -159,11 +160,16 @@ impl Api {
     if call.time || call.sign.is_some() {
       params.push(("t", jiff::Timestamp::now().as_millisecond().to_string()));
     }
-    let has_uuid = call.params.iter().any(|(k, _)| *k == "uuid");
-    if let Some(uuid) = http.cookie("__jdu").filter(|_| !has_uuid) {
+    if let Some(uuid) = http.cookie("__jdu") {
       params.push(("uuid", uuid));
     }
-    params.extend(call.params.iter().cloned());
+    // The call's own values win (`client`, `clientVersion`, `uuid` ...).
+    for (name, value) in &call.params {
+      match params.iter_mut().find(|(k, _)| k == name) {
+        Some(slot) => slot.1 = value.clone(),
+        None => params.push((*name, value.clone())),
+      }
+    }
     let mut local = None;
     if let Some(app_id) = call.sign {
       params.push(("loginType", "3".to_owned()));

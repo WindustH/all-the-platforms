@@ -2,7 +2,8 @@
 //! signed with the `_m_h5_tk` token from atp-alibaba), item pages, and the
 //! IMPaaS chat socket with its access token. Taobao serves nothing to
 //! guests (the gateway answers them with a deny page), so every call needs
-//! a login. [`Api`] owns the context.
+//! a login (the QR login and search suggestions aside). [`Api`] owns the
+//! context.
 
 use atp_alibaba::account;
 use atp_alibaba::impaas::{self, CNTAOBAO, Im};
@@ -17,7 +18,8 @@ pub const LOGIN_COOKIES: &[&str] = account::LOGIN_COOKIES;
 const IM_APP_KEY: &str = "3ce2dacdc7c0c43ad7bc7f9bc7d7a1b8";
 /// How long a chat access token is used before a new one is fetched.
 const IM_TOKEN_LIFE: i64 = 6 * 3600;
-const DOCUMENT: &str = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+/// `accept` of a page a browser opens.
+pub const DOCUMENT: &str = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
 
 pub struct Api {
   pub ctx: Ctx,
@@ -150,4 +152,12 @@ impl Api {
 /// `https://item.taobao.com/item.htm?id=<id>` (Tmall items redirect on).
 pub fn item_url(id: &str) -> String {
   format!("https://item.taobao.com/item.htm?id={id}")
+}
+
+/// `https://s.taobao.com/search?q=<words>`.
+pub fn search_url(words: &str) -> String {
+  format!(
+    "https://s.taobao.com/search?q={}",
+    atp_core::text::encode_uri_component(words)
+  )
 }

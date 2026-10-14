@@ -1,14 +1,16 @@
 //! `search`: the PC search page's item search (an mtop recommend call, app
 //! 34385, with the client fields the page sends), 48 items a page, by
-//! relevance, sales or price.
+//! relevance, sales or price. `suggest`: the words the search box suggests
+//! (`suggest.taobao.com`, where the PC search page gets them; no login).
 
-use atp_core::{Page, PageReq, Post, Query, Result, Value, ValueExt, json};
+use atp_core::{Page, PageReq, Post, Query, Result, Value, ValueExt, json, paging};
 
 use crate::api::Api;
 use crate::parse;
 
 pub const SORTS: &[&str] = &["relevance", "sales", "price-asc", "price-desc"];
 const PAGE: u64 = 48;
+const SUGGEST: &str = "https://suggest.taobao.com/sug";
 
 pub async fn search(api: &Api, query: &Query, page: &PageReq) -> Result<Page<Post>> {
   let number = page.number_or(1);
@@ -49,6 +51,26 @@ pub async fn search(api: &Api, query: &Query, page: &PageReq) -> Result<Page<Pos
     .unwrap_or(0);
   let more = items.len() as u64 >= PAGE / 2 && (total == 0 || number * PAGE < total);
   Ok(Page::new(items, more.then(|| (number + 1).to_string())))
+}
+
+/// What the search box suggests for a keyword.
+pub async fn suggest(api: &Api, keyword: &str, page: &PageReq) -> Result<Page<Post>> {
+  let v = api
+    .ctx
+    .http
+    .get(SUGGEST)
+    .queries([
+      ("area", "c2c"),
+      ("k", "1"),
+      ("code", "utf-8"),
+      ("q", keyword),
+    ])
+    .header("referer", "https://s.taobao.com/")
+    .send()
+    .await?
+    .value()?;
+  let items = v.list("result").iter().filter_map(parse::keyword).collect();
+  Ok(paging::slice(items, page))
 }
 
 /// The result list, which moves between answers.
