@@ -73,6 +73,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Xiaohongshu 小红书 | `xhs` | notes, comments, activity center, creator data | QR, browser |
 | | Weibo 微博 | `weibo` | posts, hot search, comments, reposts, analytics | QR, browser |
 | | Tieba 百度贴吧 | `tieba` | forums, threads, floors, check-in | QR, browser |
+| | Toutiao 今日头条 | `toutiao` | articles, videos, 微头条, comments, hot board | QR, browser |
 | | WeChat Official Accounts 公众号 | `mp` | articles, albums, drafts, publishing, comments, analytics | QR, AppID |
 | | Twitter / X | `twitter` | tweets, threads, lists, analytics | browser |
 | | Reddit | `reddit` | posts, comments, subreddits, inbox | browser, app |
@@ -83,6 +84,12 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Douyin 抖音 | `douyin` | videos, image posts, hot boards, no-watermark downloads | browser |
 | | YouTube | `youtube` | videos, Shorts, transcripts, playlists, analytics | browser |
 | | TikTok | `tiktok` | videos, sounds, hashtags, ads | QR, browser |
+| | Kuaishou 快手 | `kuaishou` | videos, image sets, comments, hot board, live rooms | QR, browser |
+| Shopping | Taobao / Tmall 淘宝 / 天猫 | `taobao` | items, reviews, shops, chats with sellers | QR, browser |
+| | Xianyu 闲鱼 | `xianyu` | second-hand items, sellers, favorites, chats | QR, browser |
+| | JD 京东 | `jd` | items with prices, reviews, shops, hot words | browser |
+| | Pinduoduo 拼多多 | `pdd` | goods, reviews, shops, home feed | browser, 多多进宝 |
+| Maps | Amap 高德地图 | `amap` | places, geocoding, routes, weather, traffic | key |
 | Chat | WeChat 微信 (ClawBot) | `wechat` | receive and answer messages | QR |
 | | Telegram | `telegram` | chats, channels, groups, bots, channel stats | QR, phone, bot |
 | | Discord | `discord` | servers, channels, DMs, search | QR, token |
