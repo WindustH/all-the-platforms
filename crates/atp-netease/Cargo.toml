@@ -1,0 +1,21 @@
+[package]
+name = "atp-netease"
+description = "NetEase Cloud Music (网易云音乐) support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+aes.workspace = true
+atp-core.workspace = true
+base64.workspace = true
+cbc.workspace = true
+clap.workspace = true
+jiff.workspace = true
+md-5.workspace = true
+# Textbook RSA of the weapi secret (already in the lock file through grammers).
+num-bigint = "0.4"
+rand.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
