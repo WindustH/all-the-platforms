@@ -12,6 +12,7 @@ then run:
 import base64
 import json
 import re
+import time
 import urllib.request
 from html import escape
 from pathlib import Path
@@ -87,9 +88,6 @@ COMING = [
     ("Google Maps", "Google Maps", "googlemaps", "#4285F4"),
     ("百度地图", "Baidu Map", "app:452186370", ""),
     ("腾讯地图", "Tencent Map", "app:481623196", ""),
-    ("Google", "Google Search", "google", "#4285F4"),
-    ("Bing", "Bing", "app:345323231@us", ""),
-    ("DuckDuckGo", "DuckDuckGo", "duckduckgo", "#DE5833"),
     ("Stack Overflow", "Stack Overflow", "stackoverflow", "#F58025"),
     ("Hacker News", "Hacker News", "ycombinator", "#F0652F"),
     ("Lobsters", "Lobsters", "lobsters", "#AC130D"),
@@ -139,8 +137,7 @@ CRISTAE = (
 
 def glyph(slug, cache={}):
     if slug not in cache:
-        with urllib.request.urlopen(SIMPLE_ICONS.format(slug), timeout=30) as r:
-            svg = r.read().decode()
+        svg = fetch(SIMPLE_ICONS.format(slug))[0].decode()
         cache[slug] = re.search(r' d="([^"]+)"', svg).group(1)
     return cache[slug]
 
@@ -150,10 +147,16 @@ def light(color):
     return 0.299 * r + 0.587 * g + 0.114 * b > 170
 
 
-def fetch(url):
+def fetch(url, tries=4):
     request = urllib.request.Request(url, headers={"User-Agent": "atp-docs"})
-    with urllib.request.urlopen(request, timeout=30) as r:
-        return r.read(), r.headers.get_content_type()
+    for attempt in range(tries):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as r:
+                return r.read(), r.headers.get_content_type()
+        except OSError:
+            if attempt == tries - 1:
+                raise
+            time.sleep(2 * (attempt + 1))
 
 
 def picture(icon, cache={}):
