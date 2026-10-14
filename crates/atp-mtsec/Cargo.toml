@@ -1,0 +1,15 @@
+[package]
+name = "atp-mtsec"
+description = "What all-the-platforms's Meituan and Dianping share: one request path through their gateway, its refusals, the rohr _token, Dianping shops and reviews, and Meituan's city lookups"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+base64.workspace = true
+flate2 = "1"
+jiff.workspace = true
+rand.workspace = true
+regex.workspace = true
+url.workspace = true
