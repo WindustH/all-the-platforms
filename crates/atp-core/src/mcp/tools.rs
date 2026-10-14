@@ -169,7 +169,11 @@ fn check(name: &str, words: &[String], read: bool) -> std::result::Result<(), St
     return Err("`-` (standard input) is not available over MCP; pass the text itself".into());
   }
   let given = |flag: &str| words.iter().any(|w| w.starts_with(flag));
-  if name == "login" && !["--cookie", "--token", "--browser"].iter().any(|f| given(f)) {
+  if name == "login"
+    && !["--cookie", "--token", "--browser"]
+      .iter()
+      .any(|f| given(f))
+  {
     return Err(
       "a QR-code login needs a terminal: run `atp <platform> login` there, or pass \
        --cookie, --token or --browser"
@@ -250,7 +254,8 @@ fn command_schema(ids: &[&str], command: Value) -> Value {
 }
 
 fn read_tool(ids: &[&str]) -> Value {
-  let command = json!({"type": "string", "enum": READS, "description": "A command that only reads"});
+  let command =
+    json!({"type": "string", "enum": READS, "description": "A command that only reads"});
   json!({
     "name": "read",
     "title": "Read from a platform",
@@ -263,7 +268,8 @@ fn read_tool(ids: &[&str]) -> Value {
 }
 
 fn run_tool(ids: &[&str]) -> Value {
-  let command = json!({"type": "string", "description": "Any command of the platform, shared or its own"});
+  let command =
+    json!({"type": "string", "description": "Any command of the platform, shared or its own"});
   json!({
     "name": "run",
     "title": "Act on a platform",

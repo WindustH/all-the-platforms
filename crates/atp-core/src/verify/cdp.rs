@@ -37,7 +37,9 @@ impl Cdp {
       }
       return Ok(answer.at("result").clone());
     }
-    Err(Error::internal("the browser closed its DevTools connection"))
+    Err(Error::internal(
+      "the browser closed its DevTools connection",
+    ))
   }
 
   /// Set `cookies` on every domain in `domains` and its subdomains.
@@ -47,7 +49,9 @@ impl Cdp {
       .flat_map(|d| cookies.iter().map(move |(k, v)| cookie(k, v, d)))
       .collect();
     if !list.is_empty() {
-      self.call("Storage.setCookies", json!({"cookies": list})).await?;
+      self
+        .call("Storage.setCookies", json!({"cookies": list}))
+        .await?;
     }
     Ok(())
   }
@@ -73,7 +77,9 @@ impl Cdp {
   /// Open `url` in a new tab and close the blank one the browser started with.
   pub async fn open(&mut self, url: &str) -> Result<()> {
     let targets = self.call("Target.getTargets", json!({})).await?;
-    self.call("Target.createTarget", json!({"url": url})).await?;
+    self
+      .call("Target.createTarget", json!({"url": url}))
+      .await?;
     for blank in targets
       .list("targetInfos")
       .iter()

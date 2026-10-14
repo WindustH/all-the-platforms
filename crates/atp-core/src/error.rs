@@ -134,7 +134,11 @@ fn first_link(text: &str) -> Option<String> {
     .chars()
     .take_while(|c| !c.is_whitespace() && !"\"'`<>()（）「」，。".contains(*c))
     .collect();
-  Some(link.trim_end_matches(['.', ',', ';', ':', '!', '?']).to_owned())
+  Some(
+    link
+      .trim_end_matches(['.', ',', ';', ':', '!', '?'])
+      .to_owned(),
+  )
 }
 
 impl fmt::Display for Error {

@@ -134,7 +134,9 @@ impl Browser {
       }
       tokio::time::sleep(Duration::from_millis(200)).await;
     }
-    Err(Error::internal("the browser did not open its DevTools port"))
+    Err(Error::internal(
+      "the browser did not open its DevTools port",
+    ))
   }
 
   pub fn exited(&mut self) -> bool {

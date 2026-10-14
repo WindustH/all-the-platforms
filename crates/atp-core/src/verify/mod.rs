@@ -91,7 +91,11 @@ async fn fallback(url: &str) -> Option<Cookies> {
   let opened = chrome::open_default(url);
   eprintln!(
     "No Chrome, Chromium, Edge or Brave found (ATP_BROWSER can name one); {}: {url}",
-    if opened { "opened in the default browser" } else { "open it yourself" }
+    if opened {
+      "opened in the default browser"
+    } else {
+      "open it yourself"
+    }
   );
   eprintln!("Cookies set there do not reach atp; if the retry still fails, log in again.");
   wait_for_enter(async || {}).await.then(Cookies::new)
