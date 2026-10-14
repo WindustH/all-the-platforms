@@ -1,0 +1,13 @@
+[package]
+name = "atp-lobsters"
+description = "Lobsters support for all-the-platforms, through its public JSON pages"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+regex.workspace = true
+serde_json.workspace = true
+url.workspace = true

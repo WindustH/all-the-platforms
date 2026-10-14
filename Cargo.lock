@@ -389,11 +389,13 @@ dependencies = [
  "atp-facebook",
  "atp-feishu",
  "atp-googlemaps",
+ "atp-hackernews",
  "atp-instagram",
  "atp-jd",
  "atp-kook",
  "atp-kuaishou",
  "atp-line",
+ "atp-lobsters",
  "atp-matrix",
  "atp-mattermost",
  "atp-meituan",
@@ -410,6 +412,7 @@ dependencies = [
  "atp-satori",
  "atp-slack",
  "atp-spotify",
+ "atp-stackexchange",
  "atp-taobao",
  "atp-telegram",
  "atp-tencentmap",
@@ -417,6 +420,7 @@ dependencies = [
  "atp-tiktok",
  "atp-toutiao",
  "atp-twitter",
+ "atp-v2ex",
  "atp-vocechat",
  "atp-wechat",
  "atp-wecom",
@@ -668,6 +672,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "atp-hackernews"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "futures-util",
+ "jiff",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "atp-instagram"
 version = "0.1.0"
 dependencies = [
@@ -745,6 +761,17 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "atp-lobsters"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "regex",
+ "serde_json",
+ "url",
 ]
 
 [[package]]
@@ -1012,6 +1039,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "atp-stackexchange"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde_json",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "atp-taobao"
 version = "0.1.0"
 dependencies = [
@@ -1116,6 +1156,18 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-v2ex"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "regex",
+ "serde_json",
  "url",
 ]
 

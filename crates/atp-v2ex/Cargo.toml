@@ -1,0 +1,14 @@
+[package]
+name = "atp-v2ex"
+description = "V2EX support for all-the-platforms, through its official API (v1 and v2)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+jiff.workspace = true
+regex.workspace = true
+serde_json.workspace = true
+url.workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "atp-stackexchange"
+description = "Stack Overflow and Stack Exchange support for all-the-platforms, through the Stack Exchange API"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+jiff.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["net"] }
+url.workspace = true

@@ -20,6 +20,8 @@ one of them.
 - Maps, local life and travel: `amap`, `meituan`, `dianping`, `ctrip`.
 - Cloud drives: `quark`, `baidupan`. Music: `ncm` (NetEase Cloud Music),
   `qqmusic` (QQ Music).
+- Developer communities: `so` (Stack Overflow and every Stack Exchange
+  site), `hn` (Hacker News), `lobsters`, `v2ex`.
 
 Chat apps share `chats`, `messages`, `send`, `members`, `react`, `edit` and
 `listen` (see `atp guide interact`).

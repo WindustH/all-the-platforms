@@ -90,13 +90,15 @@ GROUPS = [
         ("line", "LINE", "LINE", "line", "#00C300"),
         ("satori", "Satori", "Satori", "github:satorijs", ""),
     ]),
+    ("开发者社区", "DEVELOPER", [
+        ("so", "Stack Overflow", "Stack Exchange", "stackoverflow", "#F58025"),
+        ("hn", "Hacker News", "Hacker News", "ycombinator", "#F0652F"),
+        ("lobsters", "Lobsters", "Lobsters", "lobsters", "#AC130D"),
+        ("v2ex", "V2EX", "V2EX", "v2ex", "#1F1F1F"),
+    ]),
 ]
 
 COMING = [
-    ("Stack Overflow", "Stack Overflow", "stackoverflow", "#F58025"),
-    ("Hacker News", "Hacker News", "ycombinator", "#F0652F"),
-    ("Lobsters", "Lobsters", "lobsters", "#AC130D"),
-    ("V2EX", "V2EX", "v2ex", "#1F1F1F"),
     ("Bangumi", "番组计划", "github:bangumi", ""),
     ("播客", "Podcasts", "applepodcasts", "#9933CC"),
     ("Lemmy", "Lemmy", "lemmy", "#000000"),

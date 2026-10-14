@@ -56,5 +56,9 @@ fn main() -> ExitCode {
   .platform::<atp_netease::Netease>()
   .platform::<atp_qqmusic::QqMusic>()
   .platform::<atp_spotify::Spotify>()
+  .platform::<atp_stackexchange::StackExchange>()
+  .platform::<atp_hackernews::HackerNews>()
+  .platform::<atp_lobsters::Lobsters>()
+  .platform::<atp_v2ex::V2ex>()
   .run()
 }

@@ -74,6 +74,10 @@ atp-baidupan = { path = "crates/atp-baidupan" }
 atp-netease = { path = "crates/atp-netease" }
 atp-qqmusic = { path = "crates/atp-qqmusic" }
 atp-spotify = { path = "crates/atp-spotify" }
+atp-stackexchange = { path = "crates/atp-stackexchange" }
+atp-hackernews = { path = "crates/atp-hackernews" }
+atp-lobsters = { path = "crates/atp-lobsters" }
+atp-v2ex = { path = "crates/atp-v2ex" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -148,6 +152,10 @@ atp-baidupan.workspace = true
 atp-netease.workspace = true
 atp-qqmusic.workspace = true
 atp-spotify.workspace = true
+atp-stackexchange.workspace = true
+atp-hackernews.workspace = true
+atp-lobsters.workspace = true
+atp-v2ex.workspace = true
 
 [profile.release]
 lto = "thin"

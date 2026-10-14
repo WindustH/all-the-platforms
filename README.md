@@ -123,6 +123,10 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | VoceChat | `vocechat` | channels, direct chats | password, key |
 | | LINE | `line` | push, broadcast, audience insights | token |
 | | Satori | `satori` | any Satori server | token |
+| Developer | Stack Overflow / Stack Exchange | `so` | questions with their answers and comments, tags, users, every Stack Exchange site | app key, token |
+| | Hacker News | `hn` | front-page lists, stories, whole comment threads, search | not needed |
+| | Lobsters | `lobsters` | hottest, newest and active stories, comment threads, tags, search | not needed |
+| | V2EX | `v2ex` | hot and latest topics, replies, members, nodes, notifications | token |
 
 ## Quick start
 
@@ -148,6 +152,8 @@ atp yt transcript https://youtu.be/5C_HPTJg5ek
 atp mp read https://mp.weixin.qq.com/s/nwv1BVYGbpuYJO0bPp-APQ
 atp tg messages @telegram -n 20
 atp misskey feed --type global -n 10
+atp hn hot -n 10
+atp so search "[rust] borrow checker" -n 5
 ```
 
 Log in for everything else:

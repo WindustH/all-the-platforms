@@ -114,6 +114,10 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 | | VoceChat | `vocechat` | 频道、私聊 | 密码、密钥 |
 | | LINE | `line` | 推送、群发、受众数据 | Token |
 | | Satori | `satori` | 任意 Satori 服务端 | Token |
+| 开发者社区 | Stack Overflow / Stack Exchange | `so` | 问题及其回答与评论、标签、用户，覆盖所有 Stack Exchange 站点 | 应用 Key、Token |
+| | Hacker News | `hn` | 首页各榜单、帖子、完整评论树、搜索 | 无需登录 |
+| | Lobsters | `lobsters` | 最热、最新与活跃帖子、评论树、标签、搜索 | 无需登录 |
+| | V2EX | `v2ex` | 最热与最新主题、回复、会员、节点、通知 | Token |
 
 ## 快速开始
 
@@ -138,6 +142,8 @@ atp yt transcript https://youtu.be/5C_HPTJg5ek
 atp mp read https://mp.weixin.qq.com/s/nwv1BVYGbpuYJO0bPp-APQ
 atp tg messages @telegram -n 20
 atp misskey feed --type global -n 10
+atp hn hot -n 10
+atp so search "[rust] borrow checker" -n 5
 ```
 
 登录后解锁全部功能：
