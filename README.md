@@ -92,7 +92,8 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Dewu / POIZON 得物 | `dewu` | community posts, no-watermark videos, Open Platform prices and sales | key |
 | | Meituan 美团 | `meituan` | 联盟 deals and rankings, shop reviews, city lookup | key, browser |
 | | Dianping 大众点评 | `dianping` | shops, scores, reviews, discovery notes | QR, browser |
-| Maps | Amap 高德地图 | `amap` | places, geocoding, routes, weather, traffic | key |
+| Maps / travel | Amap 高德地图 | `amap` | places, geocoding, routes, weather, traffic | key |
+| | Ctrip 携程 | `ctrip` | sights, hotels, reviews with sub-scores, rankings, trains and transfers, flight fares, travel notes | browser |
 | Chat | WeChat 微信 (ClawBot) | `wechat` | receive and answer messages | QR |
 | | Telegram | `telegram` | chats, channels, groups, bots, channel stats | QR, phone, bot |
 | | Discord | `discord` | servers, channels, DMs, search | QR, token |

@@ -47,5 +47,6 @@ fn main() -> ExitCode {
   .platform::<atp_meituan::Meituan>()
   .platform::<atp_dianping::Dianping>()
   .platform::<atp_dewu::Dewu>()
+  .platform::<atp_ctrip::Ctrip>()
   .run()
 }

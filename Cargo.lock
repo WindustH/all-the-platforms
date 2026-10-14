@@ -82,6 +82,7 @@ dependencies = [
  "atp-amap",
  "atp-bilibili",
  "atp-core",
+ "atp-ctrip",
  "atp-dewu",
  "atp-dianping",
  "atp-dingtalk",
@@ -504,6 +505,18 @@ dependencies = [
  "url",
  "wreq",
  "wreq-util",
+]
+
+[[package]]
+name = "atp-ctrip"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde_json",
 ]
 
 [[package]]
