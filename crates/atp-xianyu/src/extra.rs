@@ -10,6 +10,7 @@ use crate::{search, users};
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Ratings a user received from the people they traded with
+  #[command(after_long_help = EX_RATINGS)]
   Ratings {
     /// User id, profile link or `me`
     user: String,
@@ -18,11 +19,19 @@ pub enum Command {
   },
   /// Words the search box suggests for a keyword
   Suggest {
+    /// The keyword typed so far
     keyword: String,
     #[command(flatten)]
     page: PageArgs,
   },
 }
+
+const EX_RATINGS: &str = "\
+Examples:
+  atp xianyu ratings me
+  atp xianyu ratings 'https://www.goofish.com/personal?userId=2201234567' -n 50
+
+More: atp guide xianyu ratings";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

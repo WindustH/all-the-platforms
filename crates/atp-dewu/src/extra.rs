@@ -16,11 +16,13 @@ pub enum Command {
   },
   /// Products of a home page tab, by its id from `tabs`
   Tab {
+    /// Tab id from `tabs`, or #N after it
     id: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Per-size reference prices of an article number (Open Platform)
+  #[command(after_long_help = EX_PRICES)]
   Prices {
     /// Article number (货号), e.g. DD1391-100
     article: String,
@@ -40,6 +42,14 @@ pub enum Command {
     article: String,
   },
 }
+
+const EX_PRICES: &str = "\
+Examples:
+  atp dewu prices DD1391-100
+  atp dewu prices DD1391-100 --region US --currency USD --consign
+
+Needs an Open Platform app: atp dewu login --token 'APP_KEY:APP_SECRET'
+More: atp guide dewu prices";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

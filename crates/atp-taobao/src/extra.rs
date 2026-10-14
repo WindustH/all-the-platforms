@@ -10,6 +10,7 @@ use crate::search;
 pub enum Command {
   /// Words the search box suggests for a keyword
   Suggest {
+    /// The keyword typed so far
     keyword: String,
     #[command(flatten)]
     page: PageArgs,
