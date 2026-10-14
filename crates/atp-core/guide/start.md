@@ -11,15 +11,17 @@ one of them.
 
 - Social and news: `zhihu`, `xhs`, `weibo`, `tieba`, `mp` (WeChat
   Official Accounts), `twitter`, `reddit`, `facebook`, `instagram`,
-  `misskey`, `toutiao`.
+  `misskey`, `lemmy`, `toutiao`, `bangumi` (Bangumi 番组计划), `rss`
+  (RSS, Atom and JSON feeds, RSSHub, Miniflux).
 - Video: `bili`, `douyin`, `kuaishou`, `youtube`, `tiktok`.
 - Chat: `wechat`, `telegram`, `discord`, `whatsapp`, `qq`, `onebot`,
   `feishu`, `dingtalk`, `wecom`, `slack`, `mattermost`, `rocketchat`,
   `matrix`, `kook`, `vocechat`, `line`, `satori`.
 - Shopping: `taobao`, `xianyu`, `jd`, `pdd`, `dewu`.
 - Maps, local life and travel: `amap`, `meituan`, `dianping`, `ctrip`.
-- Cloud drives: `quark`, `baidupan`. Music: `ncm` (NetEase Cloud Music),
-  `qqmusic` (QQ Music).
+- Cloud drives: `quark`, `baidupan`. Music and podcasts: `ncm` (NetEase
+  Cloud Music), `qqmusic` (QQ Music), `spotify`, `podcast` (Apple's
+  directory, show feeds, Podcast Index).
 - Developer communities: `so` (Stack Overflow and every Stack Exchange
   site), `hn` (Hacker News), `lobsters`, `v2ex`.
 

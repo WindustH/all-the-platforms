@@ -1,0 +1,15 @@
+[package]
+name = "atp-rss"
+description = "RSS, Atom and JSON Feed support for all-the-platforms: a local subscription list, RSSHub routes and a Miniflux account"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+futures-util = "0.3"
+jiff.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true

@@ -16,6 +16,7 @@ clap.workspace = true
 comfy-table = "8"
 csv = "1"
 dirs = "6"
+feed-rs = "3"
 futures-util = "0.3"
 html2text = "0.17"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }

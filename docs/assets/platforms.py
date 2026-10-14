@@ -38,6 +38,9 @@ GROUPS = [
         ("facebook", "Facebook", "Facebook", "facebook", "#0866FF"),
         ("instagram", "Instagram", "Instagram", "instagram", "instagram"),
         ("misskey", "Misskey", "Misskey", "misskey", "#A1CA03"),
+        ("lemmy", "Lemmy", "Lemmy", "lemmy", "#000000"),
+        ("bangumi", "番组计划", "Bangumi", "github:bangumi", ""),
+        ("rss", "RSS", "RSSHub · Miniflux", "rss", "#FFA500"),
     ]),
     ("视频", "VIDEO", [
         ("bili", "哔哩哔哩", "Bilibili", "bilibili", "#FB7299"),
@@ -46,10 +49,11 @@ GROUPS = [
         ("tiktok", "TikTok", "TikTok", "tiktok", "tiktok"),
         ("kuaishou", "快手", "Kuaishou", "kuaishou", "#FF4906"),
     ]),
-    ("音乐", "MUSIC", [
+    ("音乐与播客", "MUSIC · PODCASTS", [
         ("ncm", "网易云音乐", "NetEase Cloud Music", "neteasecloudmusic", "#D43C33"),
         ("qqmusic", "QQ音乐", "QQ Music", "app:414603431", ""),
         ("spotify", "Spotify", "Spotify", "spotify", "#1ED760"),
+        ("podcast", "播客", "Podcasts", "applepodcasts", "#9933CC"),
     ]),
     ("购物与生活", "SHOPPING", [
         ("taobao", "淘宝", "Taobao", "taobao", "#FF5000"),
@@ -99,10 +103,6 @@ GROUPS = [
 ]
 
 COMING = [
-    ("Bangumi", "番组计划", "github:bangumi", ""),
-    ("播客", "Podcasts", "applepodcasts", "#9933CC"),
-    ("Lemmy", "Lemmy", "lemmy", "#000000"),
-    ("RSS", "RSSHub · Miniflux", "rss", "#FFA500"),
     ("Threads", "Threads", "threads", "#000000"),
     ("Mastodon", "Mastodon", "mastodon", "#6364FF"),
     ("Bluesky", "Bluesky", "bluesky", "#1185FE"),

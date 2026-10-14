@@ -76,14 +76,18 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 | | Facebook | `facebook` | 个人页、公共主页、小组、主页数据、广告 | 浏览器、Token |
 | | Instagram | `instagram` | 帖子、Reels、快拍、私信、数据、广告 | 浏览器、Token |
 | | Misskey | `misskey` | 帖子、时间线、表情回应、聊天 | MiAuth、Token |
+| | Lemmy | `lemmy` | 社区、帖子、完整评论树、投票、回复，任意实例 | 密码、Token |
+| | Bangumi 番组计划 | `bangumi` | 动画、书籍、音乐与游戏条目、每日放送、角色与制作人员、我的收藏与进度 | Token |
+| | RSS | `rss` | RSS、Atom 与 JSON Feed、订阅列表与合并时间线、RSSHub 路由、Miniflux | 无需登录、Miniflux Key |
 | 视频 | 哔哩哔哩 | `bili` | 视频、弹幕、字幕、投币、创作者数据 | 扫码、浏览器 |
 | | 抖音 | `douyin` | 视频、图文、热榜、无水印下载 | 浏览器 |
 | | YouTube | `youtube` | 视频、Shorts、字幕文本、播放列表、数据 | 浏览器 |
 | | TikTok | `tiktok` | 视频、音乐、话题、广告 | 扫码、浏览器 |
 | | 快手 | `kuaishou` | 视频、图集、评论、热榜、直播间 | 扫码、浏览器 |
-| 音乐 | 网易云音乐 | `ncm` | 歌曲、歌词与翻译、歌单、榜单、评论、音乐云盘 | 扫码、浏览器 |
+| 音乐 / 播客 | 网易云音乐 | `ncm` | 歌曲、歌词与翻译、歌单、榜单、评论、音乐云盘 | 扫码、浏览器 |
 | | QQ 音乐 | `qqmusic` | 歌曲、歌词与翻译、歌单、榜单、评论 | 扫码、浏览器 |
 | | Spotify | `spotify` | 搜索、音乐库与歌单、最常听的歌曲和艺人、播放控制 | 应用 |
+| | 播客 | `podcast` | Apple 播客目录与榜单、来自节目 RSS 的单集与节目介绍、断点续传下载、Podcast Index | 无需登录、Key |
 | 购物 | 淘宝 / 天猫 | `taobao` | 商品、评价、店铺、和卖家聊天 | 扫码、浏览器 |
 | | 闲鱼 | `xianyu` | 二手商品、卖家、收藏、聊天 | 扫码、浏览器 |
 | | 京东 | `jd` | 商品与价格、评价、店铺、热词 | 浏览器 |
@@ -143,6 +147,8 @@ atp mp read https://mp.weixin.qq.com/s/nwv1BVYGbpuYJO0bPp-APQ
 atp tg messages @telegram -n 20
 atp misskey feed --type global -n 10
 atp hn hot -n 10
+atp podcast search 'hardcore history'
+atp rss read https://blog.rust-lang.org/feed.xml
 atp so search "[rust] borrow checker" -n 5
 ```
 

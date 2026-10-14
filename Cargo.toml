@@ -3,7 +3,7 @@ name = "atp"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "ATP (all-the-platforms): one command for all the platforms — social, video, music, chat, shopping, travel and drives"
+description = "ATP (all-the-platforms): one command for all the platforms — social, video, music, podcasts, feeds, chat, shopping, travel and drives"
 
 [[bin]]
 name = "atp"
@@ -78,6 +78,10 @@ atp-stackexchange = { path = "crates/atp-stackexchange" }
 atp-hackernews = { path = "crates/atp-hackernews" }
 atp-lobsters = { path = "crates/atp-lobsters" }
 atp-v2ex = { path = "crates/atp-v2ex" }
+atp-bangumi = { path = "crates/atp-bangumi" }
+atp-podcast = { path = "crates/atp-podcast" }
+atp-lemmy = { path = "crates/atp-lemmy" }
+atp-rss = { path = "crates/atp-rss" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -156,6 +160,10 @@ atp-stackexchange.workspace = true
 atp-hackernews.workspace = true
 atp-lobsters.workspace = true
 atp-v2ex.workspace = true
+atp-bangumi.workspace = true
+atp-podcast.workspace = true
+atp-lemmy.workspace = true
+atp-rss.workspace = true
 
 [profile.release]
 lto = "thin"

@@ -273,6 +273,31 @@ pub fn encode_uri_component(s: &str) -> String {
   out
 }
 
+/// `decodeURIComponent`, lenient: `%XX` sequences become their bytes
+/// (read as UTF-8, invalid sequences replaced), anything else stays.
+pub fn decode_uri_component(s: &str) -> String {
+  let bytes = s.as_bytes();
+  let mut out = Vec::with_capacity(bytes.len());
+  let mut i = 0;
+  while i < bytes.len() {
+    let hex = bytes
+      .get(i + 1..i + 3)
+      .and_then(|h| std::str::from_utf8(h).ok())
+      .and_then(|h| u8::from_str_radix(h, 16).ok());
+    match (bytes[i], hex) {
+      (b'%', Some(b)) => {
+        out.push(b);
+        i += 3;
+      }
+      (b, _) => {
+        out.push(b);
+        i += 1;
+      }
+    }
+  }
+  String::from_utf8_lossy(&out).into_owned()
+}
+
 /// A Beijing (UTC+8) wall-clock time such as `2026-10-14 08:30:00` or
 /// `2026-10-14 08:30`.
 pub fn from_beijing(local: &str) -> Option<Timestamp> {

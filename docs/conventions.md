@@ -93,10 +93,12 @@ Use these instead of writing another copy:
 | media kind of a MIME type | `MediaKind::from_mime` |
 | prices of products, listings, deals, tickets | `Post.price` (`Price::cny`, `original`, `label`); never in `extra` |
 | map platforms: points in their system, places, routes, distances, static map sizes | `geo::{Coord, System, Place, Routes, Route, Step, Distance, Polyline, image_size, save_map}`; a place is `Post.place`, never `extra`; `Platform::COORD` for `--coord` |
-| times, counts, text | `text::{from_secs, from_millis, from_beijing, parse_count, html_to_text, encode_uri_component, emoji_shortcode …}` |
+| times, counts, text | `text::{from_secs, from_millis, from_beijing, parse_count, html_to_text, encode_uri_component, decode_uri_component, emoji_shortcode …}` |
 | dates without a time of day (`Oct 12, 2021`, `3 weeks ago`) | `text::date_only`: shown as a date, never with a made-up clock time |
 | listings | `cli::PageArgs`, `paging` (`paging::slice` for lists held in memory), `PageReq` |
 | lyrics and track lists of music platforms | `music::{Lyrics, with_tracks}` |
+| RSS / Atom / JSON feeds: fetching (conditional requests, feed discovery), parsing into posts, `FEED_URL#ENTRY_ID` references | `feed::{load, get, parse, discover, entry_ref, split_entry_ref}` |
+| lists and settings a user keeps (neither credentials nor cache) | `Store::{data, put_data}` |
 | text and file arguments, confirmations | `cli::{read_text, check_images, check_files, confirm}` |
 | HTTP errors | `http::status_error`, `Req::retries` |
 | a declared client name for open APIs that challenge look-alike browsers | `http::TOOL_USER_AGENT` |

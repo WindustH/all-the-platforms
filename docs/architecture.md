@@ -30,7 +30,7 @@ line in `src/main.rs`.
 | `platforms` | `atp platforms`: one row per platform grouped by kind, `atp platforms <id>` in detail, the same data as JSON |
 | `account` | `login` (QR / token / browser / cookie string), `logout`, `status` |
 | `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, proxy; `request` (building, sending, retries, streaming), `response` |
-| `store` | session file (0600), TTL cache, `#N` short-index lists |
+| `store` | session file (0600), data files the user keeps beside it (`data`, `put_data`: lists and settings `logout` leaves alone), TTL cache (values and raw bytes), `#N` short-index lists |
 | `paging` | `collect`: follow cursors until `--limit` items; `collect_window`: `--since` / `--until` |
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg); `files`: a drive's files and folders under their own names, through `.part` files resumed by `Range`, with per-link headers and links renewed mid-file |
 | `upload` | files too big for memory: `LocalFile`, `Hashes` (md5, sha1, 4 MB block md5s, md5 of the first 256 KB in one read), `Parts` (part by part with retries, a progress bar and resume state in the private cache; optionally the SHA-1 state before each part, `Sha1Midway`) |
@@ -42,6 +42,7 @@ line in `src/main.rs`.
 | `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
 | `text` | counts (`1.2万`), durations, truncation, HTML to text, timestamps |
+| `feed` | web feeds for platforms that read them (podcasts, RSS): RSS 0.9x–2.0, Atom and JSON Feed through feed-rs into a `Feed` whose entries are posts (enclosures as media, iTunes episode data in `extra`); `get` fetches as feed readers do (a declared client, `If-None-Match` / `If-Modified-Since` against a private cached copy), `load` also follows a web page to the feed it announces (`discover`); `FEED_URL#ENTRY_ID` entry references (`entry_ref`, `split_entry_ref`) |
 | `music` | what music platforms share: `Lyrics` (LRC with its translation, as plain text or LRC) and track lists inside a post (`with_tracks`) |
 | `browser` | import cookies from local browsers (`browser` feature, on by default) |
 | `credentials` | environment variables, `login --token` fields, credentials saved in the session |

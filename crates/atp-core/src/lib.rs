@@ -15,6 +15,7 @@ pub mod credentials;
 pub mod ctx;
 pub mod download;
 pub mod error;
+pub mod feed;
 pub mod file;
 pub mod geo;
 pub mod guide;

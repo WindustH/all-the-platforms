@@ -1,0 +1,14 @@
+[package]
+name = "atp-podcast"
+description = "Podcast support for all-the-platforms: Apple's podcast directory, show feeds and Podcast Index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+jiff.workspace = true
+serde_json.workspace = true
+sha1.workspace = true
+url.workspace = true

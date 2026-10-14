@@ -85,14 +85,18 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Facebook | `facebook` | profiles, pages, groups, Page insights, ads | browser, token |
 | | Instagram | `instagram` | posts, reels, stories, DMs, insights, ads | browser, token |
 | | Misskey | `misskey` | notes, timelines, reactions, chat | MiAuth, token |
+| | Lemmy | `lemmy` | communities, posts, whole comment threads, votes, replies, on any instance | password, token |
+| | Bangumi 番组计划 | `bangumi` | anime, books, music and games, the airing calendar, cast and staff, your collection and progress | token |
+| | RSS | `rss` | RSS, Atom and JSON feeds, a subscription list with one timeline, RSSHub routes, Miniflux | not needed, Miniflux key |
 | Video | Bilibili 哔哩哔哩 | `bili` | videos, danmaku, subtitles, coins, creator data | QR, browser |
 | | Douyin 抖音 | `douyin` | videos, image posts, hot boards, no-watermark downloads | browser |
 | | YouTube | `youtube` | videos, Shorts, transcripts, playlists, analytics | browser |
 | | TikTok | `tiktok` | videos, sounds, hashtags, ads | QR, browser |
 | | Kuaishou 快手 | `kuaishou` | videos, image sets, comments, hot board, live rooms | QR, browser |
-| Music | NetEase Cloud Music 网易云音乐 | `ncm` | songs, lyrics with translations, playlists, charts, comments, your cloud drive | QR, browser |
+| Music / podcasts | NetEase Cloud Music 网易云音乐 | `ncm` | songs, lyrics with translations, playlists, charts, comments, your cloud drive | QR, browser |
 | | QQ Music QQ 音乐 | `qqmusic` | songs, lyrics with translations, playlists, charts, comments | QR, browser |
 | | Spotify | `spotify` | search, your library and playlists, top tracks and artists, playback control | app |
+| | Podcasts | `podcast` | Apple's directory and charts, episodes with show notes from each feed, resumable downloads, Podcast Index | not needed, key |
 | Shopping | Taobao / Tmall 淘宝 / 天猫 | `taobao` | items, reviews, shops, chats with sellers | QR, browser |
 | | Xianyu 闲鱼 | `xianyu` | second-hand items, sellers, favorites, chats | QR, browser |
 | | JD 京东 | `jd` | items with prices, reviews, shops, hot words | browser |
@@ -153,6 +157,8 @@ atp mp read https://mp.weixin.qq.com/s/nwv1BVYGbpuYJO0bPp-APQ
 atp tg messages @telegram -n 20
 atp misskey feed --type global -n 10
 atp hn hot -n 10
+atp podcast search 'hardcore history'
+atp rss read https://blog.rust-lang.org/feed.xml
 atp so search "[rust] borrow checker" -n 5
 ```
 

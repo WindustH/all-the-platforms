@@ -117,7 +117,7 @@ impl PlatformKind {
       Self::Shopping => "Shopping",
       Self::Local => "Maps, local life and travel",
       Self::Drive => "Cloud drives",
-      Self::Music => "Music",
+      Self::Music => "Music and podcasts",
       Self::Developer => "Developer communities",
     }
   }

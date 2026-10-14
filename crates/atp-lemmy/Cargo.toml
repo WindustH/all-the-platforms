@@ -1,0 +1,13 @@
+[package]
+name = "atp-lemmy"
+description = "Lemmy support for all-the-platforms (any instance), through its HTTP API v3"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+jiff.workspace = true
+serde_json.workspace = true
+url.workspace = true

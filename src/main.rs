@@ -60,5 +60,9 @@ fn main() -> ExitCode {
   .platform::<atp_hackernews::HackerNews>()
   .platform::<atp_lobsters::Lobsters>()
   .platform::<atp_v2ex::V2ex>()
+  .platform::<atp_bangumi::Bangumi>()
+  .platform::<atp_podcast::Podcast>()
+  .platform::<atp_lemmy::Lemmy>()
+  .platform::<atp_rss::Rss>()
   .run()
 }

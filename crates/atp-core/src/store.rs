@@ -1,9 +1,11 @@
-//! Per-platform files: the saved session, a TTL cache and the short-index list.
+//! Per-platform files: the saved session, data files, a TTL cache and the
+//! short-index list.
 //!
 //! Layout under the system's config and cache directories (Linux shown;
 //! override the root with `ATP_HOME`):
 //! - `~/.config/all-the-platforms/<platform>/session.json` (mode 0600)
-//! - `~/.cache/all-the-platforms/<platform>/*.json`
+//! - `~/.config/all-the-platforms/<platform>/<name>.json`: data files (0600)
+//! - `~/.cache/all-the-platforms/<platform>/*`
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -148,6 +150,51 @@ impl Store {
   /// Drop a cached value.
   pub fn cache_remove(&self, key: &str) {
     let _ = fs::remove_file(self.cache_dir.join(format!("{key}.json")));
+  }
+
+  /// Cached bytes younger than `ttl` (a downloaded document kept as it came).
+  pub fn cache_get_bytes(&self, name: &str, ttl: Duration) -> Option<Vec<u8>> {
+    let path = self.cache_dir.join(name);
+    let age = fs::metadata(&path).ok()?.modified().ok()?;
+    let old = SystemTime::now()
+      .duration_since(age)
+      .unwrap_or(Duration::MAX)
+      > ttl;
+    if old { None } else { fs::read(path).ok() }
+  }
+
+  /// Best effort, private to the user, like [`Store::cache_put`].
+  pub fn cache_put_bytes(&self, name: &str, bytes: &[u8]) {
+    let write = || -> Result<()> {
+      fs::create_dir_all(&self.cache_dir)?;
+      write_private(&self.cache_dir.join(name), bytes)
+    };
+    if let Err(e) = write() {
+      tracing::debug!("cache write {name} failed: {e}");
+    }
+  }
+
+  /// A data file the user keeps beside the session (`<name>.json` in the
+  /// platform's config directory): lists and settings that are neither
+  /// credentials nor disposable, so `logout` leaves them alone.
+  pub fn data<T: DeserializeOwned>(&self, name: &str) -> Result<Option<T>> {
+    let path = self.config_dir.join(format!("{name}.json"));
+    match fs::read(&path) {
+      Ok(bytes) => serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|e| Error::internal(format!("corrupt data file {}: {e}", path.display()))),
+      Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+      Err(e) => Err(e.into()),
+    }
+  }
+
+  /// Write a data file (mode 0600).
+  pub fn put_data<T: Serialize>(&self, name: &str, value: &T) -> Result<()> {
+    fs::create_dir_all(&self.config_dir)?;
+    write_private(
+      &self.config_dir.join(format!("{name}.json")),
+      &serde_json::to_vec_pretty(value)?,
+    )
   }
 
   /// Change the saved session in place (`ATP_<ID>_COOKIE` never reaches
