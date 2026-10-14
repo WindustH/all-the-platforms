@@ -1,6 +1,6 @@
 //! `a_bogus`: the query signature of ByteDance's web SDK `bdms.js`
 //! (1.0.1.19-fix.01), which Douyin and Toutiao both load with their own
-//! page and app ids,
+//! page and app ids (Juejin loads 1.0.0.33 with its app id only),
 //! ported from the reverse-engineered implementation in
 //! `Evil0ctal/Douyin_TikTok_Download_API` (`src/dtk/signing/native/abogus.py`,
 //! Apache-2.0) as `JoeanAmier/TikTokDownloader` adapts it.
@@ -43,6 +43,11 @@ pub const DOUYIN: App = App {
 pub const TOUTIAO: App = App {
   aid: 24,
   page_id: 6457,
+};
+/// Juejin starts the SDK with its app id only, so no page id is set.
+pub const JUEJIN: App = App {
+  aid: 2608,
+  page_id: 0,
 };
 
 const NOISE_MASKS: [u8; 3] = [0x91, 0x42, 0x2C];

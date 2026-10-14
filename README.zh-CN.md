@@ -82,6 +82,8 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 | | Lemmy | `lemmy` | 社区、帖子、完整评论树、投票、回复，任意实例 | 密码、Token |
 | | Discourse | `discourse` | 话题、帖子、分类、搜索、点赞、书签，任意论坛（如 linux.do） | User API Key、API Key |
 | | Bangumi 番组计划 | `bangumi` | 动画、书籍、音乐与游戏条目、每日放送、角色与制作人员、我的收藏与进度 | Token |
+| | 豆瓣 | `douban` | 电影、图书与音乐的评分、短评与影评书评，Top 250 等榜单，小组，用户的想看与看过 | 扫码、浏览器 |
+| | 微信读书 | `weread` | 书城搜索与榜单、我的书架与阅读进度、划线与想法（可导出 Markdown） | 扫码、浏览器 |
 | | RSS | `rss` | RSS、Atom 与 JSON Feed、订阅列表与合并时间线、RSSHub 路由、Miniflux | 无需登录、Miniflux Key |
 | 视频 | 哔哩哔哩 | `bili` | 视频、弹幕、字幕、投币、创作者数据 | 扫码、浏览器 |
 | | 抖音 | `douyin` | 视频、图文、热榜、无水印下载 | 浏览器 |
@@ -126,6 +128,7 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 | | Hacker News | `hn` | 首页各榜单、帖子、完整评论树、搜索 | 无需登录 |
 | | Lobsters | `lobsters` | 最热、最新与活跃帖子、评论树、标签、搜索 | 无需登录 |
 | | V2EX | `v2ex` | 最热与最新主题、回复、会员、节点、通知 | Token |
+| | 掘金 | `juejin` | 文章（转为纯文本）、沸点、热榜、评论与回复、用户、点赞、收藏集、每日签到 | 浏览器 |
 
 ## 快速开始
 

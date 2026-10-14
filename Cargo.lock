@@ -388,6 +388,7 @@ dependencies = [
  "atp-dingtalk",
  "atp-discord",
  "atp-discourse",
+ "atp-douban",
  "atp-douyin",
  "atp-facebook",
  "atp-feishu",
@@ -395,6 +396,7 @@ dependencies = [
  "atp-hackernews",
  "atp-instagram",
  "atp-jd",
+ "atp-juejin",
  "atp-kook",
  "atp-kuaishou",
  "atp-lemmy",
@@ -433,6 +435,7 @@ dependencies = [
  "atp-wechat",
  "atp-wecom",
  "atp-weibo",
+ "atp-weread",
  "atp-whatsapp",
  "atp-xhs",
  "atp-xianyu",
@@ -663,6 +666,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "atp-douban"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "regex",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "atp-douyin"
 version = "0.1.0"
 dependencies = [
@@ -759,6 +774,20 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "url",
+]
+
+[[package]]
+name = "atp-juejin"
+version = "0.1.0"
+dependencies = [
+ "atp-bytedance",
+ "atp-core",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde_json",
  "url",
 ]
 
@@ -1330,6 +1359,19 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-weread"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde_json",
  "url",
 ]
 

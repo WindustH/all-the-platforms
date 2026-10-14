@@ -1,0 +1,16 @@
+[package]
+name = "atp-juejin"
+description = "Juejin (掘金) support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-bytedance.workspace = true
+atp-core.workspace = true
+clap.workspace = true
+jiff.workspace = true
+rand.workspace = true
+regex.workspace = true
+serde_json.workspace = true
+url.workspace = true

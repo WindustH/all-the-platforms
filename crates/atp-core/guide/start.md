@@ -13,7 +13,8 @@ one of them.
   Official Accounts), `twitter`, `reddit`, `facebook`, `instagram`,
   `threads`, `misskey`, `mastodon`, `bluesky`, `lemmy`, `discourse`
   (any Discourse forum, such as linux.do), `toutiao`, `bangumi` (Bangumi
-  番组计划), `rss` (RSS, Atom and JSON feeds, RSSHub, Miniflux).
+  番组计划), `douban` (Douban 豆瓣), `weread` (WeRead 微信读书), `rss` (RSS,
+  Atom and JSON feeds, RSSHub, Miniflux).
 - Video: `bili`, `douyin`, `kuaishou`, `youtube`, `tiktok`.
 - Chat: `wechat`, `telegram`, `discord`, `whatsapp`, `qq`, `onebot`,
   `feishu`, `dingtalk`, `wecom`, `slack`, `mattermost`, `rocketchat`,
@@ -24,7 +25,7 @@ one of them.
   Cloud Music), `qqmusic` (QQ Music), `spotify`, `podcast` (Apple's
   directory, show feeds, Podcast Index).
 - Developer communities: `so` (Stack Overflow and every Stack Exchange
-  site), `hn` (Hacker News), `lobsters`, `v2ex`.
+  site), `hn` (Hacker News), `lobsters`, `v2ex`, `juejin` (Juejin 掘金).
 
 Chat apps share `chats`, `messages`, `send`, `members`, `react`, `edit` and
 `listen` (see `atp guide interact`).

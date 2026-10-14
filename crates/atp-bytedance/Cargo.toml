@@ -1,6 +1,6 @@
 [package]
 name = "atp-bytedance"
-description = "What all-the-platforms's ByteDance sites (Douyin, Toutiao) share: a_bogus signing, visitor cookies, the SSO passport"
+description = "What all-the-platforms's ByteDance sites (Douyin, Toutiao, Juejin) share: a_bogus signing, visitor cookies, the SSO passport"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

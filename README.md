@@ -91,6 +91,8 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Lemmy | `lemmy` | communities, posts, whole comment threads, votes, replies, on any instance | password, token |
 | | Discourse | `discourse` | topics, posts, categories, search, likes, bookmarks, on any forum such as linux.do | User API Key, API key |
 | | Bangumi 番组计划 | `bangumi` | anime, books, music and games, the airing calendar, cast and staff, your collection and progress | token |
+| | Douban 豆瓣 | `douban` | films, books and music with ratings, short comments and reviews, Top 250 and other lists, groups, what users marked | QR, browser |
+| | WeRead 微信读书 | `weread` | store search and rankings, your shelf and reading progress, your highlights and thoughts as Markdown | QR, browser |
 | | RSS | `rss` | RSS, Atom and JSON feeds, a subscription list with one timeline, RSSHub routes, Miniflux | not needed, Miniflux key |
 | Video | Bilibili 哔哩哔哩 | `bili` | videos, danmaku, subtitles, coins, creator data | QR, browser |
 | | Douyin 抖音 | `douyin` | videos, image posts, hot boards, no-watermark downloads | browser |
@@ -135,6 +137,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Hacker News | `hn` | front-page lists, stories, whole comment threads, search | not needed |
 | | Lobsters | `lobsters` | hottest, newest and active stories, comment threads, tags, search | not needed |
 | | V2EX | `v2ex` | hot and latest topics, replies, members, nodes, notifications | token |
+| | Juejin 掘金 | `juejin` | articles as text, pins, hot ranking, comments with replies, users, likes, collection sets, daily check-in | browser |
 
 ## Quick start
 

@@ -44,6 +44,8 @@ GROUPS = [
         ("lemmy", "Lemmy", "Lemmy", "lemmy", "#000000"),
         ("discourse", "Discourse", "linux.do", "discourse", "#000000"),
         ("bangumi", "番组计划", "Bangumi", "github:bangumi", ""),
+        ("douban", "豆瓣", "Douban", "douban", "#2D963D"),
+        ("weread", "微信读书", "WeRead", "weread", "#37A7FF"),
         ("rss", "RSS", "RSSHub · Miniflux", "rss", "#FFA500"),
     ]),
     ("视频", "VIDEO", [
@@ -103,13 +105,11 @@ GROUPS = [
         ("hn", "Hacker News", "Hacker News", "ycombinator", "#F0652F"),
         ("lobsters", "Lobsters", "Lobsters", "lobsters", "#AC130D"),
         ("v2ex", "V2EX", "V2EX", "v2ex", "#1F1F1F"),
+        ("juejin", "掘金", "Juejin", "juejin", "#007FFF"),
     ]),
 ]
 
 COMING = [
-    ("豆瓣", "Douban", "douban", "#2D963D"),
-    ("微信读书", "WeRead", "weread", "#37A7FF"),
-    ("掘金", "Juejin", "juejin", "#007FFF"),
     ("小宇宙", "Xiaoyuzhou", "app:1488894313", ""),
     ("即刻", "Jike", "app:966129812", ""),
 ]
