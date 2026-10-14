@@ -35,7 +35,8 @@ Error codes: `not_authenticated`, `verification_required`, `ip_blocked`,
 ## jsonl / csv: rows for analysis
 
 One row per item, no envelope (errors go to stderr). Every row carries
-`platform` and `fetched_at`.
+`platform` and `fetched_at`. A listing that stops before its end prints
+`more: --cursor <c>` on stderr, so stdout holds rows only.
 
 - CSV flattens nested fields into dotted columns (`author.name`,
   `metrics.views`); lists of plain values are joined with `|`, other lists

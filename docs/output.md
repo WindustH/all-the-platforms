@@ -13,6 +13,20 @@ of plain values are joined with `|`. There is no envelope: errors go to
 stderr with a non-zero exit code. Every row carries `platform` and
 `fetched_at`, so repeated runs (cron) build a time series directly.
 
+stdout holds rows only. A listing that stops before its end (`-n`,
+`--max-pages`) prints its cursor on stderr, as tables do:
+
+```sh
+atp bili comments BV1xx411c7mD -n 500 -f jsonl > part1.jsonl 2> part1.log
+grep -o -- '--cursor .*' part1.log    # more: --cursor <c>
+```
+
+`listen -f csv` prints a header and then a row per event, as it arrives,
+with fixed columns: `platform`, `fetched_at`, `created_at`, `kind`, `id`,
+`extra.chat`, `extra.chat_name`, `author.id`, `author.name`,
+`author.handle`, `title`, `text`, `url`, `media` (JSON text). `-f jsonl`
+keeps every field.
+
 - Comment threads are flattened: each comment is a row with `depth` and
   `parent_id`. `comments --all --replies` fetches every comment and every
   reply; `--max-pages N` bounds each listing, and a thread cut short keeps

@@ -27,8 +27,8 @@ shows inline. `replies` lists the replies under one comment.
   `parent_id`. Fields: `id`, `author`, `text`, `created_at`, `likes`,
   `reply_count`, `reply_to` (whom it answers inside a thread),
   `location`, `replies_cursor`.
-- JSON Lines and CSV print rows only, without the cursor; use `--json` to
-  continue a long export later.
+- JSON Lines and CSV keep rows only on stdout; where more remain, the
+  cursor goes to stderr as `more: --cursor <c>`, as in the table.
 
 Answer one with `comment POST TEXT --reply-to COMMENT`.
 

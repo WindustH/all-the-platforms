@@ -56,6 +56,19 @@ pub enum Data {
 }
 
 impl Data {
+  /// Where a listing continues (`--cursor`), when it stopped before its end.
+  pub fn next_cursor(&self) -> Option<&str> {
+    match self {
+      Data::Posts(p) => p.next_cursor.as_deref(),
+      Data::Users(p) => p.next_cursor.as_deref(),
+      Data::Comments(p) => p.next_cursor.as_deref(),
+      Data::Collections(p) => p.next_cursor.as_deref(),
+      Data::Notifications(p) => p.next_cursor.as_deref(),
+      Data::Files(p) => p.next_cursor.as_deref(),
+      _ => None,
+    }
+  }
+
   /// Drop upstream payloads (kept only with `--raw`).
   pub fn strip_raw(&mut self) {
     fn user(u: &mut User) {

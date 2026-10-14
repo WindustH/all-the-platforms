@@ -36,9 +36,9 @@ stops say so on stderr.
 
 ## Continuing later
 
-A list that stops before the end prints `more: --cursor <c>` (and carries
-`next_cursor` in structured output). Pass it back to continue exactly where
-it stopped:
+A list that stops before the end prints `more: --cursor <c>` on stderr
+(tables, JSON Lines, CSV) and carries `next_cursor` in JSON / YAML. Pass it
+back to continue exactly where it stopped:
 
     atp bili comments BV1xx411c7mD -n 100 --json > part1.json
     atp bili comments BV1xx411c7mD -n 100 --cursor '<next_cursor>' --json > part2.json

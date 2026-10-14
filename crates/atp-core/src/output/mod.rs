@@ -63,8 +63,16 @@ fn print_structured<T: Serialize>(format: Format, envelope: &Envelope<'_, T>) {
   let _ = out.flush();
 }
 
-/// Rows with `platform` and `fetched_at` added, for repeated snapshots.
+/// Rows with `platform` and `fetched_at` added, for repeated snapshots. Rows
+/// hold items only: where a listing continues goes to stderr, as in tables.
 fn print_rows(format: Format, platform: Option<&str>, data: &Data) {
+  write_rows(format, platform, data);
+  if let Some(cursor) = data.next_cursor() {
+    note(&format!("more: --cursor {cursor}"));
+  }
+}
+
+fn write_rows(format: Format, platform: Option<&str>, data: &Data) {
   let fetched_at = jiff::Timestamp::now().to_string();
   let rows: Vec<serde_json::Map<String, serde_json::Value>> = rows::rows(data)
     .iter()
@@ -88,6 +96,7 @@ fn print_rows(format: Format, platform: Option<&str>, data: &Data) {
     for row in &rows {
       let _ = writeln!(out, "{}", serde_json::Value::Object(row.clone()));
     }
+    let _ = out.flush();
     return;
   }
   // Columns in first-seen order across all rows.
@@ -182,13 +191,35 @@ pub(crate) fn envelope(platform: Option<&str>, result: &Result<Data, Error>) -> 
 }
 
 /// Live output of `listen`: each event is printed the moment it arrives, as
-/// a line for people or one JSON object (`jsonl`, `json`, `csv`) or YAML
-/// document (`yaml`) per event, with `platform` and `fetched_at` added.
+/// a line for people, one JSON object (`jsonl`, `json`) or YAML document
+/// (`yaml`) per event, or a CSV row of [`LIVE_COLUMNS`] under one header,
+/// with `platform` and `fetched_at` added.
 pub struct Stream {
   format: Format,
   platform: &'static str,
   raw: bool,
+  /// The CSV header is out.
+  header: std::sync::atomic::AtomicBool,
 }
+
+/// The columns of `listen -f csv`: events come one by one, so the columns
+/// are fixed up front (`jsonl` keeps every field).
+pub const LIVE_COLUMNS: &[&str] = &[
+  "platform",
+  "fetched_at",
+  "created_at",
+  "kind",
+  "id",
+  "extra.chat",
+  "extra.chat_name",
+  "author.id",
+  "author.name",
+  "author.handle",
+  "title",
+  "text",
+  "url",
+  "media",
+];
 
 impl Stream {
   /// `raw`: keep the upstream payloads (`--raw`).
@@ -197,6 +228,7 @@ impl Stream {
       format,
       platform,
       raw,
+      header: std::sync::atomic::AtomicBool::new(false),
     }
   }
 
@@ -234,11 +266,26 @@ impl Stream {
     let row = serde_json::Value::Object(row);
     let text = match self.format {
       Format::Yaml => format!("---\n{}", serde_saphyr::to_string(&row).unwrap_or_default()),
+      Format::Csv => self.csv_row(&row),
       _ => format!("{row}\n"),
     };
     let mut out = std::io::stdout().lock();
     let _ = out.write_all(text.as_bytes());
     let _ = out.flush();
+  }
+
+  /// One event as a CSV row of [`LIVE_COLUMNS`], after the header the first time.
+  fn csv_row(&self, row: &serde_json::Value) -> String {
+    let flat = rows::flatten(row);
+    let mut w = csv::Writer::from_writer(Vec::new());
+    if !self.header.swap(true, std::sync::atomic::Ordering::Relaxed) {
+      let _ = w.write_record(LIVE_COLUMNS);
+    }
+    let cells = LIVE_COLUMNS
+      .iter()
+      .map(|c| flat.get(*c).map(rows::cell).unwrap_or_default());
+    let _ = w.write_record(cells);
+    String::from_utf8(w.into_inner().unwrap_or_default()).unwrap_or_default()
   }
 }
 
