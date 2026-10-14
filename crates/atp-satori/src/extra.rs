@@ -20,6 +20,7 @@ pub enum Command {
   Call {
     /// `resource.method`, e.g. `guild.get`
     method: String,
+    /// Request body as a JSON object
     #[arg(default_value = "{}")]
     body: String,
   },
@@ -28,7 +29,9 @@ pub enum Command {
 const EX_CALL: &str = "\
 Examples:
   atp satori call guild.get '{\"guild_id\": \"123\"}'
-  atp satori call guild.member.kick '{\"guild_id\": \"123\", \"user_id\": \"456\"}'";
+  atp satori call guild.member.kick '{\"guild_id\": \"123\", \"user_id\": \"456\"}'
+
+More: atp guide satori call";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

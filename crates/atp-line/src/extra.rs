@@ -8,29 +8,55 @@ use crate::{account, chats, messages, users};
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Send an image by its public HTTPS URL
+  #[command(after_long_help = EX_IMAGE)]
   Image {
     /// User (U…), group (C…), room (R…), `U…,U…` or `all`
     chat: String,
+    /// Image URL (https://)
     url: String,
     /// Smaller preview image URL (default: the image itself)
     #[arg(long)]
     preview: Option<String>,
   },
   /// Send a sticker (package and sticker ids from LINE's sticker list)
+  #[command(after_long_help = EX_STICKER)]
   Sticker {
+    /// User (U…), group (C…), room (R…), `U…,U…` or `all`
     chat: String,
+    /// Sticker package id
     package: String,
+    /// Sticker id within the package
     sticker: String,
   },
   /// A group's name, picture and member count
-  Group { group: String },
+  Group {
+    /// Group id (C…)
+    group: String,
+  },
   /// Leave a group or room
-  Leave { chat: String },
+  Leave {
+    /// Group (C…) or room (R…) id
+    chat: String,
+  },
   /// Monthly message quota, usage and the webhook URL
   Quota,
   /// Rich menus and the default one
   Richmenus,
 }
+
+const EX_IMAGE: &str = "\
+Examples:
+  atp line image U0123456789abcdef0123456789abcdef https://example.com/cat.jpg
+  atp line image all https://example.com/sale.png --preview https://example.com/sale-small.png
+
+More: atp guide line image";
+
+const EX_STICKER: &str = "\
+Examples:
+  atp line sticker U0123456789abcdef0123456789abcdef 446 1988
+  atp line sticker C0123456789abcdef0123456789abcdef 446 1988
+
+More: atp guide line sticker";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
