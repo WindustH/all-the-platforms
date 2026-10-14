@@ -98,7 +98,8 @@ impl Error {
     Self::new(ErrorCode::InternalError, message)
   }
 
-  pub fn unsupported(operation: &str) -> Self {
+  pub fn unsupported(operation: impl AsRef<str>) -> Self {
+    let operation = operation.as_ref();
     Self::new(
       ErrorCode::UnsupportedOperation,
       format!("`{operation}` is not supported on this platform"),

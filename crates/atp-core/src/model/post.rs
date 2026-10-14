@@ -46,6 +46,20 @@ pub enum MediaKind {
   File,
 }
 
+impl MediaKind {
+  /// The kind a MIME type (`image/png`, `video/mp4; codecs=...`) stands for.
+  pub fn from_mime(mime: &str) -> Self {
+    let mime = mime.split(';').next().unwrap_or_default().trim();
+    match mime.split('/').next() {
+      Some("image") if mime == "image/gif" => Self::Gif,
+      Some("image") => Self::Image,
+      Some("video") => Self::Video,
+      Some("audio") => Self::Audio,
+      _ => Self::File,
+    }
+  }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Media {
   pub kind: MediaKind,

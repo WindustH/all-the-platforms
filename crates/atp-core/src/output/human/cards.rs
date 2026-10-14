@@ -134,29 +134,37 @@ pub(super) fn post_card(p: &Post) {
     );
   }
   if !p.media.is_empty() {
-    println!();
-    for m in &p.media {
-      let dur = m
-        .duration
-        .map(|d| format!(" ({})", fmt_duration(d)))
-        .unwrap_or_default();
-      println!(
-        "{}{dur} {}",
-        format!("{:?}", m.kind).to_lowercase(),
-        m.url.if_supports_color(Stream::Stdout, |t| t.dimmed())
-      );
-    }
+    media_lines(p);
   }
   if let Some(q) = &p.quoted {
+    quoted(q);
+  }
+}
+
+fn media_lines(p: &Post) {
+  println!();
+  for m in &p.media {
+    let dur = m
+      .duration
+      .map(|d| format!(" ({})", fmt_duration(d)))
+      .unwrap_or_default();
     println!(
-      "\n{}",
-      "┃ quoted".if_supports_color(Stream::Stdout, |t| t.dimmed())
+      "{}{dur} {}",
+      format!("{:?}", m.kind).to_lowercase(),
+      m.url.if_supports_color(Stream::Stdout, |t| t.dimmed())
     );
-    let who = q.author.as_ref().map(user_label).unwrap_or_default();
-    println!("┃ {who}");
-    for line in headline(q).lines() {
-      println!("┃ {line}");
-    }
+  }
+}
+
+fn quoted(q: &Post) {
+  println!(
+    "\n{}",
+    "┃ quoted".if_supports_color(Stream::Stdout, |t| t.dimmed())
+  );
+  let who = q.author.as_ref().map(user_label).unwrap_or_default();
+  println!("┃ {who}");
+  for line in headline(q).lines() {
+    println!("┃ {line}");
   }
 }
 

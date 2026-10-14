@@ -40,6 +40,17 @@ impl Seen {
 pub async fn poll(
   out: &Stream,
   every: Duration,
+  fetch: impl AsyncFnMut() -> Result<Vec<Post>>,
+) -> Result<()> {
+  poll_between(out, every, every, fetch).await
+}
+
+/// [`poll`] with a random wait between `min` and `max`, for platforms that
+/// flag requests arriving like clockwork.
+pub async fn poll_between(
+  out: &Stream,
+  min: Duration,
+  max: Duration,
   mut fetch: impl AsyncFnMut() -> Result<Vec<Post>>,
 ) -> Result<()> {
   let mut seen = Seen::default();
@@ -53,8 +64,17 @@ pub async fn poll(
       }
     }
     first = false;
-    tokio::time::sleep(every).await;
+    tokio::time::sleep(between(min, max)).await;
   }
+}
+
+fn between(min: Duration, max: Duration) -> Duration {
+  use rand::Rng;
+  if max <= min {
+    return min;
+  }
+  let ms = rand::rng().random_range(min.as_millis() as u64..=max.as_millis() as u64);
+  Duration::from_millis(ms)
 }
 
 /// Delays between reconnects of a socket listener: 1 s doubling to 60 s,

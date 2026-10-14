@@ -155,14 +155,7 @@ impl Upload {
 
   /// What kind of media the file is, by its MIME type.
   pub fn kind(&self) -> crate::model::MediaKind {
-    use crate::model::MediaKind;
-    match self.mime.split('/').next() {
-      Some("image") if self.mime == "image/gif" => MediaKind::Gif,
-      Some("image") => MediaKind::Image,
-      Some("video") => MediaKind::Video,
-      Some("audio") => MediaKind::Audio,
-      _ => MediaKind::File,
-    }
+    crate::model::MediaKind::from_mime(self.mime)
   }
 
   pub fn is_image(&self) -> bool {

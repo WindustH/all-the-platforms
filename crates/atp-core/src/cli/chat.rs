@@ -95,18 +95,7 @@ pub(super) async fn run<P: Platform>(
       text,
       files,
       reply_to,
-    } => {
-      check_files(&files)?;
-      let message = Message {
-        text: read_text(text)?,
-        reply_to: reply_to.map(|r| ctx.post_ref(&r)).transpose()?,
-        files,
-      };
-      if message.text.is_empty() && message.files.is_empty() {
-        return Err(Error::input("nothing to send: give a text or --attach"));
-      }
-      Data::Action(p.send(&ctx.collection_ref(&chat)?, &message).await?)
-    }
+    } => send(p, &chat, text, files, reply_to).await?,
     ChatCommand::Members { chat, page } => {
       let chat = ctx.collection_ref(&chat)?;
       Data::Users(page.collect(async |r| p.members(&chat, &r).await).await?)
@@ -122,15 +111,42 @@ pub(super) async fn run<P: Platform>(
       Data::Action(p.edit(&ctx.post_ref(&post)?, &text).await?)
     }
     ChatCommand::Listen { chats } => {
-      let chats = chats
-        .iter()
-        .map(|c| ctx.collection_ref(c))
-        .collect::<Result<Vec<_>>>()?;
-      p.listen(&chats, &Stream::new(format, P::INFO.id, raw))
-        .await?;
-      Data::Action(Action::done("listen", P::INFO.id).with_message("the stream ended"))
+      listen(p, &chats, &Stream::new(format, P::INFO.id, raw)).await?
     }
   })
+}
+
+async fn send<P: Platform>(
+  p: &P,
+  chat: &str,
+  text: Option<String>,
+  files: Vec<PathBuf>,
+  reply_to: Option<String>,
+) -> Result<Data> {
+  let ctx = p.ctx();
+  check_files(&files)?;
+  let message = Message {
+    text: read_text(text)?,
+    reply_to: reply_to.map(|r| ctx.post_ref(&r)).transpose()?,
+    files,
+  };
+  if message.text.is_empty() && message.files.is_empty() {
+    return Err(Error::input("nothing to send: give a text or --attach"));
+  }
+  Ok(Data::Action(
+    p.send(&ctx.collection_ref(chat)?, &message).await?,
+  ))
+}
+
+async fn listen<P: Platform>(p: &P, chats: &[String], out: &Stream) -> Result<Data> {
+  let chats = chats
+    .iter()
+    .map(|c| p.ctx().collection_ref(c))
+    .collect::<Result<Vec<_>>>()?;
+  p.listen(&chats, out).await?;
+  Ok(Data::Action(
+    Action::done("listen", P::INFO.id).with_message("the stream ended"),
+  ))
 }
 
 const EX_CHATS: &str = "\
