@@ -9,11 +9,17 @@ use crate::api::Api;
 use crate::tabs::{self, Tab};
 use crate::{users, write};
 
+const EX_TAB: &str = "\
+Examples:
+  atp x tab NASA media -n 50
+  atp x tab @NASA replies --since 7d";
+
 #[derive(Debug, clap::Subcommand)]
 pub enum PostCommand {
   /// Retweet a tweet
   #[command(visible_alias = "repost")]
   Retweet {
+    /// Tweet: id, link or #N
     post: String,
     /// Undo the retweet instead
     #[arg(long)]
@@ -21,7 +27,9 @@ pub enum PostCommand {
   },
   /// Quote a tweet with your own text
   Quote {
+    /// Tweet: id, link or #N
     post: String,
+    /// Your text
     text: String,
     /// Attach an image (repeatable, at most 4)
     #[arg(short = 'i', long = "image", value_name = "PATH")]
@@ -29,13 +37,17 @@ pub enum PostCommand {
   },
   /// Accounts that retweeted a tweet (its quotes: `reposts`)
   Retweeters {
+    /// Tweet: id, link or #N
     post: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// A profile tab: replies, media, highlights or articles
+  #[command(after_long_help = EX_TAB)]
   Tab {
+    /// User: handle, @handle, link, id or #N
     user: String,
+    /// Which tab
     #[arg(value_enum)]
     tab: Tab,
     #[command(flatten)]
@@ -43,20 +55,28 @@ pub enum PostCommand {
   },
   /// Verified followers of a user
   VerifiedFollowers {
+    /// User: handle, @handle, link, id or #N
     user: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Followers of a user that you follow too
   FollowersYouKnow {
+    /// User: handle, @handle, link, id or #N
     user: String,
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Posts similar to a tweet
-  Similar { post: String },
+  /// Posts similar to a tweet (X Premium)
+  Similar {
+    /// Tweet: id, link or #N
+    post: String,
+  },
   /// Earlier versions of an edited tweet
-  Edits { post: String },
+  Edits {
+    /// Tweet: id, link or #N
+    post: String,
+  },
 }
 
 pub(super) async fn run(api: &Api, command: PostCommand) -> Result<Data> {

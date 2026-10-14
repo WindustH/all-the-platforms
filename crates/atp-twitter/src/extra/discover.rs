@@ -9,15 +9,20 @@ use crate::{spaces, trends};
 #[derive(Debug, clap::Subcommand)]
 pub enum DiscoverCommand {
   /// A Space: title, state, hosts, speakers and listeners
-  Space { space: String },
+  Space {
+    /// Space: id or link
+    space: String,
+  },
   /// Posts sharing a Space that match a query (newest first; `extra.space` for `space`)
   Spaces {
+    /// What to search for
     query: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Trends of a place (`trend-places` lists them; 1 is worldwide)
   Trends {
+    /// The place's WOEID, from `trend-places`
     #[arg(long, default_value = "1", value_name = "WOEID")]
     place: String,
   },
