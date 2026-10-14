@@ -49,7 +49,7 @@ macro_rules! keyed {
   )*};
 }
 
-keyed!(Post, User, Comment, Collection, Notification);
+keyed!(Post, User, Comment, Collection, Notification, FileEntry);
 
 /// Items with a publication time, which `--since` / `--until` filter on.
 pub trait Dated {

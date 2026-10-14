@@ -118,6 +118,15 @@ of anything created.
 
 **Transcript** (subtitles, danmaku): `lang`, `cues` of `from`, `to` (seconds), `text`.
 
+**File** (cloud drives: `ls`, `search`, `read`, `trash`, `shares`,
+`share-ls`, `upload`): `id` (what the drive's commands take back: a file
+id, a share id or a recycle-bin record), `name`, `path` (from the drive's
+root, when the listing tells it), `dir` (a folder), `size` (bytes),
+`updated_at`, `md5` (as the drive reports it; Baidu's is not the content
+md5 of files uploaded in blocks), `share` (`url`, `code`, `expires_at`;
+on shares and on the files of someone's share) and `extra` (other hashes,
+counts, the member-only bits).
+
 **Downloads**: a list of `kind`, `path`, `bytes`.
 
 **Insights** (`insights [POST]`, creator analytics of your account or one of
@@ -135,7 +144,7 @@ in `totals_period` / `period` (for a post the totals are usually `lifetime`).
 `reposts POST` its reposts / retweets / quotes / crossposts (a page of Posts).
 
 `--raw` adds the untouched upstream object as `raw` to posts, users, comments,
-collections and notifications.
+collections, notifications and drive files.
 
 ## Referring to results
 

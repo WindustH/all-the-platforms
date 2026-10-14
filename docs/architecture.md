@@ -24,14 +24,17 @@ line in `src/main.rs`.
 | --- | --- |
 | `platform` | `Platform` trait; `cap` (capabilities), `info` (`PlatformInfo`, `Choices`, login ways), `request` (`PageReq`, `Query`, `Draft`, `Reply`, `Message`, `QrTicket`) |
 | `ctx` | `Ctx`: what a platform works with (HTTP client with the session cookies, files, session extras, login hints, `#N` resolution) |
-| `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `Page<T>`, `Action`, `AuthStatus`, `Insights`, `Transcript`, and `Data` (everything a command can print), one file per type |
+| `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `FileEntry` (drives), `Page<T>`, `Action`, `AuthStatus`, `Insights`, `Transcript`, and `Data` (everything a command can print), one file per type |
 | `cli` | the shared commands, one module per area (`account`, `read`, `library`, `write`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options |
 | `app` | top-level program, `atp platforms`, multi-call (`bili` symlink) |
 | `account` | `login` (QR / token / browser / cookie string), `logout`, `status` |
 | `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, proxy; `request` (building, sending, retries, streaming), `response` |
 | `store` | session file (0600), TTL cache, `#N` short-index lists |
 | `paging` | `collect`: follow cursors until `--limit` items; `collect_window`: `--since` / `--until` |
-| `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg) |
+| `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg); `files`: a drive's files and folders under their own names, through `.part` files resumed by `Range`, with per-link headers and links renewed mid-file |
+| `upload` | files too big for memory: `LocalFile`, `Hashes` (md5, sha1, 4 MB block md5s, md5 of the first 256 KB in one read), `Parts` (part by part with retries, a progress bar and resume state in the private cache; optionally the SHA-1 state before each part, `Sha1Midway`) |
+| `task` | background work upstream: `wait` polls a task with growing gaps; `retry` backs off while a call fails with errors a predicate picks (rate limits, risk codes) |
+| `oauth` | OAuth device-code logins (`DeviceCode`, `Poll`, `device_login`) and `Tokens` kept in the session extras, saved to disk the moment a single-use refresh token rotates (`access_token`) |
 | `file` | format detection by magic bytes, MIME types, files and images to upload |
 | `guide` | `atp guide`: topics from `crates/atp-core/guide/*.md`, platform topics generated from the command set plus each crate's `GUIDE.md` |
 | `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
@@ -41,7 +44,7 @@ line in `src/main.rs`.
 | `credentials` | environment variables, `login --token` fields, credentials saved in the session |
 | `token` | `AccessToken`: expiring access tokens cached in memory and in the private cache |
 | `chat` | `CHAT/MESSAGE` ids of messages without permalinks |
-| `live` | `listen` helpers: polling with de-duplication, reconnect back-off |
+| `live` | `listen` helpers: polling with de-duplication, `Backoff` (reconnect delays, task polling) |
 | `socket` | websocket connections through the same client |
 | `qr` | login QR codes in the terminal, from a URL or a QR image |
 | `verify` | human checks by hand: a Chromium-family browser over DevTools with the session cookies, then one retry (`chrome`, `cdp`) |
@@ -84,6 +87,21 @@ YAML document per event).
 Credentials that are not cookies (bot tokens, API keys, `AppID:Secret`) come
 in through `login --token` (`Cap::TokenLogin`, `Platform::login_token`) and
 are kept in the session extras, or from environment variables.
+
+### Drives
+
+Cloud drives (`Cap::Files`) list `FileEntry`s (id, name, path, folder or
+file, size, time, md5, share link) where other platforms list posts. The
+shared `search`, `read`, `download` and `delete` call `search_files`,
+`file`, `files` + `file_link` and `delete` instead of the post methods;
+`#N` after a listing refers to an entry's `id`. `download::files` walks a
+folder through `files`, saves under the drive's names and asks
+`file_link(file, renew)` for a link (with the headers its host wants)
+again when the host refuses one mid-file; session cookies go to a link
+only when it lists them, and never across sites on redirects. Uploads use
+`upload::Parts`, background operations `task::wait`, and drives with an
+open platform `oauth`. Everything else (`ls`, `mkdir`, `mv`, shares, the
+recycle bin) is the drive's own `Extra` commands.
 
 ### Flow of one command
 

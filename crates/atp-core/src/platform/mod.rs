@@ -10,9 +10,10 @@ mod info;
 mod request;
 
 use crate::ctx::Ctx;
+use crate::download::Link;
 use crate::error::{Error, Result};
 use crate::model::{
-  Action, Collection, Comment, Data, Insights, Media, Notification, Page, Post, User,
+  Action, Collection, Comment, Data, FileEntry, Insights, Media, Notification, Page, Post, User,
 };
 use crate::output::Stream;
 use std::collections::BTreeMap;
@@ -269,6 +270,33 @@ pub trait Platform: Sized {
     let post = self.read(post).await?;
     let media = post.media.clone();
     Ok((post, media))
+  }
+
+  // ── drives ───────────────────────────────────────────────────────────
+  //
+  // A drive (`Cap::Files`) holds files and folders: its `search`, `read`
+  // and `download` call these instead of the post methods, and `delete`
+  // takes a file. Arguments are its ids, paths or links.
+
+  /// One file or folder.
+  async fn file(&self, file: &str) -> Result<FileEntry> {
+    unsupported!("read")
+  }
+
+  /// The entries of a folder.
+  async fn files(&self, folder: &FileEntry, page: &PageReq) -> Result<Page<FileEntry>> {
+    unsupported!("ls")
+  }
+
+  /// Files and folders whose names match.
+  async fn search_files(&self, query: &Query, page: &PageReq) -> Result<Page<FileEntry>> {
+    unsupported!("search")
+  }
+
+  /// Where to fetch a file's bytes, and the headers its host wants; `renew`
+  /// asks for a fresh link after the host refused the last one.
+  async fn file_link(&self, file: &FileEntry, renew: bool) -> Result<Link> {
+    unsupported!("download")
   }
 
   // ── platform-only commands ───────────────────────────────────────────

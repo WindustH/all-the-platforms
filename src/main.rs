@@ -48,5 +48,6 @@ fn main() -> ExitCode {
   .platform::<atp_dianping::Dianping>()
   .platform::<atp_dewu::Dewu>()
   .platform::<atp_ctrip::Ctrip>()
+  .platform::<atp_quark::Quark>()
   .run()
 }

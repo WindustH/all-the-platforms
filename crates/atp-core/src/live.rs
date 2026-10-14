@@ -77,29 +77,39 @@ fn between(min: Duration, max: Duration) -> Duration {
   Duration::from_millis(ms)
 }
 
-/// Delays between reconnects of a socket listener: 1 s doubling to 60 s,
-/// back to 1 s once a connection stayed up a while.
+/// Growing delays: between reconnects of a socket listener (the default,
+/// 1 s doubling to 60 s, back to 1 s once a connection stayed up a while),
+/// or between looks at a background task ([`crate::task`]).
 pub struct Backoff {
+  first: Duration,
+  max: Duration,
   next: Duration,
 }
 
 impl Default for Backoff {
   fn default() -> Self {
-    Self {
-      next: Duration::from_secs(1),
-    }
+    Self::new(Duration::from_secs(1), Duration::from_secs(60))
   }
 }
 
 impl Backoff {
+  /// Waits of `first`, doubling up to `max`.
+  pub fn new(first: Duration, max: Duration) -> Self {
+    Self {
+      first,
+      max,
+      next: first,
+    }
+  }
+
   /// Wait before the next attempt.
   pub async fn wait(&mut self) {
     tokio::time::sleep(self.next).await;
-    self.next = (self.next * 2).min(Duration::from_secs(60));
+    self.next = (self.next * 2).min(self.max);
   }
 
-  /// The connection worked: start over at 1 s.
+  /// The connection worked: start over at the first wait.
   pub fn reset(&mut self) {
-    self.next = Duration::from_secs(1);
+    self.next = self.first;
   }
 }

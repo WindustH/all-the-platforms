@@ -3,14 +3,12 @@
 
 use std::time::{Duration, Instant};
 
-use futures_util::StreamExt;
 use rand::Rng;
 use serde::Serialize;
 use serde_json::Value;
-use tokio::io::AsyncWriteExt;
 use wreq::header::{HeaderMap, HeaderName, HeaderValue};
 
-use super::{Fetched, Http, Method, Resp, StatusCode, status_error};
+use super::{Http, Method, Resp, StatusCode};
 use crate::error::{Error, Result};
 
 #[derive(Clone)]
@@ -190,6 +188,10 @@ impl<'a> Req<'a> {
     if !hop.same_host {
       headers.remove("authorization");
     }
+    // A cookie set by hand (a drive's download link) stays on its site too.
+    if !hop.same_site {
+      headers.remove("cookie");
+    }
     if self.cookies && hop.same_site && self.http.sends_cookies_to(hop.url.host_str().unwrap_or(""))
     {
       let cookie = self.http.cookie_header();
@@ -249,7 +251,7 @@ impl<'a> Req<'a> {
     Ok(rb)
   }
 
-  async fn execute(&self) -> Result<wreq::Response> {
+  pub(super) async fn execute(&self) -> Result<wreq::Response> {
     let url = self.full_url()?;
     let mut attempt = 0;
     loop {
@@ -348,58 +350,6 @@ impl<'a> Req<'a> {
   /// Send, require a 2xx status and parse the body as JSON.
   pub async fn value(self) -> Result<Value> {
     self.send().await?.check()?.value()
-  }
-
-  /// Read a response as it arrives, handing each chunk to `f`, until the
-  /// server ends it or `f` returns `false` (server-sent events and other
-  /// long-lived feeds; give the request a long `timeout`).
-  pub async fn each_chunk(self, mut f: impl FnMut(&[u8]) -> bool) -> Result<()> {
-    let resp = self.execute().await?;
-    let status = resp.status();
-    if !status.is_success() {
-      let body = resp
-        .bytes()
-        .await
-        .map(|b| String::from_utf8_lossy(&b).into_owned())
-        .unwrap_or_default();
-      return Err(status_error(status, &body));
-    }
-    let mut stream = resp.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-      let chunk = chunk.map_err(|e| Error::network(e.to_string()))?;
-      if !f(&chunk) {
-        break;
-      }
-    }
-    Ok(())
-  }
-
-  /// Stream a successful response's body onto the end of `file`, calling
-  /// `progress(bytes)` per chunk; the status and headers come back with the count.
-  pub async fn append_to(
-    self,
-    file: &mut tokio::fs::File,
-    mut progress: impl FnMut(u64),
-  ) -> Result<Fetched> {
-    let resp = self.execute().await?;
-    let status = resp.status();
-    if !status.is_success() {
-      return Err(status_error(status, ""));
-    }
-    let headers = resp.headers().clone();
-    let mut bytes = 0u64;
-    let mut stream = resp.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-      let chunk = chunk.map_err(|e| Error::network(e.to_string()))?;
-      file.write_all(&chunk).await?;
-      bytes += chunk.len() as u64;
-      progress(chunk.len() as u64);
-    }
-    Ok(Fetched {
-      status,
-      headers,
-      bytes,
-    })
   }
 }
 

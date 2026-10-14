@@ -4,12 +4,14 @@
 use std::path::Path;
 use std::time::Duration;
 
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
 use tokio::io::AsyncWriteExt;
 
 use crate::ctx::Ctx;
 use crate::error::{Error, Result};
+use crate::http::Fetched;
 use crate::model::Media;
+use crate::output::progress;
 
 /// Bytes per ranged request: large files come as a series of these, each with
 /// its own timeout and retries (some CDNs also throttle or refuse unranged
@@ -53,14 +55,7 @@ pub(super) async fn fetch(ctx: &Ctx, referer: &str, src: Source<'_>, path: &Path
     .file_name()
     .map(|f| f.to_string_lossy().into_owned())
     .unwrap_or_default();
-  let bar = ProgressBar::new(0);
-  bar.set_style(
-    ProgressStyle::with_template(
-      "{msg:40!} {bytes:>10}/{total_bytes:10} {bar:24} {bytes_per_sec:>10}",
-    )
-    .unwrap_or_else(|_| ProgressStyle::default_bar()),
-  );
-  bar.set_message(label);
+  let bar = progress(&label);
   let result = match (src.range_param, src.size) {
     (Some(param), Some(size)) => fetch_by_param(ctx, referer, &src, param, size, path, &bar).await,
     _ => fetch_ranged(ctx, referer, &src, path, &bar).await,
@@ -142,25 +137,41 @@ pub(super) async fn fetch_ranged(
       .timeout(CHUNK_TIMEOUT)
   };
   let mut file = tokio::fs::File::create(path).await?;
-  let first = chunk(0, CHUNK - 1)
-    .append_to(&mut file, |n| bar.inc(n))
-    .await?;
-  let mut done = first.bytes;
-  if first.status == wreq::StatusCode::PARTIAL_CONTENT
-    && let Some(total) = first.range_total()
-  {
-    bar.set_length(total);
-    while done < total {
-      let to = (done + CHUNK).min(total) - 1;
-      let got = chunk(done, to).append_to(&mut file, |n| bar.inc(n)).await?;
-      if got.bytes == 0 {
-        return Err(Error::network(format!(
-          "the server sent nothing for bytes {done}-{to}"
-        )));
-      }
-      done += got.bytes;
-    }
-  }
+  let done = ranged(0, bar, async |from, to| {
+    chunk(from, to).append_to(&mut file, |n| bar.inc(n)).await
+  })
+  .await?;
   file.flush().await?;
+  Ok(done)
+}
+
+/// The sequential ranged fetch from byte `from` on: `get(a, b)` appends
+/// bytes `a..=b` to the output. A `206` with the file size continues range
+/// by range up to it; anything else carried the rest of the file already.
+/// Returns where the output ends.
+pub(super) async fn ranged(
+  from: u64,
+  bar: &ProgressBar,
+  mut get: impl AsyncFnMut(u64, u64) -> Result<Fetched>,
+) -> Result<u64> {
+  let first = get(from, from + CHUNK - 1).await?;
+  let mut done = from + first.bytes;
+  if first.status != wreq::StatusCode::PARTIAL_CONTENT {
+    return Ok(done);
+  }
+  let Some(total) = first.range_total() else {
+    return Ok(done);
+  };
+  bar.set_length(total);
+  while done < total {
+    let to = (done + CHUNK).min(total) - 1;
+    let got = get(done, to).await?;
+    if got.bytes == 0 {
+      return Err(Error::network(format!(
+        "the server sent nothing for bytes {done}-{to}"
+      )));
+    }
+    done += got.bytes;
+  }
   Ok(done)
 }

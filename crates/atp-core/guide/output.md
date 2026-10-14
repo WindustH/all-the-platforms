@@ -55,9 +55,11 @@ Every platform maps its data onto the same shapes:
   `reply_to`, `location`, `replies`.
 - **Collection** (topics, folders, playlists, subreddits): `id`, `kind`,
   `name`, `description`, `url`, `items`, `followers`.
+- **File** (cloud drives): `id`, `name`, `path`, `dir`, `size` (bytes),
+  `updated_at`, `md5`, `share` (`url`, `code`, `expires_at`), `extra`.
 - **Notification**, **Action** (every write: `action`, `target`, `ok`, `id`,
   `url`), **Auth**, **Transcript** (`cues` of `from`, `to`, `text`),
   **Downloads**, **Insights** (`atp guide analysis`).
 
 `--raw` adds the untouched upstream object as `raw` to posts, users,
-comments, collections, notifications and insights.
+comments, collections, notifications, drive files and insights.

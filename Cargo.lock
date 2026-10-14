@@ -103,6 +103,7 @@ dependencies = [
  "atp-onebot",
  "atp-pinduoduo",
  "atp-qq",
+ "atp-quark",
  "atp-reddit",
  "atp-rocketchat",
  "atp-satori",
@@ -490,6 +491,7 @@ dependencies = [
  "indicatif",
  "jiff",
  "libc",
+ "md-5",
  "owo-colors",
  "qrcode",
  "rand 0.9.5",
@@ -498,6 +500,7 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "serde_json",
+ "sha1 0.10.7",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -840,6 +843,22 @@ dependencies = [
  "rand 0.9.5",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "atp-quark"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

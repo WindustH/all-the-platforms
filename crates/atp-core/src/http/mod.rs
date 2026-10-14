@@ -7,6 +7,7 @@
 
 mod request;
 mod response;
+mod stream;
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;

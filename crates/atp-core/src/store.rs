@@ -145,6 +145,20 @@ impl Store {
     }
   }
 
+  /// Drop a cached value.
+  pub fn cache_remove(&self, key: &str) {
+    let _ = fs::remove_file(self.cache_dir.join(format!("{key}.json")));
+  }
+
+  /// Change the saved session in place (`ATP_<ID>_COOKIE` never reaches
+  /// it): for credentials that must be on disk the moment they change, such
+  /// as a refresh token that works once.
+  pub fn update_session(&self, change: impl FnOnce(&mut Session)) -> Result<()> {
+    let mut session = self.load_session()?.unwrap_or_default();
+    change(&mut session);
+    self.save_session(&session)
+  }
+
   /// Remember the references of the last printed list, for `#N` arguments.
   pub fn remember(&self, kind: RefKind, refs: Vec<String>) {
     if !refs.is_empty() {
