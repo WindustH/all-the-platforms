@@ -70,6 +70,7 @@ atp-quark = { path = "crates/atp-quark" }
 atp-baidupan = { path = "crates/atp-baidupan" }
 atp-netease = { path = "crates/atp-netease" }
 atp-qqmusic = { path = "crates/atp-qqmusic" }
+atp-spotify = { path = "crates/atp-spotify" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -140,6 +141,7 @@ atp-quark.workspace = true
 atp-baidupan.workspace = true
 atp-netease.workspace = true
 atp-qqmusic.workspace = true
+atp-spotify.workspace = true
 
 [profile.release]
 lto = "thin"

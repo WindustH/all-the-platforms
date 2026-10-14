@@ -49,6 +49,7 @@ GROUPS = [
     ("音乐", "MUSIC", [
         ("ncm", "网易云音乐", "NetEase Cloud Music", "neteasecloudmusic", "#D43C33"),
         ("qqmusic", "QQ音乐", "QQ Music", "app:414603431", ""),
+        ("spotify", "Spotify", "Spotify", "spotify", "#1ED760"),
     ]),
     ("购物与生活", "SHOPPING", [
         ("taobao", "淘宝", "Taobao", "taobao", "#FF5000"),

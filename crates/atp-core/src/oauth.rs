@@ -1,6 +1,7 @@
 //! OAuth 2.0 for a command line: the device-code login (RFC 8628), where
 //! the user confirms a code or scans a QR code on another device while atp
-//! polls, and tokens kept with the session.
+//! polls; the consent page of a login that comes back through the browser
+//! ([`open_consent`]); and tokens kept with the session.
 //!
 //! The tokens live in the session extras next to the cookies, so one
 //! session can carry both (a drive's web cookies and its open-platform
@@ -193,6 +194,18 @@ pub async fn device_login(
   Err(Error::auth(
     "the code expired before it was confirmed; run login again",
   ))
+}
+
+/// Open the consent page of a login that comes back through the browser
+/// (an authorization code at a local address) in the default browser, and
+/// print its link for when none opened.
+pub fn open_consent(url: &str) {
+  let lead = if crate::verify::open_default(url) {
+    "Opened the consent page in your browser"
+  } else {
+    "Open the consent page in a browser"
+  };
+  note(&format!("{lead}; allow access there. The page:\n{url}"));
 }
 
 /// A usable access token: the saved one while it is fresh, else the one

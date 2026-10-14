@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use self::cdp::Cdp;
 use self::chrome::Browser;
+pub(crate) use self::chrome::open_default;
 use crate::error::{Error, Result};
 use crate::http::{Cookies, proxy_url};
 use crate::output;

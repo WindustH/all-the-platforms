@@ -61,6 +61,8 @@ fn missing_cookie(info: &PlatformInfo, ctx: &Ctx) -> Option<&'static str> {
 pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
   let info = P::INFO;
   let ctx = p.ctx();
+  // No browser holds a session of a platform without cookies.
+  let cookieless = info.cookie_domains.is_empty();
   let use_qr = args.qrcode
     || (args.cookie.is_none()
       && args.browser.is_none()
@@ -73,7 +75,7 @@ pub async fn login<P: Platform>(p: &P, args: LoginArgs) -> Result<Data> {
   } else if use_qr {
     qr_login(p).await?;
     "qrcode".to_owned()
-  } else if args.browser.is_none() && !cfg!(feature = "browser") {
+  } else if cookieless || (args.browser.is_none() && !cfg!(feature = "browser")) {
     return Err(Error::input("choose how to log in").with_hint(ctx.login_hint()));
   } else {
     browser_login(ctx, args.browser)?

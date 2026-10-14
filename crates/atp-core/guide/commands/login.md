@@ -1,6 +1,7 @@
 Logs in and saves the session for this platform; every later command uses
 it. Without options, `login` shows a QR code where the platform has one,
-and otherwise reads the session of a local browser.
+and otherwise reads the session of a local browser; a platform without
+cookies (tokens, API keys, OAuth apps) names its ways to log in instead.
 
     atp bili login                    # QR code
     atp x login --browser firefox

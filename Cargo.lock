@@ -407,6 +407,7 @@ dependencies = [
  "atp-rocketchat",
  "atp-satori",
  "atp-slack",
+ "atp-spotify",
  "atp-taobao",
  "atp-telegram",
  "atp-tieba",
@@ -967,6 +968,21 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-spotify"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
  "url",
 ]
 
