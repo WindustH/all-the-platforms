@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <strong>One command line for 40+ platforms: social, video, chat, shopping, travel and drives.</strong>
+  <strong>One command line for 40+ platforms: social, video, music, chat, shopping, travel and drives.</strong>
 </p>
 
 <p align="center">
@@ -90,6 +90,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | YouTube | `youtube` | videos, Shorts, transcripts, playlists, analytics | browser |
 | | TikTok | `tiktok` | videos, sounds, hashtags, ads | QR, browser |
 | | Kuaishou 快手 | `kuaishou` | videos, image sets, comments, hot board, live rooms | QR, browser |
+| Music | NetEase Cloud Music 网易云音乐 | `ncm` | songs, lyrics with translations, playlists, charts, comments, your cloud drive | QR, browser |
 | Shopping | Taobao / Tmall 淘宝 / 天猫 | `taobao` | items, reviews, shops, chats with sellers | QR, browser |
 | | Xianyu 闲鱼 | `xianyu` | second-hand items, sellers, favorites, chats | QR, browser |
 | | JD 京东 | `jd` | items with prices, reviews, shops, hot words | browser |

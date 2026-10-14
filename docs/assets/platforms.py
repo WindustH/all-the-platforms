@@ -45,6 +45,9 @@ GROUPS = [
         ("tiktok", "TikTok", "TikTok", "tiktok", "tiktok"),
         ("kuaishou", "快手", "Kuaishou", "kuaishou", "#FF4906"),
     ]),
+    ("音乐", "MUSIC", [
+        ("ncm", "网易云音乐", "NetEase Cloud Music", "neteasecloudmusic", "#D43C33"),
+    ]),
     ("购物与生活", "SHOPPING", [
         ("taobao", "淘宝", "Taobao", "taobao", "#FF5000"),
         ("xianyu", "闲鱼", "Xianyu", "app:510909506", ""),

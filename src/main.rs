@@ -50,5 +50,6 @@ fn main() -> ExitCode {
   .platform::<atp_ctrip::Ctrip>()
   .platform::<atp_quark::Quark>()
   .platform::<atp_baidupan::Baidupan>()
+  .platform::<atp_netease::Netease>()
   .run()
 }

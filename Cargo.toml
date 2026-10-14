@@ -3,7 +3,7 @@ name = "all-the-platforms"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "One command line for 40+ platforms: social, video, chat, shopping, travel and drives — Zhihu, Xiaohongshu, Weibo, Bilibili, Douyin, WeChat, Telegram, Discord, YouTube, TikTok, Reddit, Twitter/X, Taobao, JD and more"
+description = "One command line for 40+ platforms: social, video, music, chat, shopping, travel and drives — Zhihu, Xiaohongshu, Weibo, Bilibili, Douyin, WeChat, Telegram, Discord, YouTube, TikTok, Reddit, Twitter/X, Taobao, JD and more"
 
 [[bin]]
 name = "atp"
@@ -68,6 +68,7 @@ atp-dewu = { path = "crates/atp-dewu" }
 atp-ctrip = { path = "crates/atp-ctrip" }
 atp-quark = { path = "crates/atp-quark" }
 atp-baidupan = { path = "crates/atp-baidupan" }
+atp-netease = { path = "crates/atp-netease" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -136,6 +137,7 @@ atp-dewu.workspace = true
 atp-ctrip.workspace = true
 atp-quark.workspace = true
 atp-baidupan.workspace = true
+atp-netease.workspace = true
 
 [profile.release]
 lto = "thin"
