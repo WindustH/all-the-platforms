@@ -58,6 +58,11 @@ pub const TOPICS: &[Topic] = &[
     body: include_str!("../../guide/analysis.md"),
   },
   Topic {
+    name: "maps",
+    summary: "Map platforms: places, routes, distances; points and --coord (wgs84, gcj02, bd09)",
+    body: include_str!("../../guide/maps.md"),
+  },
+  Topic {
     name: "download",
     summary: "Images, videos, audio only, speech-recognition segments",
     body: include_str!("../../guide/download.md"),

@@ -376,6 +376,7 @@ name = "atp"
 version = "0.1.0"
 dependencies = [
  "atp-amap",
+ "atp-baidumap",
  "atp-baidupan",
  "atp-bilibili",
  "atp-core",
@@ -387,6 +388,7 @@ dependencies = [
  "atp-douyin",
  "atp-facebook",
  "atp-feishu",
+ "atp-googlemaps",
  "atp-instagram",
  "atp-jd",
  "atp-kook",
@@ -410,6 +412,7 @@ dependencies = [
  "atp-spotify",
  "atp-taobao",
  "atp-telegram",
+ "atp-tencentmap",
  "atp-tieba",
  "atp-tiktok",
  "atp-toutiao",
@@ -441,6 +444,17 @@ dependencies = [
 
 [[package]]
 name = "atp-amap"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "md-5",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "atp-baidumap"
 version = "0.1.0"
 dependencies = [
  "atp-core",
@@ -640,6 +654,17 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "atp-googlemaps"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -1019,6 +1044,16 @@ dependencies = [
  "tracing",
  "url",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "atp-tencentmap"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "md-5",
+ "tokio",
 ]
 
 [[package]]

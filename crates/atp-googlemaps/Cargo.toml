@@ -1,0 +1,13 @@
+[package]
+name = "atp-googlemaps"
+description = "Google Maps Platform (Places, Geocoding, Routes, Time Zone, Elevation, Static Maps) support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+jiff.workspace = true
+tokio.workspace = true
+url.workspace = true

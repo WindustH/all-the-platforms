@@ -1,0 +1,13 @@
+[package]
+name = "atp-baidumap"
+description = "Baidu Map (百度地图) Web Service API support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+md-5.workspace = true
+tokio.workspace = true
+url.workspace = true

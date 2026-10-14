@@ -101,6 +101,9 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Meituan 美团 | `meituan` | 联盟 deals and rankings, shop reviews, city lookup | key, browser |
 | | Dianping 大众点评 | `dianping` | shops, scores, reviews, discovery notes | QR, browser |
 | Maps / travel | Amap 高德地图 | `amap` | places, geocoding, routes, weather, traffic | key |
+| | Google Maps | `gmap` | places, photos, geocoding, routes, distance matrices, time zones, elevation | key |
+| | Baidu Map 百度地图 | `bmap` | places, geocoding, routes, weather, traffic | key |
+| | Tencent Map 腾讯地图 | `qqmap` | places, geocoding, routes, districts, weather | key |
 | | Ctrip 携程 | `ctrip` | sights, hotels, reviews with sub-scores, rankings, trains and transfers, flight fares, travel notes | browser |
 | Drives | Quark Drive 夸克网盘 | `quark` | files and folders, resumable downloads, instant uploads, shares, saving shared files | QR, browser |
 | | Baidu Netdisk 百度网盘 | `baidupan` | files and folders, shares, saving shared files, offline downloads; resumable downloads and instant uploads through your own open-platform app | QR, browser, app key |

@@ -43,6 +43,8 @@ One row per item, no envelope (errors go to stderr). Every row carries
 - Comment threads become one row per comment with `depth` and `parent_id`.
 - Insights become rows with `section` = `total`, `series` (with `date`),
   `breakdown` (with `dimension`, `label`) or `warning`.
+- Route plans become rows with `section` = `route` or `step` (with
+  `route`, `step`); distances one row per origin and destination.
 
 ## Shapes
 
@@ -64,6 +66,10 @@ Every platform maps its data onto the same shapes:
 - **Notification**, **Action** (every write: `action`, `target`, `ok`, `id`,
   `url`), **Auth**, **Transcript** (`cues` of `from`, `to`, `text`),
   **Downloads**, **Insights** (`atp guide analysis`).
+- Map platforms: places are posts with a `place` (`location`, `address`,
+  `category`, `phone`, `rating`, `distance_m`, region, `hours`), **Routes**
+  (`routes` of `distance_m`, `duration_s`, `steps`, `polyline`) and
+  **Distances**; points are `{lat, lng, system}` (`atp guide maps`).
 
 `--raw` adds the untouched upstream object as `raw` to posts, users,
 comments, collections, notifications, drive files and insights.

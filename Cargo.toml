@@ -59,6 +59,9 @@ atp-alibaba = { path = "crates/atp-alibaba" }
 atp-xianyu = { path = "crates/atp-xianyu" }
 atp-taobao = { path = "crates/atp-taobao" }
 atp-amap = { path = "crates/atp-amap" }
+atp-googlemaps = { path = "crates/atp-googlemaps" }
+atp-baidumap = { path = "crates/atp-baidumap" }
+atp-tencentmap = { path = "crates/atp-tencentmap" }
 atp-jd = { path = "crates/atp-jd" }
 atp-pinduoduo = { path = "crates/atp-pinduoduo" }
 atp-mtsec = { path = "crates/atp-mtsec" }
@@ -131,6 +134,9 @@ atp-toutiao.workspace = true
 atp-xianyu.workspace = true
 atp-taobao.workspace = true
 atp-amap.workspace = true
+atp-googlemaps.workspace = true
+atp-baidumap.workspace = true
+atp-tencentmap.workspace = true
 atp-jd.workspace = true
 atp-pinduoduo.workspace = true
 atp-meituan.workspace = true

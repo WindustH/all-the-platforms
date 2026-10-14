@@ -62,6 +62,9 @@ GROUPS = [
     ]),
     ("地图与出行", "MAPS · TRAVEL", [
         ("amap", "高德地图", "Amap", "app:461703208", ""),
+        ("gmap", "Google Maps", "Google Maps", "googlemaps", "#4285F4"),
+        ("bmap", "百度地图", "Baidu Map", "app:452186370", ""),
+        ("qqmap", "腾讯地图", "Tencent Map", "app:481623196", ""),
         ("ctrip", "携程", "Ctrip", "app:379395415", ""),
     ]),
     ("网盘", "DRIVES", [
@@ -90,9 +93,6 @@ GROUPS = [
 ]
 
 COMING = [
-    ("Google Maps", "Google Maps", "googlemaps", "#4285F4"),
-    ("百度地图", "Baidu Map", "app:452186370", ""),
-    ("腾讯地图", "Tencent Map", "app:481623196", ""),
     ("Stack Overflow", "Stack Overflow", "stackoverflow", "#F58025"),
     ("Hacker News", "Hacker News", "ycombinator", "#F0652F"),
     ("Lobsters", "Lobsters", "lobsters", "#AC130D"),

@@ -37,6 +37,7 @@ line in `src/main.rs`.
 | `task` | background work upstream: `wait` polls a task with growing gaps; `retry` backs off while a call fails with errors a predicate picks (rate limits, risk codes) |
 | `oauth` | OAuth device-code logins (`DeviceCode`, `Poll`, `device_login`), the consent page of logins that come back through the browser (`open_consent`), and `Tokens` kept in the session extras, saved to disk the moment a single-use refresh token rotates (`access_token`) |
 | `file` | format detection by magic bytes, MIME types, files and images to upload |
+| `geo` | map platforms: `Coord` (a point in its `System`: `wgs84`, `gcj02`, `bd09`) and the conversions between them, mainland China's outline for Google, `Place` (`Post.place`), `Routes` / `Route` / `Step`, `Distance`, `Polyline` (Google's encoded format), `localize` (every point of a result into the `--coord` system), static map sizes |
 | `guide` | `atp guide`: topics from `crates/atp-core/guide/*.md` and what shared commands mean from `guide/commands/*.md`; platform, command (`atp guide bili search`) and login pages generated from the clap command set and `PlatformInfo`, plus each crate's `GUIDE.md` whole or by section; `page` resolves the words for the CLI and MCP |
 | `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
@@ -73,6 +74,8 @@ A platform crate exports one type implementing `atp_core::Platform`:
   `Post.url` / `User.url`, because that is what `#N` resolves to).
 - `type Extra: clap::Subcommand` holds platform-only commands; `run_extra`
   returns `Data` like everything else.
+- `const COORD: Option<geo::System>`: map platforms name the coordinate
+  system they work in; it is the default of the `--coord` option they get.
 
 ### Chat platforms
 
@@ -107,12 +110,34 @@ only when it lists them, and never across sites on redirects. Uploads use
 open platform `oauth`. Everything else (`ls`, `mkdir`, `mv`, shares, the
 recycle bin) is the drive's own `Extra` commands.
 
+### Map platforms
+
+Map platforms (`amap`, `gmap`, `bmap`, `qqmap`) share command names and
+options: places through `search`, `read` and `download`, and their own
+`nearby`, `tips`, `geocode`, `regeo`, `route`, `distance` and `staticmap`
+with the same arguments wherever the APIs allow. A place is a `Post` with a
+`geo::Place` (point, address, category, phone, rating, distance, region);
+`route` returns `Data::Routes` (routes with distance in metres, duration in
+seconds, steps and a polyline) and `distance` returns `Data::Distances`.
+Tables, cards and jsonl/csv rows know these shapes.
+
+Every coordinate carries its `geo::System`. `Platform::COORD` gives a
+platform a global `--coord` option defaulting to it; the CLI puts its value
+in `Ctx::coord`. The platform reads user points in that system and converts
+them to what its API takes (Amap and Tencent GCJ-02; Baidu BD-09 or, through
+`coord_type` / `ret_coordtype`, GCJ-02; Google WGS-84, or GCJ-02 inside
+mainland China), and tags the points it parses with the system the API
+answered in. After the command, `geo::localize` converts every typed point
+(places, routes, distances) and every `{lat, lng, system}` object in values
+and `extra` into the `--coord` system.
+
 ### Flow of one command
 
 1. `app` parses arguments, picks the platform, starts a current-thread tokio runtime.
 2. `cli::execute` loads the session (`ATP_<ID>_COOKIE` wins over the saved
    file), builds `Http` with those cookies and calls `P::new(ctx)`.
-3. The shared command maps to a trait method (listings go through `paging::collect`).
+3. The shared command maps to a trait method (listings go through `paging::collect`);
+   on map platforms the points of the result are converted to the `--coord` system.
 4. Cookies changed by responses are written back to the session file (logged-in sessions only).
 5. Lists are remembered for `#N`; `raw` payloads are dropped unless `--raw`;
    `output` prints a table or the JSON/YAML envelope.

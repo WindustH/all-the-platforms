@@ -1,0 +1,12 @@
+[package]
+name = "atp-tencentmap"
+description = "Tencent Map (腾讯地图) WebService API support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+clap.workspace = true
+md-5.workspace = true
+tokio.workspace = true
