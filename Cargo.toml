@@ -49,10 +49,12 @@ atp-matrix = { path = "crates/atp-matrix" }
 atp-vocechat = { path = "crates/atp-vocechat" }
 atp-line = { path = "crates/atp-line" }
 atp-meta = { path = "crates/atp-meta" }
+atp-bytedance = { path = "crates/atp-bytedance" }
 atp-facebook = { path = "crates/atp-facebook" }
 atp-instagram = { path = "crates/atp-instagram" }
 atp-whatsapp = { path = "crates/atp-whatsapp" }
 atp-kuaishou = { path = "crates/atp-kuaishou" }
+atp-toutiao = { path = "crates/atp-toutiao" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -109,6 +111,7 @@ atp-facebook.workspace = true
 atp-instagram.workspace = true
 atp-whatsapp.workspace = true
 atp-kuaishou.workspace = true
+atp-toutiao.workspace = true
 
 [profile.release]
 lto = "thin"

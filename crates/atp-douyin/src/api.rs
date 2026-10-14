@@ -9,8 +9,11 @@
 use atp_core::http::{Method, USER_AGENT};
 use atp_core::{Ctx, Error, ErrorCode, Http, Result, Value, ValueExt};
 
-use crate::device;
-use crate::sign::{self, abogus};
+use atp_bytedance::abogus::{self, DOUYIN};
+use atp_bytedance::query::{encode, query_string};
+use atp_bytedance::visitor;
+
+use crate::sign;
 
 pub const WWW: &str = "https://www.douyin.com";
 /// Cookies of a logged-in web session.
@@ -161,10 +164,10 @@ impl<'a> Call<'a> {
       }
       pairs.push(("msToken".into(), http.cookie("msToken").unwrap_or_default()));
     }
-    let query = sign::query_string(&pairs);
+    let query = query_string(&pairs);
     let now = jiff::Timestamp::now().as_millisecond();
-    let a_bogus = abogus::sign(&query, body, USER_AGENT, now);
-    let signed = format!("{query}&a_bogus={}", sign::encode(&a_bogus));
+    let a_bogus = abogus::sign(DOUYIN, &query, body, USER_AGENT, now);
+    let signed = format!("{query}&a_bogus={}", encode(&a_bogus));
     match uifid {
       Some(u) if sign::is_protected(&self.path) => sign::web_sign(&signed, &u, now / 1000),
       _ => signed,
@@ -181,9 +184,9 @@ impl<'a> Call<'a> {
   pub async fn send_raw(self) -> Result<Value> {
     let api = self.api;
     let ctx = &api.ctx;
-    device::ensure(api).await;
+    visitor::ensure(&api.ctx).await;
     let form = self.method == Method::POST;
-    let body = sign::query_string(&self.form);
+    let body = query_string(&self.form);
     let url = format!(
       "{}{}?{}",
       host(&self.path),

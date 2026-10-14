@@ -1,4 +1,6 @@
-//! `a_bogus`: the query signature of Douyin's `bdms.js` (1.0.1.19-fix.01),
+//! `a_bogus`: the query signature of ByteDance's web SDK `bdms.js`
+//! (1.0.1.19-fix.01), which Douyin and Toutiao both load with their own
+//! page and app ids,
 //! ported from the reverse-engineered implementation in
 //! `Evil0ctal/Douyin_TikTok_Download_API` (`src/dtk/signing/native/abogus.py`,
 //! Apache-2.0) as `JoeanAmier/TikTokDownloader` adapts it.
@@ -26,9 +28,22 @@ const SDK_VERSION: [u8; 4] = [1, 0, 1, 0];
 const PAYLOAD_KEY: u8 = 0xD3;
 /// 2024-07-24T16:00:00Z; one field counts fortnights since.
 const FORTNIGHT_EPOCH_MS: i64 = 1_721_836_800_000;
-/// Douyin web's page and app ids; the query carries the same `aid`.
-const PAGE_ID: u64 = 6241;
-pub const AID: u64 = 6383;
+/// The page and app ids a site initializes the SDK with; the query of a
+/// signed request carries the same `aid`.
+#[derive(Debug, Clone, Copy)]
+pub struct App {
+  pub aid: u64,
+  pub page_id: u64,
+}
+
+pub const DOUYIN: App = App {
+  aid: 6383,
+  page_id: 6241,
+};
+pub const TOUTIAO: App = App {
+  aid: 24,
+  page_id: 6457,
+};
 
 const NOISE_MASKS: [u8; 3] = [0x91, 0x42, 0x2C];
 const DATA_MASKS: [u8; 3] = [0x6E, 0xBD, 0xD3];
@@ -81,9 +96,9 @@ pub const BROWSER_INFO: &str = "1536|742|1536|864|1536|864|1536|864|MacIntel";
 
 /// The `a_bogus` of one request (not percent-encoded). `body` is the exact
 /// body sent (empty for GET and multipart uploads).
-pub fn sign(query: &str, body: &str, user_agent: &str, now_ms: i64) -> String {
+pub fn sign(app: App, query: &str, body: &str, user_agent: &str, now_ms: i64) -> String {
   let mut rng = rand::rng();
-  let fields = fields(query, body, user_agent, now_ms);
+  let fields = fields(app, query, body, user_agent, now_ms);
 
   let mut version = mask_pair([SDK_VERSION[0], SDK_VERSION[1]], &mut rng, None, None);
   let probe = probe_noise(&mut rng);
@@ -115,7 +130,7 @@ pub fn sign(query: &str, body: &str, user_agent: &str, now_ms: i64) -> String {
 }
 
 /// The fifty scalars, indexed by their field number (`L24` → 24).
-fn fields(query: &str, body: &str, user_agent: &str, now_ms: i64) -> [u8; 86] {
+fn fields(app: App, query: &str, body: &str, user_agent: &str, now_ms: i64) -> [u8; 86] {
   let mut f = [0u8; 86];
   let now = now_ms as u64;
   let ink = now.saturating_sub(1);
@@ -140,8 +155,8 @@ fn fields(query: &str, body: &str, user_agent: &str, now_ms: i64) -> [u8; 86] {
   put_le(&mut f, 44, DETECT_FLAGS, 4);
   f[40..44].copy_from_slice(&NR_TAG);
   put_le(&mut f, 60, ink, 6);
-  put_le(&mut f, 67, PAGE_ID, 4);
-  put_le(&mut f, 71, AID, 4);
+  put_le(&mut f, 67, app.page_id, 4);
+  put_le(&mut f, 71, app.aid, 4);
 
   for (chain, digest) in [
     (&QUERY_CHAIN, digest_of(query)),

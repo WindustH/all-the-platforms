@@ -1,0 +1,14 @@
+[package]
+name = "atp-bytedance"
+description = "What all-the-platforms's ByteDance sites (Douyin, Toutiao) share: a_bogus signing, visitor cookies, the SSO passport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atp-core.workspace = true
+jiff.workspace = true
+rand.workspace = true
+serde.workspace = true
+sm3 = "0.5"
+tracing.workspace = true
