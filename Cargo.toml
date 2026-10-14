@@ -61,6 +61,7 @@ atp-taobao = { path = "crates/atp-taobao" }
 atp-amap = { path = "crates/atp-amap" }
 atp-jd = { path = "crates/atp-jd" }
 atp-pinduoduo = { path = "crates/atp-pinduoduo" }
+atp-dewu = { path = "crates/atp-dewu" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -123,6 +124,7 @@ atp-taobao.workspace = true
 atp-amap.workspace = true
 atp-jd.workspace = true
 atp-pinduoduo.workspace = true
+atp-dewu.workspace = true
 
 [profile.release]
 lto = "thin"

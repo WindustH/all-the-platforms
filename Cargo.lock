@@ -82,6 +82,7 @@ dependencies = [
  "atp-amap",
  "atp-bilibili",
  "atp-core",
+ "atp-dewu",
  "atp-dingtalk",
  "atp-discord",
  "atp-douyin",
@@ -501,6 +502,20 @@ dependencies = [
  "url",
  "wreq",
  "wreq-util",
+]
+
+[[package]]
+name = "atp-dewu"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "md-5",
+ "regex",
+ "serde_json",
+ "tracing",
+ "url",
 ]
 
 [[package]]
