@@ -9,7 +9,7 @@ implementation of everything more than one platform needs.
 ```
 src/main.rs                 registers platforms
 crates/atp-<platform>    one platform; depends on atp-core only
-crates/atp-meta          Graph API pieces of atp-facebook and atp-instagram
+crates/atp-meta          Graph API pieces of atp-facebook, atp-instagram and atp-threads
 crates/atp-core          everything shared; knows no platform
 ```
 
@@ -81,9 +81,9 @@ Use these instead of writing another copy:
 
 | Need | atp-core |
 | --- | --- |
-| environment variables, `login --token` fields, saved credentials, keys shown masked | `credentials::{env, env_any, fields, expect, saved, save, mask}` |
+| environment variables, `login --token` fields, saved credentials, keys shown masked, instance hosts | `credentials::{env, env_any, fields, expect, saved, save, mask, host}` |
 | access tokens that expire | `token::AccessToken` |
-| logins that come back through the browser to a local address | `oauth::{open_consent, redirect}` |
+| logins that come back through the browser to a local address | `oauth::{open_consent, port, listen, random, wait, redirect}` |
 | files to upload, MIME types, image sizes | `file::{Upload, Image, mime_for, sniff}`, `Upload::size` |
 | `CHAT/MESSAGE` ids | `chat::{message_id, split_message_id, expect_message_id}` |
 | `listen` by polling (fixed or random interval), reconnect delays | `live::{poll, poll_between, Seen, Backoff}` |

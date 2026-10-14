@@ -25,8 +25,10 @@ use crate::json::ValueExt;
 use crate::output::note;
 use crate::qr;
 
+mod loopback;
 mod redirect;
 
+pub use self::loopback::{listen, port, random, wait};
 pub use self::redirect::{Via, redirect};
 
 /// Session extras the tokens are kept under.

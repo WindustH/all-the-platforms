@@ -10,6 +10,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+pub use atp_core::credentials::host;
 use atp_core::file::Upload;
 use atp_core::http::Part;
 use atp_core::{Ctx, Error, ErrorCode, Page, PageReq, Result, Value, ValueExt, credentials, json};
@@ -220,14 +221,4 @@ fn check(status: u16, body: &[u8]) -> Result<Value> {
     (400, _) => Error::input(text),
     _ => Error::upstream(format!("Misskey: {text}")),
   })
-}
-
-/// `https://misskey.io/` or `misskey.io` → `misskey.io`.
-pub fn host(url: &str) -> String {
-  let url = url.trim();
-  let url = url
-    .strip_prefix("https://")
-    .or_else(|| url.strip_prefix("http://"))
-    .unwrap_or(url);
-  url.split('/').next().unwrap_or(url).to_ascii_lowercase()
 }

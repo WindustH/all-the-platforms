@@ -10,6 +10,7 @@
 
 use std::time::Duration;
 
+pub use atp_core::credentials::host;
 use atp_core::http::{Method, TOOL_USER_AGENT, status_error};
 use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt, credentials};
 
@@ -137,14 +138,4 @@ fn refused(code: &str) -> Error {
     }
     _ => Error::upstream(text),
   }
-}
-
-/// `https://lemmy.world/` or `lemmy.world` → `lemmy.world`.
-pub fn host(url: &str) -> String {
-  let url = url.trim();
-  let url = url
-    .strip_prefix("https://")
-    .or_else(|| url.strip_prefix("http://"))
-    .unwrap_or(url);
-  url.split('/').next().unwrap_or(url).to_ascii_lowercase()
 }

@@ -380,12 +380,14 @@ dependencies = [
  "atp-baidupan",
  "atp-bangumi",
  "atp-bilibili",
+ "atp-bluesky",
  "atp-core",
  "atp-ctrip",
  "atp-dewu",
  "atp-dianping",
  "atp-dingtalk",
  "atp-discord",
+ "atp-discourse",
  "atp-douyin",
  "atp-facebook",
  "atp-feishu",
@@ -398,6 +400,7 @@ dependencies = [
  "atp-lemmy",
  "atp-line",
  "atp-lobsters",
+ "atp-mastodon",
  "atp-matrix",
  "atp-mattermost",
  "atp-meituan",
@@ -420,6 +423,7 @@ dependencies = [
  "atp-taobao",
  "atp-telegram",
  "atp-tencentmap",
+ "atp-threads",
  "atp-tieba",
  "atp-tiktok",
  "atp-toutiao",
@@ -512,6 +516,18 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "atp-bluesky"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "serde_json",
+ "url",
 ]
 
 [[package]]
@@ -630,6 +646,19 @@ dependencies = [
  "sha2 0.10.9",
  "tokio",
  "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-discourse"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "rsa",
+ "serde_json",
+ "tokio",
  "url",
 ]
 
@@ -798,6 +827,17 @@ dependencies = [
  "clap",
  "regex",
  "serde_json",
+ "url",
+]
+
+[[package]]
+name = "atp-mastodon"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "serde_json",
+ "tokio",
  "url",
 ]
 
@@ -1083,10 +1123,8 @@ dependencies = [
  "base64 0.22.1",
  "clap",
  "jiff",
- "rand 0.9.5",
  "serde_json",
  "sha2 0.10.9",
- "tokio",
  "url",
 ]
 
@@ -1097,7 +1135,6 @@ dependencies = [
  "atp-core",
  "clap",
  "jiff",
- "rand 0.9.5",
  "serde_json",
  "tokio",
  "url",
@@ -1146,6 +1183,20 @@ dependencies = [
  "clap",
  "md-5",
  "tokio",
+]
+
+[[package]]
+name = "atp-threads"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "atp-meta",
+ "clap",
+ "jiff",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

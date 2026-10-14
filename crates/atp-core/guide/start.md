@@ -11,8 +11,9 @@ one of them.
 
 - Social and news: `zhihu`, `xhs`, `weibo`, `tieba`, `mp` (WeChat
   Official Accounts), `twitter`, `reddit`, `facebook`, `instagram`,
-  `misskey`, `lemmy`, `toutiao`, `bangumi` (Bangumi 番组计划), `rss`
-  (RSS, Atom and JSON feeds, RSSHub, Miniflux).
+  `threads`, `misskey`, `mastodon`, `bluesky`, `lemmy`, `discourse`
+  (any Discourse forum, such as linux.do), `toutiao`, `bangumi` (Bangumi
+  番组计划), `rss` (RSS, Atom and JSON feeds, RSSHub, Miniflux).
 - Video: `bili`, `douyin`, `kuaishou`, `youtube`, `tiktok`.
 - Chat: `wechat`, `telegram`, `discord`, `whatsapp`, `qq`, `onebot`,
   `feishu`, `dingtalk`, `wecom`, `slack`, `mattermost`, `rocketchat`,

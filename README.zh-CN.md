@@ -75,8 +75,12 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 | | Reddit | `reddit` | 帖子、评论、社区、收件箱 | 浏览器、应用 |
 | | Facebook | `facebook` | 个人页、公共主页、小组、主页数据、广告 | 浏览器、Token |
 | | Instagram | `instagram` | 帖子、Reels、快拍、私信、数据、广告 | 浏览器、Token |
+| | Threads | `threads` | 帖子与轮播、对话、提及、搜索、数据，使用你自己的 Meta 应用 | Token |
 | | Misskey | `misskey` | 帖子、时间线、表情回应、聊天 | MiAuth、Token |
+| | Mastodon | `mastodon` | 嘟文、时间线、趋势、转嘟、书签，任意实例 | OAuth、Token |
+| | Bluesky | `bluesky` | 帖子、对话、Discover 与自定义 Feed、趋势、书签 | 应用密码 |
 | | Lemmy | `lemmy` | 社区、帖子、完整评论树、投票、回复，任意实例 | 密码、Token |
+| | Discourse | `discourse` | 话题、帖子、分类、搜索、点赞、书签，任意论坛（如 linux.do） | User API Key、API Key |
 | | Bangumi 番组计划 | `bangumi` | 动画、书籍、音乐与游戏条目、每日放送、角色与制作人员、我的收藏与进度 | Token |
 | | RSS | `rss` | RSS、Atom 与 JSON Feed、订阅列表与合并时间线、RSSHub 路由、Miniflux | 无需登录、Miniflux Key |
 | 视频 | 哔哩哔哩 | `bili` | 视频、弹幕、字幕、投币、创作者数据 | 扫码、浏览器 |
@@ -146,6 +150,7 @@ atp yt transcript https://youtu.be/5C_HPTJg5ek
 atp mp read https://mp.weixin.qq.com/s/nwv1BVYGbpuYJO0bPp-APQ
 atp tg messages @telegram -n 20
 atp misskey feed --type global -n 10
+atp bsky hot -n 10
 atp hn hot -n 10
 atp podcast search 'hardcore history'
 atp rss read https://blog.rust-lang.org/feed.xml

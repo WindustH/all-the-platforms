@@ -5,16 +5,11 @@
 //! and the PKCE verifier become the tokens, kept with the session together
 //! with the client id that renews them.
 
-use std::net::Ipv4Addr;
-use std::time::Duration;
-
 use atp_core::oauth::{self, Via};
 use atp_core::{Error, ErrorCode, Result, credentials};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use rand::Rng;
 use sha2::{Digest, Sha256};
-use tokio::net::TcpListener;
 
 use crate::api::{Api, CLIENT_ID, ENV_CLIENT_ID};
 
@@ -37,38 +32,28 @@ const SCOPES: &[&str] = &[
 ];
 pub const DEFAULT_PORT: u16 = 8888;
 pub const ENV_PORT: &str = "SPOTIFY_REDIRECT_PORT";
-/// How long the listener waits for the browser to come back.
-const CONSENT_WAIT: Duration = Duration::from_secs(300);
-const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 /// `login --token CLIENT_ID` (or `env` for `SPOTIFY_CLIENT_ID`): the
 /// consent of the user's own app in the browser.
 pub async fn token(api: &Api, arg: &str) -> Result<()> {
   let client = client_id(arg)?;
-  let port = port()?;
+  let port = oauth::port(ENV_PORT, DEFAULT_PORT)?;
   let redirect = format!("http://127.0.0.1:{port}/callback");
-  let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
-    .await
-    .map_err(|e| {
-      Error::input(format!(
-        "cannot listen on 127.0.0.1:{port} for the redirect: {e}"
-      ))
-      .with_hint(format!(
-        "free the port, or set {ENV_PORT} and register http://127.0.0.1:PORT/callback in the app"
-      ))
-    })?;
-  let verifier = random(64);
-  let state = random(24);
+  let listener = oauth::listen(port, ENV_PORT).await.map_err(|e| {
+    e.with_hint(format!(
+      "free the port, or set {ENV_PORT} and register http://127.0.0.1:PORT/callback in the app"
+    ))
+  })?;
+  let verifier = oauth::random(64);
+  let state = oauth::random(24);
   let url = consent_url(&client, &redirect, &challenge(&verifier), &state)?;
   oauth::open_consent(&url);
   atp_core::output::note(&format!(
     "The app must list {redirect} under Redirect URIs; if Spotify says \"Invalid redirect \
      URI\", add it in the dashboard, stop this with Ctrl-C and log in again."
   ));
-  let back = oauth::redirect(&listener, "/callback", &state, Via::Query, "Spotify");
-  let code = tokio::time::timeout(CONSENT_WAIT, back)
-    .await
-    .map_err(|_| Error::auth("timed out waiting for the browser to come back; run login again"))??
+  let code = oauth::wait(&listener, "/callback", &state, Via::Query, "Spotify")
+    .await?
     .remove("code")
     .ok_or_else(|| {
       Error::auth("the browser came back from another login attempt; run login again")
@@ -111,18 +96,6 @@ fn client_id(arg: &str) -> Result<String> {
   Ok(id)
 }
 
-/// The listening port: `SPOTIFY_REDIRECT_PORT`, else 8888.
-fn port() -> Result<u16> {
-  match credentials::env(ENV_PORT) {
-    None => Ok(DEFAULT_PORT),
-    Some(text) => text
-      .parse()
-      .ok()
-      .filter(|p| *p > 0)
-      .ok_or_else(|| Error::input(format!("{ENV_PORT} is not a port number: {text}"))),
-  }
-}
-
 fn consent_url(client: &str, redirect: &str, challenge: &str, state: &str) -> Result<String> {
   let scope = SCOPES.join(" ");
   let params = [
@@ -137,14 +110,6 @@ fn consent_url(client: &str, redirect: &str, challenge: &str, state: &str) -> Re
   let url = url::Url::parse_with_params(AUTHORIZE_URL, params)
     .map_err(|e| Error::internal(e.to_string()))?;
   Ok(url.into())
-}
-
-/// `len` random letters and digits (PKCE verifier, `state`).
-fn random(len: usize) -> String {
-  let mut rng = rand::rng();
-  (0..len)
-    .map(|_| CHARS[rng.random_range(0..CHARS.len())] as char)
-    .collect()
 }
 
 /// The S256 challenge of a verifier: base64url of its SHA-256, unpadded.

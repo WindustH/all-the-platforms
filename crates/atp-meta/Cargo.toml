@@ -1,6 +1,6 @@
 [package]
 name = "atp-meta"
-description = "Meta Graph API transport and Marketing API commands shared by all-the-platforms's Facebook and Instagram"
+description = "Meta Graph API transport and Marketing API commands shared by all-the-platforms's Facebook, Instagram and Threads"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

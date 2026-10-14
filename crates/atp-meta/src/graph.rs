@@ -1,7 +1,7 @@
 //! The Graph API: `https://graph.facebook.com/<version>/<path>` (and
-//! `graph.instagram.com` for Instagram-login tokens), authorized by an access
-//! token, paged by `paging.cursors.after`. Answers are checked in
-//! [`crate::errors`].
+//! `graph.instagram.com` for Instagram-login tokens, `graph.threads.net`
+//! for the Threads API), authorized by an access token, paged by
+//! `paging.cursors.after`. Answers are checked in [`crate::errors`].
 
 use atp_core::credentials;
 use atp_core::http::{Method, Part};
@@ -13,6 +13,9 @@ use crate::errors::check;
 pub const VERSION: &str = "v24.0";
 pub const FACEBOOK: &str = "https://graph.facebook.com";
 pub const INSTAGRAM: &str = "https://graph.instagram.com";
+pub const THREADS: &str = "https://graph.threads.net";
+/// The Threads API keeps its own versions.
+pub const THREADS_VERSION: &str = "v1.0";
 
 /// Session extra holding a token given to `login --token`.
 pub const TOKEN_KEY: &str = "graph_token";
@@ -87,6 +90,15 @@ impl<'a> Graph<'a> {
       ctx,
       token: token.into(),
       base: format!("{host}/{version}"),
+    }
+  }
+
+  /// A client for the Threads API ([`THREADS`] at [`THREADS_VERSION`]).
+  pub fn threads(ctx: &'a Ctx, token: impl Into<String>) -> Self {
+    Self {
+      ctx,
+      token: token.into(),
+      base: format!("{THREADS}/{THREADS_VERSION}"),
     }
   }
 

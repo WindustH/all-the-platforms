@@ -69,3 +69,14 @@ pub fn mask(secret: &str) -> String {
   let tail: String = chars[chars.len() - 4..].iter().collect();
   format!("{head}…{tail}")
 }
+
+/// The host of a server given as a host or a URL (instances of federated
+/// platforms): `https://misskey.io/` or `misskey.io` → `misskey.io`.
+pub fn host(url: &str) -> String {
+  let url = url.trim();
+  let url = url
+    .strip_prefix("https://")
+    .or_else(|| url.strip_prefix("http://"))
+    .unwrap_or(url);
+  url.split('/').next().unwrap_or(url).to_ascii_lowercase()
+}

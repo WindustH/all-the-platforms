@@ -8,7 +8,7 @@ knows as little as possible about the others.
 src/main.rs                 registry: lists the platforms, nothing else
 crates/atp-core          platform-agnostic kernel
 crates/atp-<platform>    one crate per platform (atp-zhihu, atp-telegram ...)
-crates/atp-meta          Graph API pieces shared by atp-facebook and atp-instagram
+crates/atp-meta          Graph API pieces shared by atp-facebook, atp-instagram and atp-threads
 ```
 
 Naming, layout and size rules are in [conventions.md](conventions.md).
@@ -35,7 +35,7 @@ line in `src/main.rs`.
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg); `files`: a drive's files and folders under their own names, through `.part` files resumed by `Range`, with per-link headers and links renewed mid-file |
 | `upload` | files too big for memory: `LocalFile`, `Hashes` (md5, sha1, 4 MB block md5s, md5 of the first 256 KB in one read), `Parts` (part by part with retries, a progress bar and resume state in the private cache; optionally the SHA-1 state before each part, `Sha1Midway`) |
 | `task` | background work upstream: `wait` polls a task with growing gaps; `retry` backs off while a call fails with errors a predicate picks (rate limits, risk codes) |
-| `oauth` | OAuth device-code logins (`DeviceCode`, `Poll`, `device_login`), the consent page of logins that come back through the browser (`open_consent`) and the one-shot loopback listener they come back to, with the parameters in the query or after `#` (`redirect`), and `Tokens` kept in the session extras, saved to disk the moment a single-use refresh token rotates (`access_token`) |
+| `oauth` | OAuth device-code logins (`DeviceCode`, `Poll`, `device_login`), the consent page of logins that come back through the browser (`open_consent`) and the one-shot loopback listener they come back to (`port`, `listen`, a random `state`, `wait`), with the parameters in the query or after `#` (`redirect`), and `Tokens` kept in the session extras, saved to disk the moment a single-use refresh token rotates (`access_token`) |
 | `file` | format detection by magic bytes, MIME types, files and images to upload |
 | `geo` | map platforms: `Coord` (a point in its `System`: `wgs84`, `gcj02`, `bd09`) and the conversions between them, mainland China's outline for Google, `Place` (`Post.place`), `Routes` / `Route` / `Step`, `Distance`, `Polyline` (Google's encoded format), `localize` (every point of a result into the `--coord` system), static map sizes |
 | `guide` | `atp guide`: topics from `crates/atp-core/guide/*.md` and what shared commands mean from `guide/commands/*.md`; platform, command (`atp guide bili search`) and login pages generated from the clap command set and `PlatformInfo`, plus each crate's `GUIDE.md` whole or by section; `page` resolves the words for the CLI and MCP |
@@ -45,7 +45,7 @@ line in `src/main.rs`.
 | `feed` | web feeds for platforms that read them (podcasts, RSS): RSS 0.9x–2.0, Atom and JSON Feed through feed-rs into a `Feed` whose entries are posts (enclosures as media, iTunes episode data in `extra`); `get` fetches as feed readers do (a declared client, `If-None-Match` / `If-Modified-Since` against a private cached copy), `load` also follows a web page to the feed it announces (`discover`); `FEED_URL#ENTRY_ID` entry references (`entry_ref`, `split_entry_ref`) |
 | `music` | what music platforms share: `Lyrics` (LRC with its translation, as plain text or LRC) and track lists inside a post (`with_tracks`) |
 | `browser` | import cookies from local browsers (`browser` feature, on by default) |
-| `credentials` | environment variables, `login --token` fields, credentials saved in the session |
+| `credentials` | environment variables, `login --token` fields, credentials saved in the session, instance hosts (`host`) |
 | `token` | `AccessToken`: expiring access tokens cached in memory and in the private cache |
 | `chat` | `CHAT/MESSAGE` ids of messages without permalinks |
 | `live` | `listen` helpers: polling with de-duplication, `Backoff` (reconnect delays, task polling) |

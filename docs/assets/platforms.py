@@ -37,8 +37,12 @@ GROUPS = [
         ("reddit", "Reddit", "Reddit", "reddit", "#FF4500"),
         ("facebook", "Facebook", "Facebook", "facebook", "#0866FF"),
         ("instagram", "Instagram", "Instagram", "instagram", "instagram"),
+        ("threads", "Threads", "Threads", "threads", "#000000"),
         ("misskey", "Misskey", "Misskey", "misskey", "#A1CA03"),
+        ("mastodon", "Mastodon", "Mastodon", "mastodon", "#6364FF"),
+        ("bluesky", "Bluesky", "Bluesky", "bluesky", "#1185FE"),
         ("lemmy", "Lemmy", "Lemmy", "lemmy", "#000000"),
+        ("discourse", "Discourse", "linux.do", "discourse", "#000000"),
         ("bangumi", "番组计划", "Bangumi", "github:bangumi", ""),
         ("rss", "RSS", "RSSHub · Miniflux", "rss", "#FFA500"),
     ]),
@@ -103,10 +107,6 @@ GROUPS = [
 ]
 
 COMING = [
-    ("Threads", "Threads", "threads", "#000000"),
-    ("Mastodon", "Mastodon", "mastodon", "#6364FF"),
-    ("Bluesky", "Bluesky", "bluesky", "#1185FE"),
-    ("Discourse", "linux.do", "discourse", "#000000"),
     ("豆瓣", "Douban", "douban", "#2D963D"),
     ("微信读书", "WeRead", "weread", "#37A7FF"),
     ("掘金", "Juejin", "juejin", "#007FFF"),

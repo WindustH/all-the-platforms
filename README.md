@@ -84,8 +84,12 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Reddit | `reddit` | posts, comments, subreddits, inbox | browser, app |
 | | Facebook | `facebook` | profiles, pages, groups, Page insights, ads | browser, token |
 | | Instagram | `instagram` | posts, reels, stories, DMs, insights, ads | browser, token |
+| | Threads | `threads` | posts and carousels, conversations, mentions, search, insights, through your own Meta app | token |
 | | Misskey | `misskey` | notes, timelines, reactions, chat | MiAuth, token |
+| | Mastodon | `mastodon` | statuses, timelines, trends, boosts, bookmarks, on any instance | OAuth, token |
+| | Bluesky | `bluesky` | posts, threads, Discover and custom feeds, trends, bookmarks | app password |
 | | Lemmy | `lemmy` | communities, posts, whole comment threads, votes, replies, on any instance | password, token |
+| | Discourse | `discourse` | topics, posts, categories, search, likes, bookmarks, on any forum such as linux.do | User API Key, API key |
 | | Bangumi 番组计划 | `bangumi` | anime, books, music and games, the airing calendar, cast and staff, your collection and progress | token |
 | | RSS | `rss` | RSS, Atom and JSON feeds, a subscription list with one timeline, RSSHub routes, Miniflux | not needed, Miniflux key |
 | Video | Bilibili 哔哩哔哩 | `bili` | videos, danmaku, subtitles, coins, creator data | QR, browser |
@@ -156,6 +160,7 @@ atp yt transcript https://youtu.be/5C_HPTJg5ek
 atp mp read https://mp.weixin.qq.com/s/nwv1BVYGbpuYJO0bPp-APQ
 atp tg messages @telegram -n 20
 atp misskey feed --type global -n 10
+atp bsky hot -n 10
 atp hn hot -n 10
 atp podcast search 'hardcore history'
 atp rss read https://blog.rust-lang.org/feed.xml

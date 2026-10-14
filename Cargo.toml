@@ -82,6 +82,10 @@ atp-bangumi = { path = "crates/atp-bangumi" }
 atp-podcast = { path = "crates/atp-podcast" }
 atp-lemmy = { path = "crates/atp-lemmy" }
 atp-rss = { path = "crates/atp-rss" }
+atp-threads = { path = "crates/atp-threads" }
+atp-mastodon = { path = "crates/atp-mastodon" }
+atp-bluesky = { path = "crates/atp-bluesky" }
+atp-discourse = { path = "crates/atp-discourse" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -164,6 +168,10 @@ atp-bangumi.workspace = true
 atp-podcast.workspace = true
 atp-lemmy.workspace = true
 atp-rss.workspace = true
+atp-threads.workspace = true
+atp-mastodon.workspace = true
+atp-bluesky.workspace = true
+atp-discourse.workspace = true
 
 [profile.release]
 lto = "thin"
