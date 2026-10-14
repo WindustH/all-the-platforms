@@ -1,10 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="600" height="112" viewBox="0 0 600 112" role="img" aria-label="all-the-platforms">
-  <rect x="4" y="4" width="104" height="104" rx="24" fill="#F4F5F7" stroke="#D0D7DE" stroke-width="2"/>
-  <path d="M28 38 L46 54 L28 70" fill="none" stroke="#1F2328" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M54 72 H76" stroke="#1F2328" stroke-width="8" stroke-linecap="round"/>
-  <circle cx="30" cy="88" r="5" fill="#0066FF"/>
-  <circle cx="46" cy="88" r="5" fill="#FF2442"/>
-  <circle cx="62" cy="88" r="5" fill="#1F2328"/>
-  <circle cx="78" cy="88" r="5" fill="#FB7299"/>
+  <g transform="translate(2 14) scale(0.48) rotate(-10 120 88)">
+    <path d="M 30,64 C 40,24 98,8 134,32 C 152,44 170,42 196,48 C 232,56 244,96 232,126 C 218,158 170,164 126,154 C 96,147 74,158 48,148 C 12,134 20,94 30,64 Z" fill="#CF6F42"/>
+    <path d="M 44,106 C 38,82 44,58 58,50 C 74,42 80,62 76,82 C 72,102 84,116 96,102 C 108,88 102,58 116,50 C 130,42 136,64 130,88 C 124,112 136,124 148,110 C 160,96 154,64 168,58 C 182,52 188,74 184,96 C 180,118 190,124 200,112 C 206,102 204,82 210,77 C 218,72 222,96 216,120 C 208,142 178,148 138,146 C 102,142 78,150 58,138 C 48,131 46,118 44,106 Z" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
   <text x="132" y="72" fill="#1F2328" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="46" font-weight="700" letter-spacing="-1">all-the-platforms</text>
 </svg>
