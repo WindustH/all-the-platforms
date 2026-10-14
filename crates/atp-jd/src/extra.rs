@@ -4,7 +4,7 @@ use atp_core::cli::PageArgs;
 use atp_core::{Data, Result};
 
 use crate::api::Api;
-use crate::{refs, search};
+use crate::{comments, refs, search};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -20,6 +20,11 @@ pub enum Command {
     item: String,
     #[command(flatten)]
     page: PageArgs,
+  },
+  /// An item's review summary: review count, good rate and review tags
+  Rating {
+    /// SKU or item link
+    item: String,
   },
 }
 
@@ -38,6 +43,10 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
           .collect(async |r| search::related(api, &sku, &r).await)
           .await?,
       )
+    }
+    Command::Rating { item } => {
+      let item = api.ctx.post_ref(&item)?;
+      Data::Value(comments::rating(api, &item).await?)
     }
   })
 }

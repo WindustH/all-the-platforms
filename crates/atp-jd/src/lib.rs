@@ -1,12 +1,12 @@
 //! JD (京东) for all-the-platforms.
 //!
 //! Items are posts (`kind` `item`, SKUs as ids) with their price in
-//! `price`; reviews are comments; shops are users. Calls go through JD's
-//! color gateway `api.m.jd.com`; search, item pages and reviews are signed
-//! with h5st 5.3 (a pure port in `sign`), search words are not. JD's risk
-//! control answers unknown clients with checks (code 605, the risk
-//! handler), which surface as `verification_required`, or with empty
-//! 403s.
+//! `price`; reviews are comments; shops are users and their items the
+//! users' posts. Calls go through JD's color gateway `api.m.jd.com`;
+//! search, item pages, reviews and shop items are signed with h5st 5.3 (a
+//! pure port in `sign`), search words are not. JD's risk control answers
+//! unknown clients with checks (code 605, the risk handler), which surface
+//! as `verification_required`, or with empty 403s.
 
 mod api;
 mod comments;
@@ -47,6 +47,7 @@ impl Platform for Jd {
       Cap::Read,
       Cap::Comments,
       Cap::User,
+      Cap::UserPosts,
       Cap::Favorites,
       Cap::History,
       Cap::Download,
@@ -96,6 +97,10 @@ impl Platform for Jd {
 
   async fn user(&self, user: &str) -> Result<User> {
     users::user(&self.api, user).await
+  }
+
+  async fn user_posts(&self, user: &str, page: &PageReq) -> Result<Page<Post>> {
+    users::posts(&self.api, user, page).await
   }
 
   async fn favorites(

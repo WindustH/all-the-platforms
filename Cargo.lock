@@ -598,8 +598,10 @@ dependencies = [
 name = "atp-jd"
 version = "0.1.0"
 dependencies = [
+ "aes 0.8.4",
  "atp-core",
  "base64 0.22.1",
+ "cbc 0.1.2",
  "clap",
  "jiff",
  "md-5",
