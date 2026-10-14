@@ -13,6 +13,7 @@ use crate::platform::{Cap, Draft, Platform, Reply};
 pub struct PublishArgs {
   /// Text to publish; `-` reads it from stdin
   pub text: Option<String>,
+  /// Title, where posts have one
   #[arg(long)]
   pub title: Option<String>,
   /// Attach an image (repeatable)
@@ -33,15 +34,20 @@ pub struct PublishArgs {
 pub enum WriteCommand {
   /// Like a post
   Like {
+    /// Post: an id, a link, or #N from the last list
     post: String,
     /// Remove the like instead
     #[arg(long)]
     undo: bool,
   },
   /// Remove a like
-  Unlike { post: String },
+  Unlike {
+    /// Post: an id, a link, or #N from the last list
+    post: String,
+  },
   /// Save a post to favorites / bookmarks
   Favorite {
+    /// Post: an id, a link, or #N from the last list
     post: String,
     /// Folder / collection id
     #[arg(long)]
@@ -52,13 +58,16 @@ pub enum WriteCommand {
   },
   /// Remove a post from favorites / bookmarks
   Unfavorite {
+    /// Post: an id, a link, or #N from the last list
     post: String,
+    /// Folder / collection id
     #[arg(long)]
     folder: Option<String>,
   },
   /// Comment on a post, or reply to one of its comments
   #[command(after_long_help = EX_COMMENT)]
   Comment {
+    /// Post: an id, a link, or #N from the last list
     post: String,
     /// Comment text; `-` reads it from stdin
     #[arg(required_unless_present = "images")]
@@ -72,25 +81,35 @@ pub enum WriteCommand {
   },
   /// Delete one of your comments
   DeleteComment {
+    /// Post: an id, a link, or #N from the last list
     post: String,
+    /// The comment's id, as `comments` lists it
     comment: String,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// Follow a user
   Follow {
+    /// User: an id, a handle or a link, or #N from the last list
     user: String,
+    /// Unfollow instead
     #[arg(long)]
     undo: bool,
   },
   /// Unfollow a user
-  Unfollow { user: String },
+  Unfollow {
+    /// User: an id, a handle or a link, or #N from the last list
+    user: String,
+  },
   /// Publish a post
   #[command(name = "post", after_long_help = EX_POST)]
   Publish(PublishArgs),
   /// Delete one of your posts
   Delete {
+    /// Post: an id, a link, or #N from the last list
     post: String,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },

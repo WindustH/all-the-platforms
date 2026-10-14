@@ -6,6 +6,7 @@
 //! Nothing else may write to stdout while serving: results come back as
 //! envelopes and live events are collected (see [`tools`]).
 
+mod resources;
 mod tools;
 
 use std::io::Write;
@@ -19,12 +20,15 @@ use crate::json::ValueExt;
 /// Protocol revisions this server speaks, newest first.
 const VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
-const INSTRUCTIONS: &str = "all-the-platforms (atp) reads and acts on social, video, chat, \
-shopping and map platforms with one command set. `platforms` lists them and what each \
-supports; `help` explains a platform or a command. `read` runs commands that only read \
-(search, hot, read, comments, user, ...); `run` runs anything else (likes, comments, posts, \
-messages, downloads, platform-only commands). Arguments are command-line words, e.g. \
-platform `bili`, command `search`, args [\"rust\", \"-n\", \"5\"]. Results are JSON envelopes \
+const INSTRUCTIONS: &str = "ATP (all-the-platforms) reads and acts on social, video, chat, \
+shopping, map, music and drive platforms with one command set. `platforms` lists them and what \
+each supports. `help` reads the guide: a topic, `login` or `login <platform>` (how to log in, \
+with steps, tokens and risks), a platform (`bili`), or one command (`bili search`, \
+`ncm playlist create`) with its options, values, examples and the platform's notes; the same \
+pages are resources under atp://guide/. `read` runs commands that only read (search, hot, \
+read, comments, user, ...); `run` runs anything else (likes, comments, posts, messages, \
+downloads, platform-only commands). Arguments are command-line words, e.g. platform `bili`, \
+command `search`, args [\"rust\", \"-n\", \"5\"]. Results are JSON envelopes \
 {ok, data | error{code, message, hint}}. `#3` in args means the third item of the last list. \
 Logging in with a QR code needs a terminal (`atp <platform> login`); `run` takes \
 `login --cookie`, `--token` or `--browser`.";
@@ -83,6 +87,9 @@ async fn handle(server: &tools::Tools<'_>, app: &App, message: Value) -> Option<
     "ping" => Ok(json!({})),
     "tools/list" => Ok(json!({ "tools": server.list() })),
     "tools/call" => server.call(params).await,
+    "resources/list" => Ok(resources::list(app)),
+    "resources/templates/list" => Ok(resources::templates()),
+    "resources/read" => resources::read(app, params),
     other => Err((-32601, format!("method not found: {other}"))),
   };
   Some(match result {
@@ -99,10 +106,13 @@ fn initialize(app: &App, params: &Value) -> Value {
     .unwrap_or(&VERSIONS[0]);
   json!({
     "protocolVersion": version,
-    "capabilities": { "tools": { "listChanged": false } },
+    "capabilities": {
+      "tools": { "listChanged": false },
+      "resources": { "subscribe": false, "listChanged": false },
+    },
     "serverInfo": {
-      "name": "all-the-platforms",
-      "title": "all-the-platforms",
+      "name": "atp",
+      "title": "ATP (all-the-platforms)",
       "version": app.version,
     },
     "instructions": INSTRUCTIONS,

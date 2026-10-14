@@ -33,7 +33,8 @@ use std::time::Duration;
 
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
+  User,
 };
 
 use api::Api;
@@ -93,6 +94,10 @@ impl Platform for Xhs {
       notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_secs(1),
+    kind: PlatformKind::Social,
+    token: "",
+    env: &[],
+    guest: "read, download",
     guide: include_str!("../GUIDE.md"),
   };
 

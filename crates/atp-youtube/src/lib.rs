@@ -35,7 +35,8 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Error, Insights, Media, Message,
-  Notification, Page, PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
+  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result,
+  User,
 };
 
 use crate::api::Api;
@@ -92,6 +93,14 @@ impl Platform for YouTube {
       notification_kind: &[],
     },
     min_interval: Duration::from_millis(1000),
+    kind: PlatformKind::Video,
+    token: "",
+    env: &[
+      "YOUTUBE_CLIENT_ID",
+      "YOUTUBE_CLIENT_SECRET",
+      "YOUTUBE_REFRESH_TOKEN",
+    ],
+    guest: "search, hot, read, comments, user, user-posts, transcript, download",
     guide: include_str!("../GUIDE.md"),
   };
 

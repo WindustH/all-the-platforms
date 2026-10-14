@@ -23,12 +23,14 @@ pub enum ChatCommand {
   },
   /// Messages of a chat, newest first
   Messages {
+    /// Chat: an id or link, or #N from the last list
     chat: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Send a message to a chat
   Send {
+    /// Chat: an id or link, or #N from the last list
     chat: String,
     /// Message text; `-` reads it from stdin
     #[arg(required_unless_present = "files")]
@@ -42,13 +44,16 @@ pub enum ChatCommand {
   },
   /// Members of a chat, group or server
   Members {
+    /// Chat, group or server: an id or link, or #N from the last list
     chat: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// React to a message or post with an emoji
   React {
+    /// Message or post: `CHAT/MESSAGE`, a link, or #N from the last list
     post: String,
+    /// The emoji (some platforms take a name or an id)
     emoji: String,
     /// Remove the reaction instead
     #[arg(long)]
@@ -56,6 +61,7 @@ pub enum ChatCommand {
   },
   /// Replace the text of one of your messages
   Edit {
+    /// Message: `CHAT/MESSAGE`, a link, or #N from the last list
     post: String,
     /// New text; `-` reads it from stdin
     text: String,

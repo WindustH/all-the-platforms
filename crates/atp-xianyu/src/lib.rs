@@ -26,7 +26,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo,
-  Post, QrStatus, QrTicket, Query, Result, User,
+  PlatformKind, Post, QrStatus, QrTicket, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -64,6 +64,10 @@ impl Platform for Xianyu {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(1500),
+    kind: PlatformKind::Shopping,
+    token: "",
+    env: &[],
+    guest: "hot, suggest",
     guide: include_str!("../GUIDE.md"),
   };
 

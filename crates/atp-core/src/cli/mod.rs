@@ -121,8 +121,9 @@ pub fn command<P: Platform>() -> clap::Command {
     .subcommand_required(true)
     .arg_required_else_help(true)
     .after_help(format!(
-      "Guide: `atp guide {}` (references, login, analytics, limits); `atp guide` for all topics.",
-      info.id
+      "Guide: `atp guide {id}` (references, login, analytics, limits), `atp guide {id} \
+       <command>` for one command, `atp guide` for all topics.",
+      id = info.id
     ));
   let own = extra_names::<P>();
   for (sub, alias) in ALIASES {

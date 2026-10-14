@@ -35,7 +35,7 @@ connection, one range at a time; the speed is the account's.
 
 - `ffmpeg` on PATH for merging, audio extraction from videos, and `--split`.
 - YouTube: some videos only serve full streams to clients with a
-  proof-of-origin token; all-the-platforms then asks `yt-dlp` (when installed) for
+  proof-of-origin token; ATP then asks `yt-dlp` (when installed) for
   the stream URLs. Install yt-dlp with a JavaScript runtime for those.
 
 The result lists every file with its kind, path and size.

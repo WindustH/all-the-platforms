@@ -20,7 +20,7 @@ use atp_core::http::Method;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Error, Media, Message, Notification, Page, PageReq,
-  Platform, PlatformInfo, Post, Query, Reply, Result, User, ValueExt, json,
+  Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User, ValueExt, json,
 };
 
 use crate::api::Api;
@@ -68,6 +68,10 @@ impl Platform for Matrix {
       notification_kind: &["all", "highlight"],
     },
     min_interval: Duration::from_millis(300),
+    kind: PlatformKind::Chat,
+    token: "HOMESERVER|ACCESS_TOKEN",
+    env: &["MATRIX_HOMESERVER", "MATRIX_ACCESS_TOKEN"],
+    guest: "public room directory: rooms, search -t topic; user",
     guide: include_str!("../GUIDE.md"),
   };
 

@@ -22,7 +22,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Media, Message, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
+  PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -66,6 +66,15 @@ impl Platform for Slack {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(300),
+    kind: PlatformKind::Chat,
+    token: "TOKEN|APP_TOKEN",
+    env: &[
+      "SLACK_TOKEN",
+      "SLACK_USER_TOKEN",
+      "SLACK_BOT_TOKEN",
+      "SLACK_APP_TOKEN",
+    ],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

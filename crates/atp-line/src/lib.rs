@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use atp_core::{
   Action, Cap, Choices, Ctx, Data, Insights, Media, Message, Page, PageReq, Platform, PlatformInfo,
-  Post, Result, User,
+  PlatformKind, Post, Result, User,
 };
 
 use crate::api::Api;
@@ -48,6 +48,10 @@ impl Platform for Line {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(100),
+    kind: PlatformKind::Chat,
+    token: "CHANNEL_ACCESS_TOKEN",
+    env: &["LINE_CHANNEL_ACCESS_TOKEN"],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

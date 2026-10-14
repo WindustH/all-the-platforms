@@ -20,7 +20,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo,
-  Post, Result, User,
+  PlatformKind, Post, Result, User,
 };
 
 use crate::api::Api;
@@ -54,6 +54,10 @@ impl Platform for Kook {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(200),
+    kind: PlatformKind::Chat,
+    token: "BOT_TOKEN",
+    env: &["KOOK_TOKEN"],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

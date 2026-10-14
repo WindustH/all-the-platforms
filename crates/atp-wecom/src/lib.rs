@@ -21,7 +21,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo,
-  Post, Result, User,
+  PlatformKind, Post, Result, User,
 };
 
 use crate::api::Api;
@@ -51,6 +51,16 @@ impl Platform for WeCom {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(250),
+    kind: PlatformKind::Chat,
+    token: "CORPID:SECRET:AGENTID",
+    env: &[
+      "WECOM_CORP_ID",
+      "WECOM_SECRET",
+      "WECOM_AGENT_ID",
+      "WECOM_BOT_ID",
+      "WECOM_BOT_SECRET",
+    ],
+    guest: "send to group robot webhooks",
     guide: include_str!("../GUIDE.md"),
   };
 

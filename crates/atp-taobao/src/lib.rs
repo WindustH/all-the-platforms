@@ -26,7 +26,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Message, Page, PageReq, Platform,
-  PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
+  PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -62,6 +62,10 @@ impl Platform for Taobao {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(2000),
+    kind: PlatformKind::Shopping,
+    token: "",
+    env: &[],
+    guest: "suggest",
     guide: include_str!("../GUIDE.md"),
   };
 

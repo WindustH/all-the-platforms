@@ -40,8 +40,8 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media, Message,
-  Notification, Page, PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply,
-  Result, User, ValueExt,
+  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket,
+  Query, Reply, Result, User, ValueExt,
 };
 
 use crate::api::Api;
@@ -129,6 +129,10 @@ impl Platform for Bilibili {
       notification_kind: &["reply", "at", "like"],
     },
     min_interval: Duration::from_millis(300),
+    kind: PlatformKind::Video,
+    token: "",
+    env: &[],
+    guest: "search, hot, read, comments, user, user-posts, live, listen, download",
     guide: include_str!("../GUIDE.md"),
   };
 

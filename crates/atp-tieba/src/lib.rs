@@ -28,7 +28,7 @@ use std::time::Duration;
 
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Notification, Page, PageReq,
-  Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 use api::Api;
@@ -82,6 +82,10 @@ impl Platform for Tieba {
       notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_secs(1),
+    kind: PlatformKind::Social,
+    token: "",
+    env: &[],
+    guest: "search, hot, forum, topic, read, comments, replies, user, user-posts",
     guide: include_str!("../GUIDE.md"),
   };
 

@@ -26,7 +26,8 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Media, Message, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
+  User,
 };
 
 use crate::api::Api;
@@ -76,6 +77,10 @@ impl Platform for Discord {
       notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_millis(800),
+    kind: PlatformKind::Chat,
+    token: "TOKEN",
+    env: &["DISCORD_TOKEN", "DISCORD_BOT_TOKEN"],
+    guest: "invite",
     guide: include_str!("../GUIDE.md"),
   };
 

@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Insights, Media, Page, PageReq, Platform,
-  PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -74,6 +74,15 @@ impl Platform for TikTok {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(1500),
+    kind: PlatformKind::Video,
+    token: "ACCESS_TOKEN",
+    env: &[
+      "TIKTOK_ADS_ACCESS_TOKEN",
+      "TIKTOK_ADS_APP_ID",
+      "TIKTOK_ADS_SECRET",
+      "TIKTOK_ADS_ADVERTISER_ID",
+    ],
+    guest: "read, user, download; search, comments and lists often refused",
     guide: include_str!("../GUIDE.md"),
   };
 

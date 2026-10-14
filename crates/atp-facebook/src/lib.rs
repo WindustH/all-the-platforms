@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Message, Notification,
-  Page, PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
+  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
 use atp_meta::graph::FACEBOOK;
@@ -76,6 +76,16 @@ impl Platform for Facebook {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(1500),
+    kind: PlatformKind::Social,
+    token: "ACCESS_TOKEN",
+    env: &[
+      "FACEBOOK_ACCESS_TOKEN",
+      "META_ACCESS_TOKEN",
+      "FACEBOOK_PAGE_ID",
+      "META_AD_ACCOUNT_ID",
+      "META_GRAPH_VERSION",
+    ],
+    guest: "user, user-posts, read, comments, group, group-posts, download",
     guide: include_str!("../GUIDE.md"),
   };
 

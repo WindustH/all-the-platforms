@@ -17,6 +17,7 @@ pub enum SearchKind {
 
 #[derive(Debug, clap::Args)]
 pub struct SearchArgs {
+  /// Search words
   pub query: String,
   /// What to search for
   #[arg(short = 't', long = "type", value_enum, default_value_t = SearchKind::Post)]
@@ -38,6 +39,7 @@ pub enum ReadCommand {
   Search(SearchArgs),
   /// Trending content
   Hot {
+    /// Board or category (values differ per platform)
     #[arg(short, long)]
     category: Option<String>,
     #[command(flatten)]
@@ -45,17 +47,23 @@ pub enum ReadCommand {
   },
   /// Your timeline / recommendations
   Feed {
+    /// Which feed (values differ per platform)
     #[arg(short = 't', long = "type")]
     kind: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Show one post
-  Read { post: String },
+  Read {
+    /// Post: an id, a link, or #N from the last list
+    post: String,
+  },
   /// Comments of a post
   #[command(after_long_help = EX_COMMENTS)]
   Comments {
+    /// Post: an id, a link, or #N from the last list
     post: String,
+    /// Comment order (values differ per platform)
     #[arg(short, long)]
     sort: Option<String>,
     /// Fetch every comment (ignores --limit)
@@ -69,12 +77,14 @@ pub enum ReadCommand {
   },
   /// Accounts that liked a post
   Likers {
+    /// Post: an id, a link, or #N from the last list
     post: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Reposts, retweets, quotes or crossposts of a post
   Reposts {
+    /// Post: an id, a link, or #N from the last list
     post: String,
     #[command(flatten)]
     page: PageArgs,
@@ -82,6 +92,7 @@ pub enum ReadCommand {
   /// Creator analytics of your account, or of one of your posts
   #[command(after_long_help = EX_INSIGHTS)]
   Insights {
+    /// One of your posts; your whole account when omitted
     post: Option<String>,
     /// Days of history for trends
     #[arg(short, long, default_value_t = 30)]
@@ -89,28 +100,36 @@ pub enum ReadCommand {
   },
   /// Replies under one comment
   Replies {
+    /// Post: an id, a link, or #N from the last list
     post: String,
+    /// The comment's id, as `comments` lists it
     comment: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Show a user profile
-  User { user: String },
+  User {
+    /// User: an id, a handle or a link, or #N from the last list
+    user: String,
+  },
   /// Posts of a user (yours when USER is omitted)
   #[command(after_long_help = EX_USER_POSTS)]
   UserPosts {
+    /// User: an id, a handle or a link, or #N; yours when omitted
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Followers of a user (yours when USER is omitted)
   Followers {
+    /// User: an id, a handle or a link, or #N; yours when omitted
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Accounts a user follows (yours when USER is omitted)
   Following {
+    /// User: an id, a handle or a link, or #N; yours when omitted
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,

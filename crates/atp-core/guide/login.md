@@ -3,6 +3,11 @@
 A session is a set of cookies (plus, for some platforms, tokens) saved per
 platform. Every command uses it automatically.
 
+`atp guide login <platform>` explains one platform in detail: every way
+in with its steps, where tokens come from, what each way unlocks, how long
+a session lasts, risk control and environment variables. The table at the
+end lists every platform.
+
 ## Ways to log in
 
     atp <platform> login              # QR code where supported, else the browser
@@ -20,6 +25,9 @@ platform. Every command uses it automatically.
   Arc). Only the platform's own domains are read. Log in on the website first.
 - **Cookie string**: copy the `Cookie` request header from the browser's
   developer tools (Network tab, any request to the site).
+- **Token**: bot tokens, API keys or app credentials, in the form each
+  platform names (`atp <platform> login --token '...'`; `-` reads it from
+  stdin). Several platforms also read them from environment variables.
 
 `login` verifies the session with `whoami` before saving it.
 
@@ -58,11 +66,11 @@ sessions are saved; cookies a platform refreshes are written back.
 
 ## Captchas and risk checks
 
-When a platform asks for a human check and atp runs on a terminal, it opens
+When a platform asks for a human check and ATP runs on a terminal, it opens
 the check in a browser instead of failing:
 
 1. Chrome, Chromium, Edge or Brave starts on a throwaway profile that
-   carries the atp session, through the same proxy as atp.
+   carries the ATP session, through the same proxy as ATP.
 2. Pass the check there, then press Enter in the terminal.
 3. The cookies the site set come back into the session (saved when logged
    in) and the command runs once more.
@@ -71,5 +79,5 @@ Without one of those browsers the page opens in the default browser and the
 command is retried as is; checks tied to the network clear that way, checks
 tied to cookies may need a new `login`. `ATP_BROWSER` picks the browser (a
 path or a command name). Pipes, scripts and `--no-verify` (`ATP_NO_VERIFY=1`)
-get the error with the page in `error.url` instead. atp never solves
+get the error with the page in `error.url` instead. ATP never solves
 captchas itself.

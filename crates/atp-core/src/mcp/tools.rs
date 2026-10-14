@@ -88,35 +88,10 @@ impl<'a> Tools<'a> {
     Ok(json!({"content": [{"type": "text", "text": text}], "isError": failed}))
   }
 
-  /// A guide topic, a platform's guide or one command's help.
+  /// A guide page: the index, a topic, `login [platform]`, a platform or
+  /// `platform command [sub...]`.
   fn help(&self, topic: &str) -> std::result::Result<String, String> {
-    if topic.is_empty() {
-      let platforms: Vec<_> = self
-        .app
-        .platforms()
-        .iter()
-        .map(|e| (e.info.id, e.info.name))
-        .collect();
-      return Ok(guide::index(&platforms));
-    }
-    if let Some(t) = guide::TOPICS.iter().find(|t| t.name == topic) {
-      return Ok(t.body.to_owned());
-    }
-    let mut words = topic.split_whitespace();
-    let entry = words
-      .next()
-      .and_then(|p| self.app.find(p))
-      .ok_or_else(|| format!("no topic or platform `{topic}`; call help without a topic"))?;
-    let Some(name) = words.next() else {
-      return Ok(guide::platform(&entry.info, &(entry.command)()));
-    };
-    let mut root = self.app.command();
-    root.build();
-    root
-      .find_subcommand_mut(entry.info.id)
-      .and_then(|p| p.find_subcommand_mut(name))
-      .map(|c| c.render_long_help().to_string())
-      .ok_or_else(|| format!("{} has no command `{name}`", entry.info.id))
+    guide::page(self.app, &[topic])
   }
 
   /// Run `platform command args...` and answer with its envelope.
@@ -217,12 +192,18 @@ fn help_tool() -> Value {
   json!({
     "name": "help",
     "title": "Read the guide",
-    "description": "Documentation: no topic lists the topics; a topic (start, login, refs, output, \
-      analysis, download, interact, mcp, config); a platform (`bili`) for its commands, references and \
-      limits; or a platform and command (`bili search`) for that command's options.",
+    "description": "ATP's documentation, as Markdown. No topic: the index. A topic: start, login, refs, \
+      output, analysis, download, interact, mcp, config. `login`: every platform's login ways; \
+      `login xhs`: how to log in to one platform, with steps, tokens, expiry and risks. A platform \
+      (`bili`): its commands, references, login and limits. A platform and command (`bili search`, \
+      `ncm playlist create`): usage, options, values, examples, what it means on every platform \
+      and the platform's notes. The same pages are resources under atp://guide/.",
     "inputSchema": {
       "type": "object",
-      "properties": {"topic": {"type": "string", "description": "Topic, platform, or `platform command`"}},
+      "properties": {"topic": {
+        "type": "string",
+        "description": "Empty, a topic, `login [platform]`, a platform, or `platform command [sub...]`",
+      }},
     },
     "annotations": {"readOnlyHint": true, "openWorldHint": false},
   })

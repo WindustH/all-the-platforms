@@ -21,8 +21,8 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo, Post, Result,
-  User,
+  Action, Cap, Choices, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo, PlatformKind,
+  Post, Result, User,
 };
 
 use crate::api::Api;
@@ -51,6 +51,17 @@ impl Platform for DingTalk {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(250),
+    kind: PlatformKind::Chat,
+    token: "APPKEY:APPSECRET",
+    env: &[
+      "DINGTALK_APP_KEY",
+      "DINGTALK_APP_SECRET",
+      "DINGTALK_CLIENT_ID",
+      "DINGTALK_CLIENT_SECRET",
+      "DINGTALK_ROBOT_CODE",
+      "DINGTALK_WEBHOOK_SECRET",
+    ],
+    guest: "send to group robot webhooks",
     guide: include_str!("../GUIDE.md"),
   };
 

@@ -23,7 +23,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Media, Message, Page, PageReq, Platform,
-  PlatformInfo, Post, Query, Reply, Result, User,
+  PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -65,6 +65,10 @@ impl Platform for RocketChat {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(200),
+    kind: PlatformKind::Chat,
+    token: "SERVER|USER_ID|TOKEN",
+    env: &["ROCKETCHAT_URL", "ROCKETCHAT_USER_ID", "ROCKETCHAT_TOKEN"],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

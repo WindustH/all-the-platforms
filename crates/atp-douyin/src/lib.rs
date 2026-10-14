@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use atp_core::{
   Cap, Choices, Collection, Comment, Ctx, Data, Media, Notification, Page, PageReq, Platform,
-  PlatformInfo, Post, Query, Result, User,
+  PlatformInfo, PlatformKind, Post, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -68,6 +68,10 @@ impl Platform for Douyin {
       notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_millis(800),
+    kind: PlatformKind::Video,
+    token: "",
+    env: &[],
+    guest: "hot, user, read, download (via the share page)",
     guide: include_str!("../GUIDE.md"),
   };
 

@@ -28,7 +28,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Error, Insights, Message, Notification,
-  Page, PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
+  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 use atp_meta::graph::{self, host_for};
 
@@ -80,6 +80,16 @@ impl Platform for Instagram {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(2500),
+    kind: PlatformKind::Social,
+    token: "ACCESS_TOKEN",
+    env: &[
+      "INSTAGRAM_ACCESS_TOKEN",
+      "META_ACCESS_TOKEN",
+      "INSTAGRAM_USER_ID",
+      "META_AD_ACCOUNT_ID",
+      "META_GRAPH_VERSION",
+    ],
+    guest: "public accounts: user, read, first comments, latest user-posts",
     guide: include_str!("../GUIDE.md"),
   };
 
