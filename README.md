@@ -89,6 +89,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Xianyu 闲鱼 | `xianyu` | second-hand items, sellers, favorites, chats | QR, browser |
 | | JD 京东 | `jd` | items with prices, reviews, shops, hot words | browser |
 | | Pinduoduo 拼多多 | `pdd` | goods, reviews, shops, home feed | browser, 多多进宝 |
+| | Dewu / POIZON 得物 | `dewu` | community posts, no-watermark videos, Open Platform prices and sales | key |
 | | Meituan 美团 | `meituan` | 联盟 deals and rankings, shop reviews, city lookup | key, browser |
 | | Dianping 大众点评 | `dianping` | shops, scores, reviews, discovery notes | QR, browser |
 | Maps | Amap 高德地图 | `amap` | places, geocoding, routes, weather, traffic | key |
