@@ -90,7 +90,6 @@ COMING = [
     ("Google", "Google Search", "google", "#4285F4"),
     ("Bing", "Bing", "app:345323231@us", ""),
     ("DuckDuckGo", "DuckDuckGo", "duckduckgo", "#DE5833"),
-    ("SearXNG", "SearXNG", "searxng", "#3050FF"),
     ("Stack Overflow", "Stack Overflow", "stackoverflow", "#F58025"),
     ("Hacker News", "Hacker News", "ycombinator", "#F0652F"),
     ("Lobsters", "Lobsters", "lobsters", "#AC130D"),
