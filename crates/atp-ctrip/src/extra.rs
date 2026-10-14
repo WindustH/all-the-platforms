@@ -13,17 +13,24 @@ use crate::{cities, rankings, refs, search, trains};
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Destinations, stations and hotels suggested for a keyword
+  #[command(after_long_help = EX_SUGGEST)]
   Suggest {
+    /// Words to look up (a city, sight, station or hotel name)
     keyword: String,
     /// Places of the hotel search (hotels, business areas) instead of destinations
     #[arg(long)]
     hotels: bool,
   },
   /// Places of a name, with the district id (sights, rankings) and the city id (hotels)
-  Cities { name: String },
+  Cities {
+    /// City or place name (杭州)
+    name: String,
+  },
   /// A city's sights: score, reviews, heat, level and ticket price
+  #[command(after_long_help = EX_SIGHTS)]
   Sights(SightsArgs),
   /// One sight in full: scores, hours, tickets, phones, coordinates and photos
+  #[command(after_long_help = EX_SIGHT)]
   Sight {
     /// Sight id, link, poi:ID or #N
     sight: String,
@@ -46,19 +53,66 @@ pub enum Command {
     hotel: String,
   },
   /// Room plans and prices for a stay (needs a login)
+  #[command(after_long_help = EX_ROOMS)]
   Rooms(RoomsArgs),
   /// The day's trains between two stations or cities: seats, fares, tickets left
+  #[command(after_long_help = EX_TRAINS)]
   Trains(TrainArgs),
   /// The day's plans with one change (train and train, or a flight and a train)
   Transfers(TransferArgs),
   /// The lowest one-way flight fare of each day between two cities
+  #[command(after_long_help = EX_FARES)]
   Fares(FareArgs),
 }
+
+const EX_SUGGEST: &str = "\
+Examples:
+  atp ctrip suggest 西湖
+  atp ctrip suggest 外滩 --hotels
+
+More: atp guide ctrip suggest";
+
+const EX_SIGHTS: &str = "\
+Examples:
+  atp ctrip sights 杭州 --sort rating
+  atp ctrip sights 14 --5a --free
+
+More: atp guide ctrip sights";
+
+const EX_SIGHT: &str = "\
+Examples:
+  atp ctrip sight 49894
+  atp ctrip sight poi:82922
+  atp ctrip sight '#3'
+
+More: atp guide ctrip sight";
+
+const EX_ROOMS: &str = "\
+Examples:
+  atp ctrip rooms 445394
+  atp ctrip rooms hotel:445394 --checkin 2026-11-01 --checkout 2026-11-03 --adults 1
+
+More: atp guide ctrip rooms";
+
+const EX_TRAINS: &str = "\
+Examples:
+  atp ctrip trains 上海 北京
+  atp ctrip trains 上海虹桥 杭州东 --date 2026-11-01
+
+More: atp guide ctrip trains";
+
+const EX_FARES: &str = "\
+Examples:
+  atp ctrip fares 上海 成都
+  atp ctrip fares SHA CTU --date 2026-12-01 --direct
+
+More: atp guide ctrip fares";
 
 #[derive(Debug, clap::Args)]
 pub struct SightsArgs {
   /// City name or district id
   city: String,
+  /// Order of the list
   #[arg(long, default_value = "default", value_parser = ["default", "rating", "hot", "sales"])]
   sort: String,
   /// Only 5A sights
@@ -85,6 +139,7 @@ pub struct RoomsArgs {
   hotel: String,
   #[command(flatten)]
   stay: StayArgs,
+  /// Adults staying
   #[arg(long, default_value_t = 2)]
   adults: u8,
 }

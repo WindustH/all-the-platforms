@@ -12,9 +12,12 @@ use crate::deals::{self, Filter, Rank, Sort};
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// The city (Meituan's and Dianping's ids), district and business area at a point, or where an IP address is
+  #[command(after_long_help = EX_LOCATE)]
   Locate {
+    /// Latitude of the point
     #[arg(allow_negative_numbers = true, required_unless_present = "ip")]
     lat: Option<f64>,
+    /// Longitude of the point
     #[arg(allow_negative_numbers = true, required_unless_present = "ip")]
     lng: Option<f64>,
     /// Locate an IP address instead (yours when none is given; mainland China only)
@@ -22,6 +25,7 @@ pub enum Command {
     ip: Option<String>,
   },
   /// A city's districts, or one district's business areas (ids for `deals --area`)
+  #[command(after_long_help = EX_AREAS)]
   Areas {
     /// Meituan city id (from `locate`)
     city: String,
@@ -32,8 +36,32 @@ pub enum Command {
     page: PageArgs,
   },
   /// Deals from the 美团联盟 API: a ranking, a list or a search, in a city or near a point
+  #[command(after_long_help = EX_DEALS)]
   Deals(DealsArgs),
 }
+
+const EX_LOCATE: &str = "\
+Examples:
+  atp mt locate 31.2304 121.4737
+  atp mt locate --ip
+  atp mt locate --ip 114.114.114.114
+
+More: atp guide mt locate";
+
+const EX_AREAS: &str = "\
+Examples:
+  atp mt areas 10
+  atp mt areas 10 --district 浦东新区
+
+More: atp guide mt areas";
+
+const EX_DEALS: &str = "\
+Examples:
+  atp mt deals 火锅 --city 10
+  atp mt deals --rank picks
+  atp mt deals --store --near 31.2304,121.4737 --sort sales
+
+More: atp guide mt deals";
 
 #[derive(Debug, clap::Args)]
 pub struct DealsArgs {
@@ -54,6 +82,7 @@ pub struct DealsArgs {
   /// LAT,LNG to list around (Meituan answers for Beijing without one)
   #[arg(long, value_parser = point, allow_hyphen_values = true)]
   near: Option<(f64, f64)>,
+  /// Order of the list (lists without words ignore commission; searches take price only)
   #[arg(long, value_enum)]
   sort: Option<Sort>,
   #[command(flatten)]

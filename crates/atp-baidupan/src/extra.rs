@@ -26,26 +26,38 @@ pub enum Command {
     page: PageArgs,
   },
   /// Create a folder
+  #[command(after_long_help = EX_MKDIR)]
   Mkdir {
+    /// Path of the new folder (`/Movies/2024`)
     path: String,
     /// Create the folders above it too
     #[arg(short, long)]
     parents: bool,
   },
   /// Move files and folders into a folder: `mv SRC… DEST`
+  #[command(after_long_help = EX_MV)]
   Mv {
+    /// Paths, file ids or #N to move, then the folder to move them into
     #[arg(value_name = "PATH", num_args = 2.., required = true)]
     paths: Vec<String>,
   },
   /// Copy files and folders into a folder: `cp SRC… DEST`
   Cp {
+    /// Paths, file ids or #N to copy, then the folder to copy them into
     #[arg(value_name = "PATH", num_args = 2.., required = true)]
     paths: Vec<String>,
   },
   /// Rename a file or folder
-  Rename { path: String, name: String },
+  Rename {
+    /// A path, file id or #N
+    path: String,
+    /// The new name (not a path)
+    name: String,
+  },
   /// Upload local files through the open platform (at once when the drive holds them already)
+  #[command(after_long_help = EX_UPLOAD)]
   Upload {
+    /// Local files to upload (up to 4 GB each)
     #[arg(required = true)]
     files: Vec<PathBuf>,
     /// Folder to upload into (default: the root)
@@ -56,7 +68,9 @@ pub enum Command {
     overwrite: bool,
   },
   /// Share files and folders in one link with an extraction code
+  #[command(after_long_help = EX_SHARE)]
   Share {
+    /// Paths, file ids or #N to share
     #[arg(value_name = "PATH", required = true)]
     paths: Vec<String>,
     /// Days the link works: 0 (no end), 1, 7 or 30
@@ -73,12 +87,15 @@ pub enum Command {
   },
   /// Cancel shares by their ids from `shares`
   Unshare {
+    /// Share ids or #N from `shares`
     #[arg(required = true)]
     ids: Vec<String>,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// Save everything in someone's share into your drive (转存)
+  #[command(after_long_help = EX_SAVE)]
   Save {
     /// Share link (`https://pan.baidu.com/s/1…`)
     url: String,
@@ -90,11 +107,13 @@ pub enum Command {
     to: Option<String>,
   },
   /// List what someone's share holds
-  #[command(name = "share-ls")]
+  #[command(name = "share-ls", after_long_help = EX_SHARE_LS)]
   ShareLs {
+    /// Share link (`https://pan.baidu.com/s/1…`, `?pwd=` or `提取码` included or not)
     url: String,
     /// A folder inside the share: its path from an earlier `share-ls`, or `#N`
     dir: Option<String>,
+    /// The share's extraction code
     #[arg(long, value_name = "CODE")]
     pwd: Option<String>,
     #[command(flatten)]
@@ -107,27 +126,32 @@ pub enum Command {
   },
   /// Restore entries of the recycle bin by their ids from `trash`
   Restore {
+    /// File ids or #N from `trash`
     #[arg(required = true)]
     ids: Vec<String>,
   },
   /// Delete entries of the recycle bin for good
   Purge {
+    /// File ids or #N from `trash`
     #[arg(required = true)]
     ids: Vec<String>,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// Storage used and left
   Quota,
   /// Offline downloads: Baidu fetches links (http, magnet, ed2k …) into your drive
-  #[command(subcommand)]
+  #[command(subcommand, after_long_help = EX_OFFLINE)]
   Offline(Offline),
 }
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Offline {
   /// Hand links to Baidu to fetch into your drive
+  #[command(after_long_help = EX_OFFLINE_ADD)]
   Add {
+    /// Links to fetch: http(s), ftp, magnet or ed2k
     #[arg(value_name = "URL", required = true)]
     urls: Vec<String>,
     /// Folder to save into (default: the root)
@@ -141,12 +165,71 @@ pub enum Offline {
   },
   /// Cancel offline downloads by their ids from `offline list`
   Cancel {
+    /// Task ids or #N from `offline list`
     #[arg(required = true)]
     ids: Vec<String>,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
 }
+
+const EX_MKDIR: &str = "\
+Examples:
+  atp baidupan mkdir /Movies
+  atp baidupan mkdir /Movies/2024/Summer -p
+
+More: atp guide baidupan mkdir";
+
+const EX_MV: &str = "\
+Examples:
+  atp baidupan mv /Downloads/a.mkv /Movies
+  atp baidupan mv '#1' '#2' /Archive
+
+More: atp guide baidupan mv";
+
+const EX_UPLOAD: &str = "\
+Examples:
+  atp baidupan upload movie.mkv
+  atp baidupan upload *.jpg --to /Photos --overwrite
+
+More: atp guide baidupan upload";
+
+const EX_SHARE: &str = "\
+Examples:
+  atp baidupan share /Movies/a.mkv
+  atp baidupan share /Photos /Docs --expire 0 --pwd ab12
+
+More: atp guide baidupan share";
+
+const EX_SAVE: &str = "\
+Examples:
+  atp baidupan save 'https://pan.baidu.com/s/1AbCdEf?pwd=ab12'
+  atp baidupan save https://pan.baidu.com/s/1AbCdEf --pwd ab12 --to /Saved
+
+More: atp guide baidupan save";
+
+const EX_SHARE_LS: &str = "\
+Examples:
+  atp baidupan share-ls https://pan.baidu.com/s/1AbCdEf --pwd ab12
+  atp baidupan share-ls https://pan.baidu.com/s/1AbCdEf '#2' --pwd ab12
+
+More: atp guide baidupan share-ls";
+
+const EX_OFFLINE: &str = "\
+Examples:
+  atp baidupan offline add 'magnet:?xt=urn:btih:...' --to /Downloads
+  atp baidupan offline list
+  atp baidupan offline cancel '#1'
+
+More: atp guide baidupan offline";
+
+const EX_OFFLINE_ADD: &str = "\
+Examples:
+  atp baidupan offline add https://example.com/file.iso
+  atp baidupan offline add 'magnet:?xt=urn:btih:...' --to /Downloads
+
+More: atp guide baidupan offline add";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
