@@ -47,6 +47,7 @@ impl Platform for Xianyu {
     caps: &[
       Cap::QrLogin,
       Cap::Search,
+      Cap::Hot,
       Cap::Feed,
       Cap::Read,
       Cap::User,
@@ -90,6 +91,10 @@ impl Platform for Xianyu {
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
     search::search(&self.api, query, page).await
+  }
+
+  async fn hot(&self, _category: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
+    search::hot(&self.api, page).await
   }
 
   async fn feed(&self, _kind: Option<&str>, page: &PageReq) -> Result<Page<Post>> {

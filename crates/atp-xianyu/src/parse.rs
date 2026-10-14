@@ -5,7 +5,7 @@ use atp_alibaba::text::{beijing, https, price};
 use atp_core::text::{from_unix, parse_count};
 use atp_core::{Comment, Extra, Media, Metrics, Post, User, UserStats, Value, ValueExt, json};
 
-use crate::api::{item_url, user_url};
+use crate::api::{item_url, search_url, user_url};
 
 fn image(url: Option<String>, width: Option<u64>, height: Option<u64>) -> Option<Media> {
   let mut media = Media::image(https(url?));
@@ -307,4 +307,18 @@ pub fn push(decoded: &Value) -> Option<Value> {
     "content": {"contentType": 101, "custom": {"data": m.at("6.3.5"), "summary": m.at("6.3.2")}},
     "extension": ext,
   }}))
+}
+
+/// A search word (`kind` `keyword`) under the first of `keys` it has,
+/// linking to its search.
+pub fn keyword(v: &Value, keys: &[&str]) -> Option<Post> {
+  let text = v.first_str(keys).filter(|t| !t.trim().is_empty())?;
+  Some(Post {
+    id: text.clone(),
+    kind: "keyword".into(),
+    url: Some(search_url(&text)),
+    title: Some(text),
+    raw: Some(v.clone()),
+    ..Post::default()
+  })
 }
