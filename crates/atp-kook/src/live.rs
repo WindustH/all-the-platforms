@@ -70,7 +70,7 @@ async fn session(api: &Api, me: &str, wanted: &HashSet<String>, out: &Stream) ->
               sn = n;
             }
             if let Some(post) = event(v.at("d"), me)
-              && (wanted.is_empty() || post.extra.get("chat").and_then(Value::as_str).is_some_and(|c| wanted.contains(c)))
+              && wanted_post(wanted, &post)
             {
               out.post(&post);
             }
@@ -90,6 +90,15 @@ async fn session(api: &Api, me: &str, wanted: &HashSet<String>, out: &Stream) ->
       }
     }
   }
+}
+
+/// Whether `post` is in a chat `listen` was asked for: its channel or
+/// direct chat (`extra.chat`), or its server (`guild:<extra.guild>`).
+fn wanted_post(wanted: &HashSet<String>, post: &Post) -> bool {
+  let field = |key: &str| post.extra.get(key).and_then(Value::as_str);
+  wanted.is_empty()
+    || field("chat").is_some_and(|c| wanted.contains(c))
+    || field("guild").is_some_and(|g| wanted.contains(&Chat::Guild(g.to_owned()).id()))
 }
 
 /// A gateway event as a post, or `None` for events not about messages.
@@ -160,8 +169,11 @@ fn system_event(d: &Value, chat: Chat, direct: bool) -> Option<Post> {
     _ => return None,
   };
   let message = body.str("msg_id").unwrap_or_default();
-  let chat = match body.str("channel_id") {
-    Some(c) if !direct => Chat::Channel(c),
+  // In servers the target of a system event is the server itself.
+  let guild = (!direct).then(|| d.str("target_id")).flatten();
+  let chat = match (body.str("channel_id"), &guild) {
+    (Some(c), _) if !direct => Chat::Channel(c),
+    (None, Some(g)) => Chat::Guild(g.clone()),
     _ => chat,
   };
   let mut post = Post {
@@ -179,6 +191,9 @@ fn system_event(d: &Value, chat: Chat, direct: bool) -> Option<Post> {
   };
   post.extra.insert("chat".into(), json!(chat.id()));
   post.extra.insert("message_id".into(), json!(message));
+  if let Some(g) = guild {
+    post.extra.insert("guild".into(), json!(g));
+  }
   if let Some(e) = body.str("emoji.name").or_else(|| body.str("emoji.id")) {
     post.extra.insert("emoji".into(), json!(e));
   }

@@ -65,8 +65,9 @@ Takes an emoji or a server emoji id; `--undo` removes the reaction.
 ### listen
 
 Messages, edits, deletions, reactions (added and removed), joins and leaves
-as they happen, through KOOK's websocket gateway. Filter by channel ids or
-`dm:<user id>`. A closed connection is re-opened; after three failed
+as they happen, through KOOK's websocket gateway. Filter by channel ids,
+`dm:<user id>`, or `guild:<id>` for every channel of a server (its joins
+and leaves too). A closed connection is re-opened; after three failed
 connections in a row `listen` stops with the error.
 
 ### server, roles
