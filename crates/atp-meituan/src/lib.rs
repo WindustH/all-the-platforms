@@ -22,8 +22,8 @@ mod users;
 use std::time::Duration;
 
 use atp_core::{
-  Cap, Choices, Comment, Ctx, Data, Error, Insights, Page, PageReq, Platform, PlatformInfo, Post,
-  Query, Result, User,
+  Cap, Choices, Comment, Ctx, Data, Error, Insights, Page, PageReq, Platform, PlatformInfo,
+  PlatformKind, Post, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -56,6 +56,10 @@ impl Platform for Meituan {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(2000),
+    kind: PlatformKind::Local,
+    token: "APP_KEY:APP_SECRET",
+    env: &["MEITUAN_APP_KEY", "MEITUAN_APP_SECRET"],
+    guest: "locate, areas",
     guide: include_str!("../GUIDE.md"),
   };
 

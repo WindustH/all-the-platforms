@@ -15,6 +15,17 @@ Examples:
   atp tiktok ads campaigns
   atp tiktok ads report --days 30 -f csv > report.csv";
 
+const EX_SOUND: &str = "\
+Examples:
+  atp tiktok sound https://www.tiktok.com/music/original-sound-7215829446516345602
+  atp tiktok sound 7215829446516345602 --info";
+
+const EX_PLAYLIST: &str = "\
+Examples:
+  atp tiktok playlists tiktok          # a creator's playlists
+  atp tiktok playlist https://www.tiktok.com/@tiktok/playlist/Trends-7212345678901234567
+  atp tiktok playlist 7212345678901234567 --info";
+
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Videos of a hashtag
@@ -25,6 +36,7 @@ pub enum Command {
     page: PageArgs,
   },
   /// Videos using a sound (or the sound itself with --info)
+  #[command(after_long_help = EX_SOUND)]
   Sound {
     /// Sound id or /music/ link
     sound: String,
@@ -35,9 +47,11 @@ pub enum Command {
     page: PageArgs,
   },
   /// Videos of a playlist (or the playlist itself with --info)
+  #[command(after_long_help = EX_PLAYLIST)]
   Playlist {
     /// Playlist id or link
     playlist: String,
+    /// Show the playlist instead of its videos
     #[arg(long)]
     info: bool,
     #[command(flatten)]
@@ -45,12 +59,14 @@ pub enum Command {
   },
   /// A creator's playlists (yours when USER is omitted)
   Playlists {
+    /// Creator: handle, @handle, profile link or secUid
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Videos TikTok recommends next to one
   Related {
+    /// Video: id, link or short link
     video: String,
     #[command(flatten)]
     page: PageArgs,

@@ -14,7 +14,9 @@ use crate::{discover, dynamics, insights, media, users, videos};
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Give coins to a video
+  #[command(after_long_help = EX_COIN)]
   Coin {
+    /// Video: BV… or av… id, link, b23.tv short link or #N
     video: String,
     /// Number of coins
     #[arg(short = 'n', long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=2))]
@@ -24,26 +26,40 @@ pub enum Command {
     like: bool,
   },
   /// Like, coin and favorite a video at once
-  Triple { video: String },
+  Triple {
+    /// Video: BV… or av… id, link, b23.tv short link or #N
+    video: String,
+  },
   /// Subtitles of a video (most tracks need a login)
+  #[command(after_long_help = EX_SUBTITLE)]
   Subtitle {
+    /// Video: BV… or av… id, link (`?p=N` for a part), b23.tv short link or #N
     video: String,
     /// Track language, e.g. zh-CN, ai-zh, en
     #[arg(long)]
     lang: Option<String>,
   },
   /// AI summary and outline of a video
-  Summary { video: String },
+  Summary {
+    /// Video: BV… or av… id, link (`?p=N` for a part), b23.tv short link or #N
+    video: String,
+  },
   /// Danmaku (bullet comments) of a video
-  Danmaku { video: String },
+  Danmaku {
+    /// Video: BV… or av… id, link (`?p=N` for a part), b23.tv short link or #N
+    video: String,
+  },
   /// Videos related to a video
   Related {
+    /// Video: BV… or av… id, link, b23.tv short link or #N
     video: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Ranking board: the whole site, or one region (see `hot --category`)
+  #[command(after_long_help = EX_RANK)]
   Rank {
+    /// One region's board instead of the whole site's
     #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(videos::HOT_CATEGORIES))]
     region: Option<String>,
     #[command(flatten)]
@@ -53,7 +69,7 @@ pub enum Command {
   WatchLater,
   /// Your videos side by side with creator-center numbers (3-second bounce,
   /// share watched, follows, click-through rank ...)
-  #[command(visible_alias = "my-videos")]
+  #[command(visible_alias = "my-videos", after_long_help = EX_VIDEO_STATS)]
   VideoStats {
     /// Only these videos (at most 10); default: the latest ones
     videos: Vec<String>,
@@ -70,11 +86,39 @@ pub enum Command {
   /// Dynamics of a user (yours when USER is omitted)
   #[command(visible_alias = "my-dynamics")]
   Dynamics {
+    /// User: mid, `uid:MID`, space link, name or #N; yours when omitted
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
 }
+
+const EX_COIN: &str = "\
+Examples:
+  atp bili coin BV1xx411c7mD
+  atp bili coin BV1xx411c7mD -n 2 --like
+
+More: atp guide bili coin";
+
+const EX_SUBTITLE: &str = "\
+Examples:
+  atp bili subtitle BV1xx411c7mD
+  atp bili subtitle 'https://www.bilibili.com/video/BV1xx411c7mD?p=2' --lang ai-zh
+
+More: atp guide bili subtitle";
+
+const EX_RANK: &str = "\
+Examples:
+  atp bili rank
+  atp bili rank --region game -n 50";
+
+const EX_VIDEO_STATS: &str = "\
+Examples:
+  atp bili video-stats
+  atp bili video-stats -n 30 -f csv
+  atp bili video-stats BV1xx411c7mD '#2'
+
+More: atp guide bili insights";
 
 async fn video_ref(api: &Api, arg: &str) -> Result<Video> {
   refs::video(api, &api.ctx.post_ref(arg)?).await

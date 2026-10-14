@@ -13,13 +13,20 @@ pub enum AccountCommand {
   Me,
   /// Ad accounts the token can use
   Accounts {
+    /// How many accounts (0 = all)
     #[arg(short = 'n', long, default_value_t = 100)]
     limit: usize,
   },
   /// Details of ad accounts (default: the current one)
-  Account { ids: Vec<String> },
+  Account {
+    /// Ad account ids (`act_` optional)
+    ids: Vec<String>,
+  },
   /// Remember the ad account to use by default
-  Use { account: String },
+  Use {
+    /// Ad account id (`act_` optional)
+    account: String,
+  },
 }
 
 pub async fn run(ctx: &Ctx, graph: &Graph<'_>, command: AccountCommand) -> Result<Data> {

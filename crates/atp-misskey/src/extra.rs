@@ -13,11 +13,14 @@ use crate::search;
 pub enum Command {
   /// Renote (boost) a note, or take the renote back with --undo
   Renote {
+    /// Note: id, /notes/ link or #N
     note: String,
+    /// Take your renote back
     #[arg(long)]
     undo: bool,
   },
   /// Write a note with every option Misskey has
+  #[command(after_long_help = EX_NOTE)]
   Note {
     /// Text; `-` reads it from stdin
     text: Option<String>,
@@ -30,8 +33,10 @@ pub enum Command {
     /// Keep it on this server (no federation)
     #[arg(long)]
     local_only: bool,
+    /// Reply to this note (id, link or #N)
     #[arg(long, value_name = "NOTE")]
     reply_to: Option<String>,
+    /// Quote this note (id, link or #N)
     #[arg(long, value_name = "NOTE")]
     quote: Option<String>,
     /// Attach a file (repeatable)
@@ -42,6 +47,7 @@ pub enum Command {
   Trends,
   /// Notes with a hashtag
   Tag {
+    /// Hashtag, with or without the `#`
     tag: String,
     #[command(flatten)]
     page: PageArgs,
@@ -54,6 +60,14 @@ pub enum Command {
   /// The instance: name, version, limits and counts
   Instance,
 }
+
+const EX_NOTE: &str = "\
+Examples:
+  atp misskey note 'Spoilers inside' --cw 'Film ending'
+  atp misskey note 'Only for followers' --visibility followers --local-only
+  atp misskey note 'Same here' --reply-to '#2' -i photo.jpg
+
+More: atp guide misskey note";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

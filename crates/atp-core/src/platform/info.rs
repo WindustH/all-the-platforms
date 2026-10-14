@@ -52,14 +52,90 @@ pub struct PlatformInfo {
   pub choices: Choices,
   /// Minimum gap between requests (anti-bot pacing); zero disables it.
   pub min_interval: Duration,
-  /// Markdown notes appended to the generated `atp guide <id>` topic:
-  /// reference formats, login notes, analytics, limits.
+  /// The group `atp platforms` and the guide list it under.
+  pub kind: PlatformKind,
+  /// What `login --token` takes, as a placeholder (`BOT_TOKEN`,
+  /// `APP_ID:APP_SECRET`); empty without [`Cap::TokenLogin`].
+  pub token: &'static str,
+  /// Environment variables with credentials or login settings, besides
+  /// the `ATP_<ID>_COOKIE` every cookie platform reads.
+  pub env: &'static [&'static str],
+  /// What works without logging in, in a few words for `atp guide login`
+  /// (`"search, read, comments, users, download"`, `"nothing"`).
+  pub guest: &'static str,
+  /// The crate's `GUIDE.md`: `## Logging in`, `## References`, notes per
+  /// command under `## Commands` (`### search`, `### playlist create`),
+  /// `## Limits`. `atp guide` shows it whole or section by section.
   pub guide: &'static str,
+}
+
+/// What a platform is for; groups `atp platforms` and the guide index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlatformKind {
+  Social,
+  Video,
+  Chat,
+  Shopping,
+  Local,
+  Drive,
+  Music,
+}
+
+impl PlatformKind {
+  pub const ALL: &[PlatformKind] = &[
+    Self::Social,
+    Self::Video,
+    Self::Chat,
+    Self::Shopping,
+    Self::Local,
+    Self::Drive,
+    Self::Music,
+  ];
+
+  /// Lowercase name, as in `atp platforms --json`.
+  pub fn name(self) -> &'static str {
+    match self {
+      Self::Social => "social",
+      Self::Video => "video",
+      Self::Chat => "chat",
+      Self::Shopping => "shopping",
+      Self::Local => "local",
+      Self::Drive => "drive",
+      Self::Music => "music",
+    }
+  }
+
+  /// Heading for people.
+  pub fn title(self) -> &'static str {
+    match self {
+      Self::Social => "Social and news",
+      Self::Video => "Video",
+      Self::Chat => "Chat",
+      Self::Shopping => "Shopping",
+      Self::Local => "Maps, local life and travel",
+      Self::Drive => "Cloud drives",
+      Self::Music => "Music",
+    }
+  }
 }
 
 impl PlatformInfo {
   pub fn supports(&self, cap: Cap) -> bool {
     self.caps.contains(&cap)
+  }
+
+  /// The ways to log in as single words: `QR`, `token`, `browser`, `cookie`.
+  pub fn login_words(&self) -> Vec<&'static str> {
+    let cookies = !self.cookie_domains.is_empty();
+    [
+      (self.supports(Cap::QrLogin), "QR"),
+      (self.supports(Cap::TokenLogin), "token"),
+      (cookies && cfg!(feature = "browser"), "browser"),
+      (cookies, "cookie"),
+    ]
+    .into_iter()
+    .filter_map(|(on, word)| on.then_some(word))
+    .collect()
   }
 
   /// Every way to log in, as commands: `atp <id> login` (QR code),
@@ -72,7 +148,12 @@ impl PlatformInfo {
       ways.push(format!("`atp {id} login` (QR code)"));
     }
     if self.supports(Cap::TokenLogin) {
-      ways.push(format!("`atp {id} login --token '...'`"));
+      let token = if self.token.is_empty() {
+        "..."
+      } else {
+        self.token
+      };
+      ways.push(format!("`atp {id} login --token '{token}'`"));
     }
     if cookies && cfg!(feature = "browser") {
       ways.push(format!("`atp {id} login --browser`"));

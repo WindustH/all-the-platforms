@@ -12,6 +12,7 @@ pub enum FollowerCommand {
   Tags,
   /// Followers carrying a tag (API, verified accounts)
   Tagged {
+    /// Tag: its id, from `tags`, or #N
     tag: String,
     #[command(flatten)]
     page: PageArgs,

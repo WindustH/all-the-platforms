@@ -11,6 +11,7 @@ use crate::platform::{Cap, Platform};
 
 #[derive(Debug, clap::Args)]
 pub struct DownloadArgs {
+  /// Post: an id, a link, or #N from the last list
   pub post: String,
   /// Directory to save into
   #[arg(short = 'o', long, default_value = ".")]

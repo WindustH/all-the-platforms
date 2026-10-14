@@ -17,6 +17,7 @@ pub enum Command {
   Nearby(NearbyArgs),
   /// Address → coordinates
   Geocode {
+    /// Address to look up
     address: String,
     /// Narrow the search to a city (name, citycode or adcode)
     #[arg(long)]
@@ -31,20 +32,26 @@ pub enum Command {
     pois: bool,
   },
   /// Route between two places: distance, time, tolls and steps
+  #[command(after_long_help = EX_ROUTE)]
   Route(RouteArgs),
   /// Distances from one or more places to a destination
+  #[command(after_long_help = EX_DISTANCE)]
   Distance {
     /// LNG,LAT or place names (up to 100)
     #[arg(required = true, num_args = 1..=100)]
     from: Vec<String>,
+    /// Destination: LNG,LAT or a place name
     #[arg(long)]
     to: String,
+    /// Straight-line, driving or walking distance
     #[arg(long, value_enum, default_value_t = Measure::Straight)]
     mode: Measure,
   },
   /// Suggestions for a keyword as you type it
   Tips {
+    /// The keyword typed so far
     keyword: String,
+    /// Keep suggestions inside a city (name, citycode or adcode)
     #[arg(long)]
     city: Option<String>,
     /// LNG,LAT to rank nearby suggestions first
@@ -60,20 +67,27 @@ pub enum Command {
     depth: u8,
   },
   /// Where an IP address is (yours by default; mainland China only)
-  Ip { ip: Option<String> },
+  Ip {
+    /// IP address to locate
+    ip: Option<String>,
+  },
   /// Weather now, or the forecast for the next days
   Weather {
     /// City or district name, or its adcode
     city: String,
+    /// The forecast for the next four days instead of the weather now
     #[arg(long)]
     forecast: bool,
   },
   /// Live traffic on a road, in a rectangle or around a point
+  #[command(after_long_help = EX_TRAFFIC)]
   Traffic(TrafficArgs),
   /// Convert GPS, Baidu or Mapbar coordinates to Amap's (GCJ-02)
+  #[command(after_long_help = EX_CONVERT)]
   Convert {
     /// LNG,LAT; several separated by `|`
     coords: String,
+    /// Coordinate system of the input: gps (WGS-84), baidu or mapbar
     #[arg(long, default_value = "gps", value_parser = ["gps", "baidu", "mapbar"])]
     from: String,
   },
@@ -81,10 +95,40 @@ pub enum Command {
   Staticmap(MapArgs),
 }
 
+const EX_ROUTE: &str = "\
+Examples:
+  atp amap route 116.481,39.990 116.397,39.909
+  atp amap route 望京 北京南站 --type transit --strategy least-walk --city 北京
+
+More: atp guide amap route";
+
+const EX_DISTANCE: &str = "\
+Examples:
+  atp amap distance 116.481,39.990 116.434,39.908 --to 116.397,39.909
+  atp amap distance 望京 国贸 --to 北京南站 --mode driving
+
+More: atp guide amap distance";
+
+const EX_TRAFFIC: &str = "\
+Examples:
+  atp amap traffic 长安街 --city 北京
+  atp amap traffic --rect '116.351,39.966;116.357,39.968'
+  atp amap traffic --around 116.481,39.990 --radius 2000
+
+More: atp guide amap traffic";
+
+const EX_CONVERT: &str = "\
+Examples:
+  atp amap convert 116.404,39.915
+  atp amap convert '116.404,39.915|116.481,39.990' --from baidu
+
+More: atp guide amap convert";
+
 #[derive(Debug, clap::Args)]
 pub struct NearbyArgs {
   /// LNG,LAT (GCJ-02)
   location: String,
+  /// Keyword the places must match
   keyword: Option<String>,
   /// Search radius in metres (at most 50000)
   #[arg(long, default_value_t = 3000)]
@@ -102,6 +146,7 @@ pub struct RouteArgs {
   from: String,
   /// LNG,LAT or a place name
   to: String,
+  /// How to travel
   #[arg(long = "type", value_enum, default_value_t = Mode::Driving)]
   mode: Mode,
   /// City to look place names up in
@@ -117,6 +162,7 @@ pub struct RouteArgs {
 pub struct TrafficArgs {
   /// Road name (needs --city)
   road: Option<String>,
+  /// City of the road (name or adcode)
   #[arg(long)]
   city: Option<String>,
   /// LNG,LAT;LNG,LAT: south-west and north-east corners
@@ -146,6 +192,7 @@ pub struct MapArgs {
   /// Draw live traffic
   #[arg(long)]
   traffic: bool,
+  /// File to save the image to
   #[arg(
     short = 'o',
     long,

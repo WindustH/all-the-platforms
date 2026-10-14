@@ -7,20 +7,40 @@ use super::{confirm, one};
 use crate::api::Api;
 use crate::{account, users};
 
+const EX_FOLDERS: &str = "\
+Examples:
+  atp x folders                        # numbered
+  atp x favorites --folder '#1'
+  atp x favorite 1849213456789012345   # bookmark it first
+  atp x favorite 1849213456789012345 --folder '#1'
+
+More: atp guide x favorites";
+
 #[derive(Debug, clap::Subcommand)]
 pub enum FolderCommand {
   /// Your bookmark folders (ids for `favorites --folder` and `favorite --folder`)
+  #[command(after_long_help = EX_FOLDERS)]
   Folders {
     #[command(flatten)]
     page: PageArgs,
   },
   /// Create a bookmark folder
-  FolderCreate { name: String },
+  FolderCreate {
+    /// Name of the folder
+    name: String,
+  },
   /// Rename a bookmark folder
-  FolderRename { folder: String, name: String },
+  FolderRename {
+    /// Folder: id or #N, from `folders`
+    folder: String,
+    /// New name
+    name: String,
+  },
   /// Delete a bookmark folder (its bookmarks stay bookmarked)
   FolderDelete {
+    /// Folder: id or #N, from `folders`
     folder: String,
+    /// Confirm the deletion (required)
     #[arg(short, long)]
     yes: bool,
   },

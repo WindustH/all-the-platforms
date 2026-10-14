@@ -12,6 +12,7 @@ use crate::{feeds, lists, refs, topics, users};
 pub enum BrowseCommand {
   /// Show a topic, or list its essence (精华) posts
   Topic {
+    /// Topic: id, link or #N
     id: String,
     /// List the topic's essence posts instead
     #[arg(long)]
@@ -21,42 +22,50 @@ pub enum BrowseCommand {
   },
   /// Articles of a user
   UserArticles {
+    /// User: url_token, @token or profile link
     user: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Pins (想法) of a user
   UserPins {
+    /// User: url_token, @token or profile link
     user: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// What a user did lately: answered, posted, voted, followed (动态); yours without USER
   Activities {
+    /// User: url_token, @token or profile link
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Questions a user asked; yours without USER
   UserQuestions {
+    /// User: url_token, @token or profile link
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Videos of a user; yours without USER
   UserVideos {
+    /// User: url_token, @token or profile link
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Columns (专栏) a user writes in; yours without USER
   UserColumns {
+    /// User: url_token, @token or profile link
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Questions, topics, columns or favorites folders a user follows; yours without USER
+  #[command(after_long_help = EX_USER_FOLLOWING)]
   UserFollowing {
+    /// User: url_token, @token or profile link
     user: Option<String>,
     /// What to list
     #[arg(short = 't', long = "type", default_value = "questions", value_parser = ["questions", "topics", "columns", "folders"])]
@@ -65,6 +74,14 @@ pub enum BrowseCommand {
     page: PageArgs,
   },
 }
+
+const EX_USER_FOLLOWING: &str = "\
+Examples:
+  atp zhihu user-following
+  atp zhihu user-following zhang-jia-wei -t topics
+  atp zhihu user-following @zhang-jia-wei -t folders
+
+More: atp guide zhihu user-following";
 
 pub async fn run(api: &Api, command: BrowseCommand) -> Result<Data> {
   match command {

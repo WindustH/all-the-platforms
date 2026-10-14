@@ -52,6 +52,7 @@ pub enum Command {
     event: String,
     /// Note text; `-` reads it from stdin
     text: Option<String>,
+    /// Note title
     #[arg(long)]
     title: Option<String>,
     /// Attach an image (repeatable, at least one)
@@ -66,9 +67,13 @@ pub enum Command {
   /// What the search box suggests before you type (猜你想搜), personalized
   Trending,
   /// Search completions for a keyword
-  Suggest { keyword: String },
+  Suggest {
+    /// The start of a search
+    keyword: String,
+  },
   /// Search your own collected notes (or with --likes, liked notes)
   SearchSaved {
+    /// What to search for
     keyword: String,
     /// Search the liked notes instead
     #[arg(long)]
@@ -78,8 +83,11 @@ pub enum Command {
   },
   /// Like a comment of a note (or take the like back with --undo)
   LikeComment {
+    /// Note: link with xsec_token, #N, or an id seen in a list
     note: String,
+    /// Comment id (see `comments`)
     comment: String,
+    /// Take the like back instead
     #[arg(long)]
     undo: bool,
   },
@@ -93,11 +101,13 @@ pub enum Command {
   HistoryCount,
   /// Remove notes from the browsing history
   HistoryDelete {
+    /// Notes: links, #N or ids
     #[arg(required = true)]
     notes: Vec<String>,
   },
   /// Empty the browsing history of notes
   HistoryClear {
+    /// Confirm clearing the history (required; there is no question)
     #[arg(short, long)]
     yes: bool,
   },
@@ -208,11 +218,15 @@ const EX_EVENTS: &str = "\
 Examples:
   atp xhs events                 # everything running now
   atp xhs events 动漫 --latest    # activities about anime, newest first
-  atp xhs events --kept          # the ones you kept";
+  atp xhs events --kept          # the ones you kept
+
+More: atp guide xhs events";
 
 const EX_JOIN: &str = "\
 Examples:
   atp xhs events 动漫
   atp xhs event '#1'             # rewards, period and topics first
   atp xhs join-event '#1' --title '十月新番' -i cover.jpg '这季最期待的三部'
-  atp xhs join-event 43010 --title 周末 -i a.jpg -i b.jpg - < note.txt";
+  atp xhs join-event 43010 --title 周末 -i a.jpg -i b.jpg - < note.txt
+
+More: atp guide xhs join-event";

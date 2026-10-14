@@ -12,31 +12,48 @@ use crate::{parse, pins, users};
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// About a server: members online, boosts, features, channels and roles
-  #[command(visible_alias = "guild")]
-  Server { server: String },
+  #[command(visible_alias = "guild", after_long_help = EX_SERVER)]
+  Server {
+    /// Server: id, `server:ID` or a discord.com/channels/SERVER link
+    server: String,
+  },
   /// Roles of a server
-  Roles { server: String },
+  Roles {
+    /// Server: id, `server:ID` or a discord.com/channels/SERVER link
+    server: String,
+  },
   /// Custom emoji of a server (the `name:id` form `react` takes)
-  Emojis { server: String },
+  #[command(after_long_help = EX_EMOJIS)]
+  Emojis {
+    /// Server: id, `server:ID` or a discord.com/channels/SERVER link
+    server: String,
+  },
   /// Pinned messages of a channel
   Pins {
+    /// Channel: id, link, `<#ID>`, `channel:ID`, or a user for your direct chat
     chat: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Pin a message, or unpin it with --undo
   Pin {
+    /// Message: link, `CHANNEL/MESSAGE` or `CHANNEL-MESSAGE`
     message: String,
+    /// Unpin it instead
     #[arg(long)]
     undo: bool,
   },
   /// What an invite leads to (works without logging in)
+  #[command(after_long_help = EX_INVITE)]
   Invite {
     /// Invite code or link (discord.gg/…, discord.com/invite/…)
     code: String,
   },
   /// Open invites of a server (needs the Manage Server permission)
-  Invites { server: String },
+  Invites {
+    /// Server: id, `server:ID` or a discord.com/channels/SERVER link
+    server: String,
+  },
   /// Friends and friend requests of a user account
   Friends {
     /// Also blocked accounts
@@ -44,6 +61,27 @@ pub enum Command {
     all: bool,
   },
 }
+
+const EX_SERVER: &str = "\
+Examples:
+  atp discord server 81384788765712384
+  atp discord server https://discord.com/channels/81384788765712384
+
+More: atp guide discord server";
+
+const EX_EMOJIS: &str = "\
+Examples:
+  atp discord emojis 81384788765712384
+  atp discord react 81384788862181376/1234567890123456789 party:81384788865712384
+
+More: atp guide discord emojis";
+
+const EX_INVITE: &str = "\
+Examples:
+  atp discord invite rust-lang
+  atp discord invite https://discord.gg/rust-lang
+
+More: atp guide discord invite";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

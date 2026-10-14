@@ -21,7 +21,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo,
-  Post, Result, User,
+  PlatformKind, Post, Result, User,
 };
 
 use crate::api::Api;
@@ -53,6 +53,15 @@ impl Platform for Qq {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(200),
+    kind: PlatformKind::Chat,
+    token: "APPID:SECRET",
+    env: &[
+      "QQ_BOT_APPID",
+      "QQ_BOT_SECRET",
+      "QQ_BOT_SANDBOX",
+      "QQ_BOT_INTENTS",
+    ],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

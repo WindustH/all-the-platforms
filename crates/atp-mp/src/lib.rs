@@ -39,7 +39,7 @@ use std::time::Duration;
 
 use atp_core::{
   Action, Cap, Choices, Comment, Ctx, Data, Draft, Error, Insights, Page, PageReq, Platform,
-  PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 use crate::accounts::Account;
@@ -78,6 +78,10 @@ impl Platform for Mp {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(1500),
+    kind: PlatformKind::Social,
+    token: "APPID:SECRET",
+    env: &["WECHAT_APPID", "WECHAT_SECRET"],
+    guest: "read, download, album; user from an article link",
     guide: include_str!("../GUIDE.md"),
   };
 

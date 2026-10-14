@@ -10,13 +10,17 @@ use crate::{login, messages, mt, web};
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Log in a user account with its phone number and the code Telegram sends
+  #[command(after_long_help = EX_LOGIN_PHONE)]
   LoginPhone {
     /// International format, e.g. +447700900123 (asked when left out)
     phone: Option<String>,
   },
   /// Search the messages of one chat (public channels need no account)
+  #[command(after_long_help = EX_SEARCH_CHAT)]
   SearchChat {
+    /// Chat: @name, t.me link, numeric id or #N
     chat: String,
+    /// Words to find
     query: String,
     /// photo, video, media, document, url, voice, music, gif, round, mention
     #[arg(long)]
@@ -25,16 +29,48 @@ pub enum Command {
     page: PageArgs,
   },
   /// Mark a chat as read
-  MarkRead { chat: String },
+  MarkRead {
+    /// Chat: @name, t.me link, numeric id or #N
+    chat: String,
+  },
   /// Pin a message (or unpin it with --undo)
   Pin {
+    /// Message: t.me link, `CHAT/ID` or #N
     message: String,
+    /// Unpin it instead
     #[arg(long)]
     undo: bool,
   },
   /// Forward a message to another chat
-  Forward { message: String, to: String },
+  #[command(after_long_help = EX_FORWARD)]
+  Forward {
+    /// Message: t.me link, `CHAT/ID` or #N
+    message: String,
+    /// Chat to forward it to: @name, t.me link, numeric id or #N
+    to: String,
+  },
 }
+
+const EX_LOGIN_PHONE: &str = "\
+Examples:
+  atp telegram login-phone
+  atp telegram login-phone +447700900123
+
+More: atp guide telegram login";
+
+const EX_SEARCH_CHAT: &str = "\
+Examples:
+  atp telegram search-chat @durov update
+  atp telegram search-chat @mychannel invoice --filter document
+
+More: atp guide telegram search-chat";
+
+const EX_FORWARD: &str = "\
+Examples:
+  atp telegram forward https://t.me/durov/42 @friend
+  atp telegram forward @mychannel/42 -1001234567890
+
+More: atp guide telegram forward";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;

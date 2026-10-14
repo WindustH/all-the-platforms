@@ -25,26 +25,38 @@ pub enum Command {
     page: PageArgs,
   },
   /// Create a folder
+  #[command(after_long_help = EX_MKDIR)]
   Mkdir {
+    /// Path of the new folder (`/Movies/2024`)
     path: String,
     /// Create the folders above it too
     #[arg(short, long)]
     parents: bool,
   },
   /// Move files and folders into a folder: `mv SRC… DEST`
+  #[command(after_long_help = EX_MV)]
   Mv {
+    /// Paths, ids or #N to move, then the folder to move them into
     #[arg(value_name = "PATH", num_args = 2.., required = true)]
     paths: Vec<String>,
   },
   /// Copy files and folders into a folder: `cp SRC… DEST`
   Cp {
+    /// Paths, ids or #N to copy, then the folder to copy them into
     #[arg(value_name = "PATH", num_args = 2.., required = true)]
     paths: Vec<String>,
   },
   /// Rename a file or folder
-  Rename { path: String, name: String },
+  Rename {
+    /// A path, file id or #N
+    path: String,
+    /// The new name (not a path)
+    name: String,
+  },
   /// Upload local files (at once when the drive holds them already)
+  #[command(after_long_help = EX_UPLOAD)]
   Upload {
+    /// Local files to upload
     #[arg(required = true)]
     files: Vec<PathBuf>,
     /// Folder to upload into (default: the root)
@@ -52,7 +64,9 @@ pub enum Command {
     to: Option<String>,
   },
   /// Share files and folders in one link
+  #[command(after_long_help = EX_SHARE)]
   Share {
+    /// Paths, file ids or #N to share
     #[arg(value_name = "PATH", required = true)]
     paths: Vec<String>,
     /// Days the link works: 0 (no end), 1, 7 or 30
@@ -69,12 +83,15 @@ pub enum Command {
   },
   /// Cancel shares by their ids from `shares`
   Unshare {
+    /// Share ids or #N from `shares`
     #[arg(required = true)]
     ids: Vec<String>,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// Save everything in someone's share into your drive (转存)
+  #[command(after_long_help = EX_SAVE)]
   Save {
     /// Share link (`https://pan.quark.cn/s/…`)
     url: String,
@@ -86,11 +103,13 @@ pub enum Command {
     to: Option<String>,
   },
   /// List what someone's share holds
-  #[command(name = "share-ls")]
+  #[command(name = "share-ls", after_long_help = EX_SHARE_LS)]
   ShareLs {
+    /// Share link (`https://pan.quark.cn/s/…`, `?pwd=` or `提取码` included or not)
     url: String,
     /// A folder inside the share: its id from an earlier `share-ls`, or `#N`
     dir: Option<String>,
+    /// The share's extraction code
     #[arg(long, value_name = "CODE")]
     pwd: Option<String>,
     #[command(flatten)]
@@ -103,19 +122,65 @@ pub enum Command {
   },
   /// Restore entries of the recycle bin by their ids from `trash`
   Restore {
+    /// Record ids or #N from `trash`
     #[arg(required = true)]
     ids: Vec<String>,
   },
   /// Delete entries of the recycle bin for good
   Purge {
+    /// Record ids or #N from `trash`
     #[arg(required = true)]
     ids: Vec<String>,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// Storage used and left, and the member type
   Quota,
 }
+
+const EX_MKDIR: &str = "\
+Examples:
+  atp quark mkdir /Movies
+  atp quark mkdir /Movies/2024/Summer -p
+
+More: atp guide quark mkdir";
+
+const EX_MV: &str = "\
+Examples:
+  atp quark mv /Downloads/a.mkv /Movies
+  atp quark mv '#1' '#2' /Archive
+
+More: atp guide quark mv";
+
+const EX_UPLOAD: &str = "\
+Examples:
+  atp quark upload movie.mkv
+  atp quark upload *.jpg --to /Photos
+
+More: atp guide quark upload";
+
+const EX_SHARE: &str = "\
+Examples:
+  atp quark share /Movies/a.mkv
+  atp quark share /Photos --expire 0 --pwd
+  atp quark share /Docs/report.pdf --expire 30 --pwd abcd
+
+More: atp guide quark share";
+
+const EX_SAVE: &str = "\
+Examples:
+  atp quark save 'https://pan.quark.cn/s/abc123?pwd=abcd'
+  atp quark save https://pan.quark.cn/s/abc123 --pwd abcd --to /Saved
+
+More: atp guide quark save";
+
+const EX_SHARE_LS: &str = "\
+Examples:
+  atp quark share-ls https://pan.quark.cn/s/abc123 --pwd abcd
+  atp quark share-ls https://pan.quark.cn/s/abc123 '#2' --pwd abcd
+
+More: atp guide quark share-ls";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

@@ -9,7 +9,7 @@ use sha1::Sha1;
 use tokio::io::AsyncReadExt;
 
 use crate::error::Result;
-use crate::output::progress;
+use crate::output::{progress, set_total};
 
 /// Block size of [`Hashes::blocks`]: 4 MB, Baidu's upload block.
 pub const BLOCK: u64 = 4 << 20;
@@ -36,7 +36,7 @@ impl Hashes {
       .map(|n| format!("hashing {}", n.to_string_lossy()))
       .unwrap_or_default();
     let bar = progress(&label);
-    bar.set_length(size);
+    set_total(&bar, size);
     let mut pass = Pass::default();
     let mut buf = vec![0u8; 1 << 20];
     loop {

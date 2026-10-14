@@ -30,8 +30,8 @@ mod users;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Comment, Ctx, Data, Error, Page, PageReq, Platform, PlatformInfo, Post,
-  QrStatus, QrTicket, Query, Reply, Result, User,
+  Action, Cap, Choices, Comment, Ctx, Data, Error, Page, PageReq, Platform, PlatformInfo,
+  PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -90,6 +90,10 @@ impl Platform for Netease {
       ..Choices::NONE
     },
     min_interval: Duration::from_secs(1),
+    kind: PlatformKind::Music,
+    token: "",
+    env: &[],
+    guest: "search, read, lyrics, hot, toplists, comments, user, user-posts",
     guide: include_str!("../GUIDE.md"),
   };
 

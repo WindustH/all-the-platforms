@@ -12,8 +12,11 @@ use crate::{comments, insights, library, posts, refs, users};
 #[derive(Debug, clap::Subcommand)]
 pub enum AccountCommand {
   /// Vote on an answer: up, down (反对) or neutral
+  #[command(after_long_help = EX_VOTE)]
   Vote {
+    /// Answer (or article / pin): link, a:<id>, answer id or #N
     post: String,
+    /// The vote; articles and pins take up or neutral only
     #[arg(value_parser = ["up", "down", "neutral"])]
     direction: String,
   },
@@ -21,18 +24,23 @@ pub enum AccountCommand {
   LikeComment {
     /// Comment id
     comment: String,
+    /// Take the like back instead
     #[arg(long)]
     undo: bool,
   },
   /// Block a user (屏蔽), or unblock with --undo
   Block {
+    /// User: url_token, @token or profile link
     user: String,
+    /// Unblock instead
     #[arg(long)]
     undo: bool,
   },
   /// Create a favorites folder (收藏夹)
   CreateFolder {
+    /// Folder name
     title: String,
+    /// Folder description
     #[arg(short, long, default_value = "")]
     description: String,
     /// Only you can see it
@@ -41,8 +49,9 @@ pub enum AccountCommand {
   },
   /// Delete one of your favorites folders
   DeleteFolder {
-    /// Folder id (see `collections`)
+    /// Folder id (see `collections`) or #N after it
     folder: String,
+    /// Confirm the deletion (required; there is no question)
     #[arg(short, long)]
     yes: bool,
   },
@@ -55,6 +64,14 @@ pub enum AccountCommand {
     page: PageArgs,
   },
 }
+
+const EX_VOTE: &str = "\
+Examples:
+  atp zhihu vote 2104695667 up
+  atp zhihu vote https://www.zhihu.com/question/123/answer/456 down
+  atp zhihu vote a:2104695667 neutral
+
+More: atp guide zhihu vote";
 
 pub async fn run(api: &Api, command: AccountCommand) -> Result<Data> {
   match command {

@@ -24,6 +24,7 @@ pub enum ObjectCommand {
   Adsets {
     #[command(flatten)]
     scope: Scope,
+    /// Only the ad sets of this campaign
     #[arg(long, value_name = "ID")]
     campaign: Option<String>,
   },
@@ -31,8 +32,10 @@ pub enum ObjectCommand {
   Ads {
     #[command(flatten)]
     scope: Scope,
+    /// Only the ads of this campaign
     #[arg(long, value_name = "ID")]
     campaign: Option<String>,
+    /// Only the ads of this ad set (wins over --campaign)
     #[arg(long, value_name = "ID")]
     adset: Option<String>,
   },
@@ -53,6 +56,7 @@ pub enum ObjectCommand {
   },
   /// Any object by id (campaign, ad set, ad, creative ...)
   Get {
+    /// Object id
     id: String,
     /// Comma-separated fields
     #[arg(long)]

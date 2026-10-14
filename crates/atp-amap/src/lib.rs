@@ -22,7 +22,8 @@ mod weather;
 use std::time::Duration;
 
 use atp_core::{
-  Cap, Choices, Ctx, Data, Page, PageReq, Platform, PlatformInfo, Post, Query, Result, User,
+  Cap, Choices, Ctx, Data, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query,
+  Result, User,
 };
 
 use crate::api::Api;
@@ -46,6 +47,10 @@ impl Platform for Amap {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(150),
+    kind: PlatformKind::Local,
+    token: "KEY[:SIGN_SECRET]",
+    env: &["AMAP_KEY", "AMAP_SIGN_SECRET"],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

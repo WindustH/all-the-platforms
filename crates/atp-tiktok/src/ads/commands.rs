@@ -16,6 +16,13 @@ Examples:
 
 Dimensions and metrics are the Marketing API's names (report/integrated/get).";
 
+const EX_RAW: &str = "\
+Examples:
+  atp tiktok ads raw /campaign/get/ advertiser_id=7012345678901234567 page_size=10
+  atp tiktok ads raw /adgroup/get/ advertiser_id=7012345678901234567 'filtering={\"campaign_ids\":[\"1800000000000001\"]}'
+
+Values that parse as JSON are sent as JSON; --post sends them as a JSON body.";
+
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// The person the access token belongs to
@@ -23,9 +30,15 @@ pub enum Command {
   /// Ad accounts the token manages (needs TIKTOK_ADS_APP_ID and TIKTOK_ADS_SECRET)
   Advertisers,
   /// Details of ad accounts (default: the current one)
-  Advertiser { ids: Vec<String> },
+  Advertiser {
+    /// Ad account (advertiser) ids
+    ids: Vec<String>,
+  },
   /// Remember the ad account to use by default
-  Use { advertiser: String },
+  Use {
+    /// Ad account (advertiser) id
+    advertiser: String,
+  },
   /// Campaigns of an ad account
   Campaigns {
     #[command(flatten)]
@@ -43,8 +56,10 @@ pub enum Command {
   Ads {
     #[command(flatten)]
     scope: Scope,
+    /// Only these campaigns (repeatable)
     #[arg(long = "campaign", value_name = "ID")]
     campaigns: Vec<String>,
+    /// Only these ad groups (repeatable)
     #[arg(long = "adgroup", value_name = "ID")]
     adgroups: Vec<String>,
   },
@@ -62,6 +77,7 @@ pub enum Command {
   #[command(after_long_help = EX_REPORT)]
   Report(ReportArgs),
   /// Any Marketing API endpoint: `ads raw /campaign/get/ advertiser_id=1 page_size=10`
+  #[command(after_long_help = EX_RAW)]
   Raw {
     /// Path after /open_api/v1.3, e.g. /campaign/get/
     path: String,

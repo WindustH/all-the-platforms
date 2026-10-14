@@ -11,14 +11,11 @@ use std::pin::Pin;
 use std::process::ExitCode;
 
 use clap::{ArgMatches, Args, FromArgMatches};
-use comfy_table::{Attribute, Cell, CellAlignment, ContentArrangement, Table, presets};
-use serde_json::json;
 
 use crate::cli::{self, GlobalArgs};
 use crate::guide;
 use crate::model::Data;
-use crate::output::{self, Format};
-use crate::platform::{Cap, Platform, PlatformInfo};
+use crate::platform::{Platform, PlatformInfo};
 
 type RunFuture = Pin<Box<dyn Future<Output = ExitCode>>>;
 pub(crate) type CallFuture = Pin<Box<dyn Future<Output = crate::error::Result<Data>>>>;
@@ -26,7 +23,7 @@ pub(crate) type CallFuture = Pin<Box<dyn Future<Output = crate::error::Result<Da
 pub(crate) struct Entry {
   pub info: PlatformInfo,
   pub command: fn() -> clap::Command,
-  extras: fn() -> Vec<String>,
+  pub extras: fn() -> Vec<String>,
   run: fn(GlobalArgs, ArgMatches) -> RunFuture,
   /// Run without printing: the data or the error, for the MCP server.
   pub call: fn(GlobalArgs, ArgMatches) -> CallFuture,
@@ -86,17 +83,33 @@ impl App {
       .long_about(None)
       .subcommand_required(true)
       .arg_required_else_help(true)
-      .after_help("Guides: `atp guide` lists topics (start, login, analysis ...) and platforms.")
+      .after_help(
+        "Guides: `atp guide` lists topics and platforms; `atp guide bili search` explains one \
+         command, `atp guide login xhs` logging in.",
+      )
       .subcommand(
-        clap::Command::new("platforms").about("List platforms and what each one supports"),
+        clap::Command::new("platforms")
+          .about("List platforms and what each one supports")
+          .arg(
+            clap::Arg::new("id")
+              .value_name("PLATFORM")
+              .help("One platform in detail: commands, login ways, what works without an account"),
+          ),
       )
       .subcommand(
         clap::Command::new("guide")
-          .about(
-            "Read the built-in documentation: `atp guide`, `atp guide analysis`, `atp guide bili`",
-          )
+          .about("Read the built-in documentation: topics, platforms, commands, logins")
           .visible_alias("docs")
-          .arg(clap::Arg::new("topic").help("A topic or a platform; omit to list them")),
+          .arg(
+            clap::Arg::new("topic")
+              .num_args(0..)
+              .value_name("WORDS")
+              .help(
+                "A topic, a platform, `<platform> <command> [<sub>...]` or `login \
+                 [<platform>]`; omit to list them",
+              ),
+          )
+          .after_long_help(EX_GUIDE),
       )
       .subcommand(
         clap::Command::new("mcp")
@@ -141,11 +154,17 @@ impl App {
       return ExitCode::FAILURE;
     };
     if name == "platforms" {
-      self.print_platforms(global.output_format());
-      return ExitCode::SUCCESS;
+      let id = sub.get_one::<String>("id").map(String::as_str);
+      return crate::platforms::print(&self, id, global.output_format());
     }
     if name == "guide" {
-      return self.print_guide(sub.get_one::<String>("topic").map(String::as_str));
+      let words: Vec<&str> = sub
+        .get_many::<String>("topic")
+        .into_iter()
+        .flatten()
+        .map(String::as_str)
+        .collect();
+      return self.print_guide(&words);
     }
     let Some(runtime) = runtime() else {
       return ExitCode::FAILURE;
@@ -159,80 +178,15 @@ impl App {
     runtime.block_on((entry.run)(global, sub.clone()))
   }
 
-  fn print_guide(&self, topic: Option<&str>) -> ExitCode {
-    let Some(topic) = topic else {
-      let platforms: Vec<_> = self
-        .platforms
-        .iter()
-        .map(|e| (e.info.id, e.info.name))
-        .collect();
-      guide::print(&guide::index(&platforms));
-      return ExitCode::SUCCESS;
-    };
-    if let Some(t) = guide::TOPICS.iter().find(|t| t.name == topic) {
-      guide::print(t.body);
-    } else if let Some(e) = self.find(topic) {
-      guide::print(&guide::platform(&e.info, &(e.command)()));
-    } else {
-      eprintln!("error: no guide topic `{topic}`; `atp guide` lists them");
-      return ExitCode::from(2);
-    }
-    ExitCode::SUCCESS
-  }
-
-  /// Every platform with its capabilities and own commands.
-  pub(crate) fn platforms_value(&self) -> serde_json::Value {
-    let list: Vec<_> = self
-      .platforms
-      .iter()
-      .map(|e| {
-        json!({
-          "id": e.info.id,
-          "name": e.info.name,
-          "aliases": e.info.aliases,
-          "home": e.info.home,
-          "capabilities": e.info.caps.iter().map(|c| c.name()).collect::<Vec<_>>(),
-          "extra_commands": (e.extras)(),
-        })
-      })
-      .collect();
-    json!({ "platforms": list })
-  }
-
-  fn print_platforms(&self, format: Format) {
-    if format != Format::Table {
-      output::emit(format, None, &Data::Value(self.platforms_value()));
-      return;
-    }
-    let mut t = Table::new();
-    t.load_style(presets::NOTHING)
-      .set_content_arrangement(ContentArrangement::Dynamic);
-    let mut header = vec![Cell::new("")];
-    header.extend(
-      self
-        .platforms
-        .iter()
-        .map(|e| Cell::new(e.info.id).add_attribute(Attribute::Bold)),
-    );
-    t.set_header(header);
-    for cap in Cap::ALL {
-      let mut row = vec![Cell::new(cap.name())];
-      row.extend(self.platforms.iter().map(|e| {
-        Cell::new(if e.info.supports(*cap) { "✓" } else { "·" })
-          .set_alignment(CellAlignment::Center)
-      }));
-      t.add_row(row);
-    }
-    println!("{t}");
-    for e in &self.platforms {
-      let extras = (e.extras)();
-      if !extras.is_empty() {
-        println!(
-          "\n{} ({}) only: {}",
-          e.info.name,
-          e.info.id,
-          extras.join(", ")
-        );
+  fn print_guide(&self, words: &[&str]) -> ExitCode {
+    match guide::page(self, words) {
+      Ok(page) => {
+        guide::print(&page);
+        ExitCode::SUCCESS
+      }
+      Err(message) => {
+        eprintln!("error: {message}");
+        ExitCode::from(2)
       }
     }
   }
@@ -271,3 +225,15 @@ fn restore_sigpipe() {
     libc::signal(libc::SIGPIPE, libc::SIG_DFL);
   }
 }
+
+const EX_GUIDE: &str = "\
+Examples:
+  atp guide                         # topics and platforms
+  atp guide refs                    # a topic
+  atp guide bili                    # a platform
+  atp guide bili search             # one command of a platform
+  atp guide ncm playlist create     # a nested command
+  atp guide login                   # every platform's login ways
+  atp guide login xhs               # logging in to one platform
+
+Pages are Markdown: piped, they print as is.";

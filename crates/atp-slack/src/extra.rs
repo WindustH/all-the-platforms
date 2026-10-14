@@ -7,23 +7,53 @@ use crate::{chats, messages};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
-  /// The workspace: name, domain, plan
+  /// The workspace: name, domain, address
   Workspace,
   /// Pinned messages of a conversation
-  Pins { chat: String },
+  Pins {
+    /// Conversation: id, archive link, `#name`, a user for your direct one, or #N
+    chat: String,
+  },
   /// Pin a message, or unpin it with --undo
+  #[command(after_long_help = EX_PIN)]
   Pin {
+    /// Message: link, `CHANNEL/TS` or #N
     message: String,
+    /// Unpin it instead
     #[arg(long)]
     undo: bool,
   },
   /// Bookmarks (links) of a conversation
-  Bookmarks { chat: String },
+  Bookmarks {
+    /// Conversation: id, archive link, `#name`, a user for your direct one, or #N
+    chat: String,
+  },
   /// Join a public channel
-  Join { chat: String },
+  #[command(after_long_help = EX_JOIN)]
+  Join {
+    /// Channel: id, archive link, `#name` or #N
+    chat: String,
+  },
   /// Leave a conversation
-  Leave { chat: String },
+  Leave {
+    /// Conversation: id, archive link, `#name` or #N
+    chat: String,
+  },
 }
+
+const EX_PIN: &str = "\
+Examples:
+  atp slack pin https://acme.slack.com/archives/C0123ABCD/p1700000000000100
+  atp slack pin C0123ABCD/1700000000.000100 --undo
+
+More: atp guide slack pin";
+
+const EX_JOIN: &str = "\
+Examples:
+  atp slack join '#general'
+  atp slack join C0123ABCD
+
+More: atp guide slack join";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;

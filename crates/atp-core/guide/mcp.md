@@ -1,4 +1,4 @@
-# Using atp from AI agents (MCP)
+# Using ATP from AI agents (MCP)
 
 `atp mcp` serves every platform to AI agents over the Model Context
 Protocol, on standard input and output. Add it to a client:
@@ -15,7 +15,7 @@ Other clients take the same command in their configuration:
 | Tool | What it does |
 | --- | --- |
 | `platforms` | every platform, its capabilities and its own commands |
-| `help` | this guide: a topic, a platform (`bili`) or a command (`bili search`) |
+| `help` | this guide: the index, a topic, `login [platform]`, a platform (`bili`) or a command (`bili search`, `ncm playlist create`) |
 | `read` | commands that only read: search, hot, read, comments, user, followers, notifications, chats, messages, whoami ... |
 | `run` | everything else: like, comment, follow, post, delete, send, download, `listen`, platform-only commands (left out with `--read-only`) |
 
@@ -23,6 +23,21 @@ Other clients take the same command in their configuration:
 words, e.g. `{"platform": "bili", "command": "search", "args": ["rust", "-n", "5"]}`,
 and answer with the same envelope `--json` prints. `#3` refers to the third
 item of the last list, across calls.
+
+## Resources
+
+The guide is also served as resources, in Markdown (`text/markdown`):
+
+| URI | Page |
+| --- | --- |
+| `atp://guide` | the index |
+| `atp://guide/<topic>` | a topic, e.g. `atp://guide/refs`; `atp://guide/login` adds every platform's login ways |
+| `atp://guide/<platform>` | a platform, e.g. `atp://guide/bili` |
+| `atp://guide/<platform>/<command>` | one command; nested ones add segments: `atp://guide/ncm/playlist/create` |
+| `atp://guide/login/<platform>` | logging in to one platform |
+
+`resources/list` lists the index, the topics and the platforms;
+`resources/templates/list` gives the last two forms as templates.
 
 ## Limits
 

@@ -16,17 +16,26 @@ pub enum Command {
     page: PageArgs,
   },
   /// Goods of a category or home tab, by its id from `categories`
+  #[command(after_long_help = EX_CATEGORY)]
   Category {
+    /// Category or tab id from `categories`, or #N after it
     id: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// A goods' review summary: rating, tags with counts (needs a login)
   ReviewSummary {
-    /// Goods id or goods.html link
+    /// Goods id, goods.html link or #N
     goods: String,
   },
 }
+
+const EX_CATEGORY: &str = "\
+Examples:
+  atp pdd categories                # home tabs, or 多多进宝 tags with credentials
+  atp pdd category '#2' -n 40
+
+More: atp guide pdd category";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

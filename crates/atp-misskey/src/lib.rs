@@ -24,7 +24,8 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Message, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
+  User,
 };
 
 use crate::api::Api;
@@ -87,6 +88,10 @@ impl Platform for Misskey {
       notification_kind: users::NOTIFICATION_KINDS,
     },
     min_interval: Duration::from_millis(500),
+    kind: PlatformKind::Social,
+    token: "INSTANCE|TOKEN",
+    env: &["MISSKEY_URL", "MISSKEY_TOKEN"],
+    guest: "public timelines, hot, search, read, comments, user, user-posts, tag",
     guide: include_str!("../GUIDE.md"),
   };
 

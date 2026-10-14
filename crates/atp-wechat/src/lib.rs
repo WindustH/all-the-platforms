@@ -28,7 +28,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Error, Media, Message, Page, PageReq, Platform,
-  PlatformInfo, Post, QrStatus, QrTicket, Result, User,
+  PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Result, User,
 };
 
 use crate::api::Api;
@@ -58,6 +58,10 @@ impl Platform for Wechat {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(300),
+    kind: PlatformKind::Chat,
+    token: "",
+    env: &[],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

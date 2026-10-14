@@ -31,7 +31,8 @@ mod users;
 use std::time::Duration;
 
 use atp_core::{
-  Cap, Choices, Ctx, Data, Media, Page, PageReq, Platform, PlatformInfo, Post, Query, Result, User,
+  Cap, Choices, Ctx, Data, Media, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query,
+  Result, User,
 };
 
 use crate::api::Api;
@@ -59,6 +60,10 @@ impl Platform for Dewu {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(3000),
+    kind: PlatformKind::Shopping,
+    token: "APP_KEY:APP_SECRET",
+    env: &["DEWU_APP_KEY", "DEWU_APP_SECRET"],
+    guest: "everything but search, prices and sales",
     guide: include_str!("../GUIDE.md"),
   };
 

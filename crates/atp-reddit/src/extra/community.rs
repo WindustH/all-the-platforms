@@ -8,19 +8,33 @@ use crate::{moderation, subreddits};
 #[derive(Debug, clap::Subcommand)]
 pub enum CommunityCommand {
   /// A subreddit's rules
-  Rules { subreddit: String },
+  Rules {
+    /// Subreddit: name, r/name or link
+    subreddit: String,
+  },
   /// A subreddit's moderators and their permissions
   #[command(visible_alias = "moderators")]
-  Mods { subreddit: String },
-  /// A subreddit's wiki: its pages, or one page (`index` is the main one)
-  Wiki {
+  Mods {
+    /// Subreddit: name, r/name or link
     subreddit: String,
+  },
+  /// A subreddit's wiki: its pages, or one page (`index` is the main one)
+  #[command(after_long_help = EX_WIKI)]
+  Wiki {
+    /// Subreddit: name, r/name or link
+    subreddit: String,
+    /// Page name (`index` is the main one) or #N after the list
     page: Option<String>,
   },
   /// Post flairs a subreddit offers
-  Flairs { subreddit: String },
+  Flairs {
+    /// Subreddit: name, r/name or link
+    subreddit: String,
+  },
   /// Set your post's flair: a template from `flairs` and/or a text
+  #[command(after_long_help = EX_FLAIR)]
   Flair {
+    /// Post: id, `t3_…`, link or #N
     post: String,
     /// Flair text (where the subreddit or template allows editing)
     text: Option<String>,
@@ -29,6 +43,22 @@ pub enum CommunityCommand {
     template: Option<String>,
   },
 }
+
+const EX_WIKI: &str = "\
+Examples:
+  atp reddit wiki rust
+  atp reddit wiki r/rust '#2'
+  atp reddit wiki AskHistorians faq
+
+More: atp guide reddit wiki";
+
+const EX_FLAIR: &str = "\
+Examples:
+  atp reddit flairs r/test
+  atp reddit flair 1wt65ox --template '#3'
+  atp reddit flair 1wt65ox 'Solved' --template '#1'
+
+More: atp guide reddit flair";
 
 pub(super) async fn run(api: &Api, command: CommunityCommand) -> Result<Data> {
   let ctx = &api.ctx;

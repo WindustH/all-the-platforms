@@ -33,11 +33,13 @@ pub async fn run(api: &Api, command: ExploreCommand) -> Result<Data> {
 pub enum DiscoveryCommand {
   /// Trending searches (热搜)
   Trending {
+    /// How many words
     #[arg(short = 'n', long, default_value_t = 20)]
     limit: usize,
   },
   /// One issue of the weekly picks (每周必看); the latest by default
   Weekly {
+    /// Issue number
     number: Option<u64>,
     #[command(flatten)]
     page: PageArgs,
@@ -48,8 +50,11 @@ pub enum DiscoveryCommand {
     page: PageArgs,
   },
   /// Dynamics under a topic (话题): its id or link
+  #[command(after_long_help = EX_TOPIC)]
   Topic {
+    /// Topic: id, a link with `topic_id=`, or #N after `search -t topic`
     topic: String,
+    /// Order: most popular or newest first; Bilibili's default when omitted
     #[arg(long, value_parser = ["hot", "new"])]
     sort: Option<String>,
     #[command(flatten)]
@@ -86,7 +91,9 @@ async fn run_discovery(api: &Api, command: DiscoveryCommand) -> Result<Data> {
 #[derive(Debug, clap::Subcommand)]
 pub enum PgcCommand {
   /// Episodes of a bangumi / film / documentary (ss…, ep…, md… or link)
+  #[command(after_long_help = EX_BANGUMI)]
   Bangumi {
+    /// Season: ss…, ep…, md…, a /bangumi/ link or #N
     season: String,
     /// The season itself: rating, status, counters
     #[arg(long)]
@@ -96,13 +103,17 @@ pub enum PgcCommand {
   },
   /// Follow (追番 / 追剧) a bangumi or film, or stop with --undo
   BangumiFollow {
+    /// Season: ss…, ep…, md…, a /bangumi/ link or #N
     season: String,
+    /// Stop following
     #[arg(long)]
     undo: bool,
   },
   /// Bangumi a user follows (yours when USER is omitted); --drama for films and series
   MyBangumi {
+    /// User: mid, `uid:MID`, space link, name or #N; yours when omitted
     user: Option<String>,
+    /// Films and series (追剧) instead of bangumi (追番)
     #[arg(long)]
     drama: bool,
     #[command(flatten)]
@@ -110,6 +121,7 @@ pub enum PgcCommand {
   },
   /// Episodes airing around today (新番时间表)
   Timeline {
+    /// Films and series instead of bangumi
     #[arg(long)]
     drama: bool,
     /// Days back
@@ -169,7 +181,11 @@ async fn run_pgc(api: &Api, command: PgcCommand) -> Result<Data> {
 #[derive(Debug, clap::Subcommand)]
 pub enum RoomCommand {
   /// A live room: title, streamer, live state, audience (room id or link, or uid:MID / @name)
-  Live { room: String },
+  #[command(after_long_help = EX_LIVE)]
+  Live {
+    /// Room: number, `live:ROOM`, live.bilibili.com link, or the streamer as `uid:MID` / `@name`
+    room: String,
+  },
   /// Live rooms of the people you follow
   LiveFollowing {
     #[command(flatten)]
@@ -194,27 +210,65 @@ async fn run_rooms(api: &Api, command: RoomCommand) -> Result<Data> {
 pub enum SpaceCommand {
   /// Collections (合集) and series (系列) of a user
   Lists {
+    /// User: mid, `uid:MID`, space link, name or #N
     user: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Videos of a collection or series (its link, MID/ID or MID/series/ID)
+  #[command(after_long_help = EX_LIST)]
   List {
+    /// Collection: space link, `MID/ID` (合集), `MID/series/ID` (系列) or #N
     list: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Column articles (专栏) of a user
   Articles {
+    /// User: mid, `uid:MID`, space link, name or #N
     user: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Videos a user recently gave coins to (when they make it public)
-  Coined { user: String },
+  Coined {
+    /// User: mid, `uid:MID`, space link, name or #N
+    user: String,
+  },
   /// Videos a user recently liked (when they make it public)
-  Liked { user: String },
+  Liked {
+    /// User: mid, `uid:MID`, space link, name or #N
+    user: String,
+  },
 }
+
+const EX_TOPIC: &str = "\
+Examples:
+  atp bili search 原神 -t topic
+  atp bili topic '#1' --sort new
+
+More: atp guide bili topic";
+
+const EX_BANGUMI: &str = "\
+Examples:
+  atp bili bangumi ss28747
+  atp bili bangumi ep508404 --info
+  atp bili bangumi 'https://www.bilibili.com/bangumi/media/md28229899'
+
+More: atp guide bili bangumi";
+
+const EX_LIVE: &str = "\
+Examples:
+  atp bili live 22637261
+  atp bili live uid:672328094
+  atp bili live https://live.bilibili.com/22637261";
+
+const EX_LIST: &str = "\
+Examples:
+  atp bili lists 946974
+  atp bili list '#1'
+  atp bili list 946974/1888
+  atp bili list 946974/series/250285";
 
 async fn run_spaces(api: &Api, command: SpaceCommand) -> Result<Data> {
   use SpaceCommand as E;

@@ -31,30 +31,44 @@ pub async fn run(api: &Api, command: LibraryCommand) -> Result<Data> {
 pub enum HistoryCommand {
   /// Search your watch history
   HistorySearch {
+    /// Words to find in the titles
     keyword: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Remove a video from your watch history
-  HistoryDelete { video: String },
+  HistoryDelete {
+    /// Video: BV… or av… id, link, b23.tv short link or #N
+    video: String,
+  },
   /// Erase your whole watch history
   HistoryClear {
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// Stop recording the watch history (--undo resumes)
   HistoryPause {
+    /// Resume recording
     #[arg(long)]
     undo: bool,
   },
   /// Add a video to watch later
-  LaterAdd { video: String },
+  LaterAdd {
+    /// Video: BV… or av… id, link, b23.tv short link or #N
+    video: String,
+  },
   /// Remove a video from watch later
-  LaterRemove { video: String },
+  LaterRemove {
+    /// Video: BV… or av… id, link, b23.tv short link or #N
+    video: String,
+  },
   /// Empty watch later, or only the videos already watched
   LaterClear {
+    /// Only remove the videos already watched (no confirmation needed)
     #[arg(long)]
     watched: bool,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
@@ -95,33 +109,48 @@ async fn run_history(api: &Api, command: HistoryCommand) -> Result<Data> {
 #[derive(Debug, clap::Subcommand)]
 pub enum FolderCommand {
   /// Create a favorites folder
+  #[command(after_long_help = EX_FOLDER_CREATE)]
   FolderCreate {
+    /// Folder name
     title: String,
+    /// Description
     #[arg(long, default_value = "")]
     intro: String,
+    /// Make the folder private
     #[arg(long)]
     private: bool,
   },
   /// Rename a favorites folder or change its description / visibility
+  #[command(after_long_help = EX_FOLDER_EDIT)]
   FolderEdit {
+    /// Folder: id, favlist?fid= link or #N
     folder: String,
+    /// New name
     #[arg(long)]
     title: Option<String>,
+    /// New description
     #[arg(long)]
     intro: Option<String>,
+    /// Make the folder private
     #[arg(long, conflicts_with = "public")]
     private: bool,
+    /// Make the folder public
     #[arg(long)]
     public: bool,
   },
   /// Delete a favorites folder and what it holds
   FolderDelete {
+    /// Folder: id, favlist?fid= link or #N
     folder: String,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// Remove videos that became unavailable from a folder
-  FolderClean { folder: String },
+  FolderClean {
+    /// Folder: id, favlist?fid= link or #N
+    folder: String,
+  },
   /// Folders and collections you saved from other people
   SavedFolders {
     #[command(flatten)]
@@ -129,7 +158,9 @@ pub enum FolderCommand {
   },
   /// Save someone's folder or collection (合集), or drop it with --undo
   Save {
+    /// Folder (id or favlist?fid= link), 合集 (space link or `MID/ID`), or #N
     folder: String,
+    /// Drop it from your saved folders
     #[arg(long)]
     undo: bool,
   },
@@ -180,30 +211,47 @@ pub enum FollowCommand {
   Groups,
   /// The people in one of your follow groups (id or exact name)
   Group {
+    /// Follow group: id, exact name or #N
     group: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Create a follow group
-  GroupCreate { name: String },
+  GroupCreate {
+    /// Group name
+    name: String,
+  },
   /// Rename a follow group
-  GroupRename { group: String, name: String },
+  GroupRename {
+    /// Follow group: id, exact name or #N
+    group: String,
+    /// New name
+    name: String,
+  },
   /// Delete a follow group (its people move to the default group)
   GroupDelete {
+    /// Follow group: id, exact name or #N
     group: String,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// Put users into follow groups (replacing their groups; none = default)
+  #[command(after_long_help = EX_GROUP_ASSIGN)]
   GroupAssign {
+    /// Users: mids, `uid:MID`, space links, names or #N
     #[arg(required = true)]
     users: Vec<String>,
+    /// Groups to put them in (id, exact name or #N; repeat for several);
+    /// none moves them to the default group
     #[arg(long = "to", value_name = "GROUP")]
     groups: Vec<String>,
   },
   /// Mark a user as a special follow (特别关注), or unmark with --undo
   Special {
+    /// User: mid, `uid:MID`, space link, name or #N
     user: String,
+    /// Unmark the user
     #[arg(long)]
     undo: bool,
   },
@@ -214,17 +262,39 @@ pub enum FollowCommand {
   },
   /// Block a user, or unblock with --undo
   Block {
+    /// User: mid, `uid:MID`, space link, name or #N
     user: String,
+    /// Unblock the user
     #[arg(long)]
     undo: bool,
   },
   /// People both you and USER follow
   SharedFollowing {
+    /// User: mid, `uid:MID`, space link, name or #N
     user: String,
     #[command(flatten)]
     page: PageArgs,
   },
 }
+
+const EX_FOLDER_CREATE: &str = "\
+Examples:
+  atp bili folder-create 'Watch again'
+  atp bili folder-create Drafts --intro 'for later' --private";
+
+const EX_FOLDER_EDIT: &str = "\
+Examples:
+  atp bili collections
+  atp bili folder-edit '#2' --title 'Music videos' --public
+  atp bili folder-edit 1052622027 --intro ''";
+
+const EX_GROUP_ASSIGN: &str = "\
+Examples:
+  atp bili group-assign 946974 --to Friends
+  atp bili group-assign 946974 '#3' --to Friends --to 'Game streams'
+  atp bili group-assign 946974
+
+More: atp guide bili group-assign";
 
 async fn run_follows(api: &Api, command: FollowCommand) -> Result<Data> {
   use FollowCommand as L;

@@ -27,8 +27,8 @@ mod users;
 use std::time::Duration;
 
 use atp_core::{
-  Cap, Choices, Comment, Ctx, Data, Page, PageReq, Platform, PlatformInfo, Post, Query, Result,
-  User,
+  Cap, Choices, Comment, Ctx, Data, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post,
+  Query, Result, User,
 };
 
 use crate::api::Api;
@@ -63,6 +63,10 @@ impl Platform for Ctrip {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(2500),
+    kind: PlatformKind::Local,
+    token: "",
+    env: &[],
+    guest: "everything except rooms (sights, hotels, reviews, trains, fares, notes)",
     guide: include_str!("../GUIDE.md"),
   };
 

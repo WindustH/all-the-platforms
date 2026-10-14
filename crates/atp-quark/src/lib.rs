@@ -30,8 +30,8 @@ use std::time::Duration;
 
 use atp_core::download::Link;
 use atp_core::{
-  Action, Cap, Choices, Ctx, Data, FileEntry, Page, PageReq, Platform, PlatformInfo, QrStatus,
-  QrTicket, Query, Result, User,
+  Action, Cap, Choices, Ctx, Data, FileEntry, Page, PageReq, Platform, PlatformInfo, PlatformKind,
+  QrStatus, QrTicket, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -59,6 +59,10 @@ impl Platform for Quark {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(500),
+    kind: PlatformKind::Drive,
+    token: "",
+    env: &[],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

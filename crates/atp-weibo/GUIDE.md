@@ -1,3 +1,38 @@
+## Logging in
+
+- `atp weibo login` shows a QR code; scan it with the Weibo app (我的 →
+  扫一扫) and confirm there. ATP then trades the confirmation for weibo.com
+  cookies. When the scan is confirmed but Weibo sets no session cookie,
+  the login fails and suggests `--browser` or `--cookie`.
+- `atp weibo login --browser` imports the cookies of a browser logged in at
+  https://weibo.com (it reads the weibo.com, weibo.cn and sina.com.cn
+  cookies).
+- `atp weibo login --cookie '...'` takes the whole `Cookie` header of a
+  weibo.com request; it must contain `SUB`. The `XSRF-TOKEN` that writes
+  send is fetched when the session lacks it. `ATP_WEIBO_COOKIE` supplies
+  such a header for one run, without saving it.
+
+Without a login, ATP uses a visitor cookie from Sina's visitor system
+(kept for up to three days, apart from the session, and renewed once when
+Weibo refuses it): hot lists, search, posts, comments, likers, profiles, a
+user's posts, followers and following all work. Search and `topic` always
+go through m.weibo.cn with the visitor cookie, logged in or not. Reposts
+lists, the feeds other than `hot`, notifications, unread counters, your
+favorites, folders, groups and likes, insights and every write need a
+login. When Weibo shows something to logged-in accounts only, the command
+fails with `not_authenticated`.
+
+How long a session lasts is not known. When Weibo refuses it, commands
+fail with `not_authenticated` ("the Weibo session has expired or was
+refused") and a hint to log in again.
+
+Weibo asks for a slider check when an account writes too much; the
+command then fails with `verification_required`, and on a terminal ATP
+opens weibo.com in a browser to pass it (see `atp guide login`). Answers
+such as 频繁 or 操作过快 become `rate_limited`: slow down and retry later.
+Requests are spaced at least a second apart, and every write waits 1.2 to
+3.5 seconds first.
+
 ## References
 
 - Posts: `https://weibo.com/<uid>/<id>`, `https://weibo.com/detail/<mid>`,
@@ -7,42 +42,79 @@
   domain, or a `weibo.com/u/<uid>`, `weibo.com/n/<name>` or `m.weibo.cn/u/<uid>` link.
 - Comments: the numeric comment id (`comments` lists them).
 
-## Logging in
+## Commands
 
-`atp weibo login` shows a QR code for the Weibo app (我的 → 扫一扫).
-`--browser` reuses a weibo.com browser session and `--cookie` takes the
-cookie header of weibo.com (it needs `SUB`).
+### hot
 
-Without a login, a visitor cookie from Sina's visitor system is used: hot
-lists, search, posts, comments, likers, profiles, a user's posts, followers
-and following all work. Reposts lists and everything about your own account
-need a login.
+`--category realtime` (热搜, the default), `posts` (热门微博), and the
+boards `entertainment`, `life`, `social`, `tech`, `sports`, `acg`,
+`trend`, `explode` (these two come back empty without a login) and `mine`
+(yours, logged in). Hot-search entries are posts of kind `trend` with the
+heat in `metrics.views`.
 
-## Reading
+### feed
 
-- `hot --category realtime` (热搜, the default), `posts` (热门微博), and the
-  boards `entertainment`, `life`, `social`, `tech`, `sports`, `acg`,
-  `trend`, `explode` (these two come back empty without a login) and `mine`
-  (yours, logged in). Hot-search entries are posts of kind `trend` with the
-  heat in `metrics.views`.
-- `feed --type following|latest|original|video|hot` (logged out: `hot`).
-- `search --sort general|latest|hot`, `--filter video|image`;
-  `-t user`, `-t topic` (with discussion and read counts).
-- `comments --sort hot|time`, `--all --replies` for whole threads.
-- `topic NAME` lists posts under a hashtag; `groups` and `group GID` read
-  your feed groups; `folders` lists favorite folders for `favorites --folder`.
+`--type following|latest|original|video|hot`; logged in the default is
+`following`, logged out only `hot` works.
 
-## Interactions
+### search
 
-- `post TEXT [--title T] [-i IMAGE ...] [--topic T]` (up to 18 pictures;
-  topics become `#T#`); `post TEXT --quote POST` and `repost POST [TEXT]
-  [--comment]` repost.
-- `comment POST TEXT [--reply-to COMMENT]`, `delete-comment POST COMMENT`,
-  `like`, `favorite`, `follow`, `delete` (your post).
-- Weibo asks for a slider check when an account writes too much; the
-  command then fails with `verification_required`.
+`--sort general|latest|hot`, `--filter video|image`; `-t user`,
+`-t topic` (with discussion and read counts).
 
-## Analytics
+### comments
+
+`--sort hot|time`, `--all --replies` for whole threads.
+
+### comment, delete-comment
+
+`comment POST TEXT --reply-to COMMENT` answers a comment;
+`delete-comment POST COMMENT` takes the comment id.
+
+### favorite
+
+There is no `--folder`: Weibo files favorites into folders (tags) on
+weibo.com, and `favorites --folder` reads them.
+
+### favorites, collections
+
+Weibo shows favorites and their folders of the logged-in account only;
+another user's fail with `permission_denied`.
+
+### folders
+
+Your favorite folders, with the ids `favorites --folder` takes.
+
+### topic
+
+`topic NAME` lists posts under a hashtag, newest first.
+
+### groups, group
+
+`groups` lists your feed groups; `group GID` reads one of them.
+
+### post
+
+`post TEXT [--title T] [-i IMAGE ...] [--topic T]`: up to 18 pictures;
+topics become `#T#`, and a title goes on the first line. `post TEXT
+--quote POST` reposts with text (no pictures then); `--reply-to` is not
+supported, use `comment`.
+
+### repost
+
+`repost POST [TEXT] [--comment]` reposts (转发), optionally with your text;
+`--comment` also posts the text as a comment on the original.
+
+### delete
+
+Deletes one of your own posts.
+
+### notifications
+
+`--type comments` (received, the default), `mentions` (in posts),
+`comment-mentions`, `sent-comments` and `likes`.
+
+### insights
 
 `insights` reports what weibo.com shows: lifetime followers, posts and the
 likes, comments and reposts received, plus yesterday's reads and
@@ -50,7 +122,7 @@ interactions. `insights POST` gives a post's counters (reads where Weibo
 shows them, video plays). The creator data center (me.weibo.com) has no
 usable web API, so there are no daily trends or audience breakdowns.
 
-## Downloads
+### download
 
 Pictures at their largest size (live photos with their motion clip, GIFs
 as video) and videos in the best quality offered.

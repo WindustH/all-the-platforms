@@ -26,7 +26,8 @@ line in `src/main.rs`.
 | `ctx` | `Ctx`: what a platform works with (HTTP client with the session cookies, files, session extras, login hints, `#N` resolution) |
 | `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `FileEntry` (drives), `Page<T>`, `Action`, `AuthStatus`, `Insights`, `Transcript`, and `Data` (everything a command can print), one file per type |
 | `cli` | the shared commands, one module per area (`account`, `read`, `library`, `write`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options |
-| `app` | top-level program, `atp platforms`, multi-call (`bili` symlink) |
+| `app` | top-level program, multi-call (`bili` symlink) |
+| `platforms` | `atp platforms`: one row per platform grouped by kind, `atp platforms <id>` in detail, the same data as JSON |
 | `account` | `login` (QR / token / browser / cookie string), `logout`, `status` |
 | `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, proxy; `request` (building, sending, retries, streaming), `response` |
 | `store` | session file (0600), TTL cache, `#N` short-index lists |
@@ -36,7 +37,7 @@ line in `src/main.rs`.
 | `task` | background work upstream: `wait` polls a task with growing gaps; `retry` backs off while a call fails with errors a predicate picks (rate limits, risk codes) |
 | `oauth` | OAuth device-code logins (`DeviceCode`, `Poll`, `device_login`) and `Tokens` kept in the session extras, saved to disk the moment a single-use refresh token rotates (`access_token`) |
 | `file` | format detection by magic bytes, MIME types, files and images to upload |
-| `guide` | `atp guide`: topics from `crates/atp-core/guide/*.md`, platform topics generated from the command set plus each crate's `GUIDE.md` |
+| `guide` | `atp guide`: topics from `crates/atp-core/guide/*.md` and what shared commands mean from `guide/commands/*.md`; platform, command (`atp guide bili search`) and login pages generated from the clap command set and `PlatformInfo`, plus each crate's `GUIDE.md` whole or by section; `page` resolves the words for the CLI and MCP |
 | `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
 | `text` | counts (`1.2万`), durations, truncation, HTML to text, timestamps |
@@ -48,7 +49,7 @@ line in `src/main.rs`.
 | `socket` | websocket connections through the same client |
 | `qr` | login QR codes in the terminal, from a URL or a QR image |
 | `verify` | human checks by hand: a Chromium-family browser over DevTools with the session cookies, then one retry (`chrome`, `cdp`) |
-| `mcp` | `atp mcp`: JSON-RPC over stdio; tools `platforms`, `help`, `read`, `run` calling commands without printing |
+| `mcp` | `atp mcp`: JSON-RPC over stdio; tools `platforms`, `help`, `read`, `run` calling commands without printing; the guide as resources (`atp://guide/…`) |
 
 ### The Platform contract
 
@@ -56,7 +57,9 @@ A platform crate exports one type implementing `atp_core::Platform`:
 
 - `const INFO: PlatformInfo` declares id, aliases, home page, cookie domains,
   required cookies, supported capabilities (`caps`), accepted option values
-  (`choices`) and request pacing (`min_interval`).
+  (`choices`), request pacing (`min_interval`), its kind, what logging in
+  takes (`token`, `env`) and allows without an account (`guest`), and the
+  crate's `GUIDE.md` (`guide`).
 - Methods for the shared commands (`search`, `read`, `comments`, `like`,
   `publish`, ...). Each has a default body returning `unsupported_operation`,
   so a platform implements only what it supports and lists it in `caps`;

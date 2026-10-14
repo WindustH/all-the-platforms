@@ -71,8 +71,8 @@ fn walk(v: &Value, skip: &[&str], out: &mut Listing) {
           "reelItemRenderer" => out.posts.extend(video::renderer(c, true)),
           "shortsLockupViewModel" => out.posts.extend(video::short(c)),
           "lockupViewModel" => match video::lockup(c) {
-            Some(Lockup::Video(p)) => out.posts.push(p),
-            Some(Lockup::Playlist(p)) => out.collections.push(p),
+            Some(Lockup::Video(p)) => out.posts.push(*p),
+            Some(Lockup::Playlist(p)) => out.collections.push(*p),
             None => {}
           },
           "channelRenderer" | "gridChannelRenderer" => out.users.extend(channel(c)),

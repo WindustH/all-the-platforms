@@ -22,8 +22,8 @@ mod users;
 use std::time::Duration;
 
 use atp_core::{
-  Cap, Choices, Comment, Ctx, Data, Page, PageReq, Platform, PlatformInfo, Post, Query, Result,
-  User,
+  Cap, Choices, Comment, Ctx, Data, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post,
+  Query, Result, User,
 };
 
 use crate::api::Api;
@@ -57,6 +57,10 @@ impl Platform for Jd {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(3000),
+    kind: PlatformKind::Shopping,
+    token: "",
+    env: &[],
+    guest: "hot, suggest, related; the rest usually meets a risk check",
     guide: include_str!("../GUIDE.md"),
   };
 

@@ -21,7 +21,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo,
-  Post, Result, User,
+  PlatformKind, Post, Result, User,
 };
 
 use crate::api::Api;
@@ -55,6 +55,15 @@ impl Platform for Satori {
     ],
     choices: Choices::NONE,
     min_interval: Duration::ZERO,
+    kind: PlatformKind::Chat,
+    token: "URL|TOKEN|PLATFORM:USER_ID",
+    env: &[
+      "SATORI_URL",
+      "SATORI_TOKEN",
+      "SATORI_PLATFORM",
+      "SATORI_USER_ID",
+    ],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

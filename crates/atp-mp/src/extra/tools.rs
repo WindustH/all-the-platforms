@@ -12,9 +12,15 @@ pub enum ToolCommand {
   /// The auto-reply rules as configured (API)
   Autoreply,
   /// Daily quota of an API path, e.g. /cgi-bin/draft/add (API)
-  Quota { path: String },
+  Quota {
+    /// API path, e.g. /cgi-bin/draft/add
+    path: String,
+  },
   /// Look up a failed API request by the rid in its error (API)
-  Rid { rid: String },
+  Rid {
+    /// The `rid` from the error message
+    rid: String,
+  },
   /// Accounts this backend session can switch to
   Accounts,
 }

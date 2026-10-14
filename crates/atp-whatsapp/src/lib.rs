@@ -38,7 +38,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Error, Insights, Media, Message, Page, PageReq,
-  Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
+  Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -77,6 +77,15 @@ impl Platform for WhatsApp {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(300),
+    kind: PlatformKind::Chat,
+    token: "TOKEN:PHONE_NUMBER_ID:WABA_ID",
+    env: &[
+      "WHATSAPP_TOKEN",
+      "WHATSAPP_PHONE_NUMBER_ID",
+      "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "WHATSAPP_GRAPH_VERSION",
+    ],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

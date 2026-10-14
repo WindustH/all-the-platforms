@@ -34,7 +34,8 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media, Message,
-  Notification, Page, PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
+  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result,
+  User,
 };
 
 use crate::api::Api;
@@ -95,6 +96,15 @@ impl Platform for Reddit {
       notification_kind: notifications::KINDS,
     },
     min_interval: Duration::from_millis(1000),
+    kind: PlatformKind::Social,
+    token: "",
+    env: &[
+      "REDDIT_CLIENT_ID",
+      "REDDIT_CLIENT_SECRET",
+      "REDDIT_USERNAME",
+      "REDDIT_PASSWORD",
+    ],
+    guest: "search, hot, feed, read, comments, user, user-posts, download, sub",
     guide: include_str!("../GUIDE.md"),
   };
 

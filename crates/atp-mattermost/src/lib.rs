@@ -24,7 +24,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Media, Message, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
+  PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -68,6 +68,10 @@ impl Platform for Mattermost {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(200),
+    kind: PlatformKind::Chat,
+    token: "SERVER|TOKEN",
+    env: &["MATTERMOST_URL", "MATTERMOST_TOKEN"],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

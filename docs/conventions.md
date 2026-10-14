@@ -39,7 +39,7 @@ Every platform crate uses the same module names for the same roles:
 | `live.rs` | `listen` (a `gateway.rs` may hold a socket protocol it uses) |
 | `extra.rs` / `extra/` | platform-only commands: `pub enum Command`, `pub async fn run(api: &Api, command: Command) -> Result<Data>` |
 | feature modules | plural nouns for what they handle: `posts`, `comments`, `users`, `chats`, `messages`, `notifications`, `insights`, `uploads`, `library`, `search` ... |
-| `GUIDE.md` | the platform's part of `atp guide` |
+| `GUIDE.md` | the platform's part of `atp guide` (see [Documentation](#documentation)) |
 
 One name per role: `parse` (not `convert`), `users` (not `people` / `user`),
 `messages` (not `im`, `dm`, `pm`, `direct`), `live` (not `stream`,
@@ -92,6 +92,7 @@ Use these instead of writing another copy:
 | media kind of a MIME type | `MediaKind::from_mime` |
 | prices of products, listings, deals, tickets | `Post.price` (`Price::cny`, `original`, `label`); never in `extra` |
 | times, counts, text | `text::{from_secs, from_millis, from_beijing, parse_count, html_to_text, encode_uri_component, emoji_shortcode …}` |
+| dates without a time of day (`Oct 12, 2021`, `3 weeks ago`) | `text::date_only`: shown as a date, never with a made-up clock time |
 | listings | `cli::PageArgs`, `paging` (`paging::slice` for lists held in memory), `PageReq` |
 | text and file arguments, confirmations | `cli::{read_text, check_images, check_files, confirm}` |
 | HTTP errors | `http::status_error`, `Req::retries` |
@@ -101,6 +102,44 @@ their subdomains), so list every domain the session is used on.
 
 When a crate needs something a second crate already has, move it into
 atp-core first.
+
+## Documentation
+
+`atp guide`, the MCP `help` tool and the `atp://guide/…` resources are
+built from four sources. A platform is not done until all four are
+complete.
+
+- **clap doc comments.** Every command, nested subcommand and argument of
+  a platform (`extra.rs`), positionals included, has a `///` comment;
+  `-y, --yes` reads "Skip the confirmation question (needed in scripts)".
+  Commands whose usage is not obvious (several argument forms, special
+  syntax, nested subcommands, a particular login) get examples in
+  `after_long_help`: a `const EX_…` in the `Examples:` format of
+  atp-core, ending with `More: atp guide <id> <command>`.
+- **`crates/atp-core/guide/commands/*.md`.** What a shared command means
+  on every platform: arguments, paging, `--since` / `--until`, `#N`,
+  confirmation and `--yes`, output shapes. `guide/command.rs` maps command
+  names to files; a new shared command gets a file or joins one.
+- **The crate's `GUIDE.md`**, in this order: an optional intro,
+  `## Logging in`, `## References`, `## Commands`, other sections,
+  `## Limits`.
+  - `## Logging in` is required and complete: every way in with its
+    steps, where tokens and app credentials come from, what each way
+    unlocks and what works without an account, how long a session lasts
+    and how its end shows, risk control (new-device checks, captchas,
+    write pacing, ban risks) and the environment variables. Facts the
+    code cannot tell are said to be unknown, never guessed.
+  - Under `## Commands`, a command that behaves specially on the platform
+    gets a `### name` section (`### playlist create`; one section may name
+    several: `### like, unlike`). Headings hold only command names as
+    typed, canonical names for shared commands (`read`, not `show`).
+    Commands with nothing special get no section. `atp guide <id>
+    <command>` shows the sections naming the command or its group; `login`
+    shows `## Logging in`.
+- **`PlatformInfo`**: `kind`, `token` (what `login --token` takes, as a
+  placeholder), `env` (credential variables) and `guest` (what works
+  without logging in) feed `atp guide login`, `atp platforms` and login
+  hints.
 
 ## Checks
 

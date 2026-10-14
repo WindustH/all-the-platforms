@@ -11,12 +11,14 @@ use crate::platform::Platform;
 pub enum LibraryCommand {
   /// Favorites folders / lists (yours when USER is omitted)
   Collections {
+    /// User: an id, a handle or a link, or #N; yours when omitted
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Saved / bookmarked posts (yours when USER is omitted)
   Favorites {
+    /// User: an id, a handle or a link, or #N; yours when omitted
     user: Option<String>,
     /// Only this folder / collection id
     #[arg(long)]
@@ -26,6 +28,7 @@ pub enum LibraryCommand {
   },
   /// Liked posts (yours when USER is omitted)
   Likes {
+    /// User: an id, a handle or a link, or #N; yours when omitted
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,
@@ -37,6 +40,7 @@ pub enum LibraryCommand {
   },
   /// Your notifications
   Notifications {
+    /// Only this kind (values differ per platform)
     #[arg(short = 't', long = "type")]
     kind: Option<String>,
     #[command(flatten)]

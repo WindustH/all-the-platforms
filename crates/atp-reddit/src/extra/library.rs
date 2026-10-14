@@ -26,15 +26,22 @@ pub enum LibraryCommand {
   },
   /// Hide a post from your listings
   Hide {
+    /// Post: id, `t3_…`, link or #N
     post: String,
     /// Show it again instead
     #[arg(long)]
     undo: bool,
   },
   /// A user's trophies (yours when USER is omitted)
-  Trophies { user: Option<String> },
+  Trophies {
+    /// User: name, `u/name` or profile link
+    user: Option<String>,
+  },
   /// Subreddits a user moderates (yours when USER is omitted)
-  Moderated { user: Option<String> },
+  Moderated {
+    /// User: name, `u/name` or profile link
+    user: Option<String>,
+  },
 }
 
 pub(super) async fn run(api: &Api, command: LibraryCommand) -> Result<Data> {

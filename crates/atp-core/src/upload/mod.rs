@@ -18,7 +18,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use crate::ctx::Ctx;
 use crate::error::{Error, ErrorCode, Result};
 use crate::file::{mime_for, sniff};
-use crate::output::{note, progress};
+use crate::output::{note, progress, set_total};
 use crate::task;
 
 pub use self::hashes::{BLOCK, HEAD, Hashes};
@@ -195,7 +195,7 @@ impl<'a> Parts<'a> {
     }
     let mut sha1 = self.sha1_before(first, part_size).await?;
     let bar = progress(&self.file.name);
-    bar.set_length(self.file.size);
+    set_total(&bar, self.file.size);
     bar.set_position((u64::from(first - 1) * part_size).min(self.file.size));
     for number in first..=count {
       let data = self.file.part(number, part_size).await?;

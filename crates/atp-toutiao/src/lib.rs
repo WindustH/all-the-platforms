@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use atp_core::{
   Action, Cap, Choices, Comment, Ctx, Data, Insights, NoExtra, Page, PageReq, Platform,
-  PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
+  PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -64,6 +64,10 @@ impl Platform for Toutiao {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(1000),
+    kind: PlatformKind::Social,
+    token: "",
+    env: &[],
+    guest: "hot, feed, search, read, comments, user, user-posts, download",
     guide: include_str!("../GUIDE.md"),
   };
 

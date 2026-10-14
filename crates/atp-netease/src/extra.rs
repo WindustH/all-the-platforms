@@ -14,11 +14,12 @@ use crate::{cloud, discover, library, lyrics, playlists, uploads, users};
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Your playlists: create, add or remove songs, delete; any playlist's songs
-  #[command(subcommand)]
+  #[command(subcommand, after_long_help = EX_PLAYLIST)]
   Playlist(PlaylistCommand),
   /// Lyrics of a song: plain text with translations under their lines, or LRC
   #[command(after_long_help = EX_LYRICS)]
   Lyrics {
+    /// Song: id, `song:ID`, link or #N
     song: String,
     /// LRC with times instead of plain text
     #[arg(long)]
@@ -28,7 +29,7 @@ pub enum Command {
     original: bool,
   },
   /// Your music cloud drive (云盘): your own uploaded files
-  #[command(subcommand)]
+  #[command(subcommand, after_long_help = EX_CLOUD)]
   Cloud(CloudCommand),
   /// Every chart (榜单), as playlists to read
   Toplists {
@@ -37,6 +38,7 @@ pub enum Command {
   },
   /// Listening ranking (听歌排行) of a user, yours without USER
   Ranking {
+    /// User: id, `user/home?id=` link, exact nickname or #N
     user: Option<String>,
     /// All time instead of the last week
     #[arg(long)]
@@ -51,32 +53,42 @@ pub enum Command {
 #[derive(Debug, clap::Subcommand)]
 pub enum PlaylistCommand {
   /// Create a playlist
+  #[command(after_long_help = EX_PLAYLIST_CREATE)]
   Create {
+    /// Name of the new playlist
     name: String,
     /// Only you see it
     #[arg(long)]
     private: bool,
   },
   /// Add songs to one of your playlists
+  #[command(after_long_help = EX_PLAYLIST_ADD)]
   Add {
+    /// Playlist: id, `playlist:ID`, link or #N
     playlist: String,
+    /// Songs: ids, `song:ID`, links or #N
     #[arg(value_name = "SONG", required = true)]
     songs: Vec<String>,
   },
   /// Remove songs from one of your playlists
   Remove {
+    /// Playlist: id, `playlist:ID`, link or #N
     playlist: String,
+    /// Songs: ids, `song:ID`, links or #N
     #[arg(value_name = "SONG", required = true)]
     songs: Vec<String>,
   },
   /// Delete one of your playlists
   Delete {
+    /// Playlist: id, `playlist:ID`, link or #N
     playlist: String,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// The songs of a playlist (or a chart), page by page
   Tracks {
+    /// Playlist or chart: id, `playlist:ID`, link or #N
     playlist: String,
     #[command(flatten)]
     page: PageArgs,
@@ -91,7 +103,9 @@ pub enum CloudCommand {
     page: PageArgs,
   },
   /// Upload your own audio files (at once when the drive holds them already)
+  #[command(after_long_help = EX_CLOUD_UPLOAD)]
   Upload {
+    /// Local audio files (mp3, flac, ape, wav, m4a, ogg …)
     #[arg(required = true)]
     files: Vec<PathBuf>,
     /// Artist the drive shows for them
@@ -103,6 +117,7 @@ pub enum CloudCommand {
   },
   /// Download files you uploaded, by their ids from `cloud ls`
   Download {
+    /// File ids from `cloud ls`, or #N
     #[arg(value_name = "FILE", required = true)]
     files: Vec<String>,
     /// Directory to save into
@@ -111,8 +126,10 @@ pub enum CloudCommand {
   },
   /// Delete files from your cloud drive
   Delete {
+    /// File ids from `cloud ls`, or #N
     #[arg(value_name = "FILE", required = true)]
     files: Vec<String>,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
@@ -231,3 +248,40 @@ Examples:
   atp ncm lyrics 186016
   atp ncm lyrics '#1' --lrc --json | jq -r .data.text > song.lrc
   atp ncm lyrics https://music.163.com/song?id=186016 --original";
+
+const EX_PLAYLIST: &str = "\
+Examples:
+  atp ncm playlist create \"Road trip\"
+  atp ncm playlist add playlist:24381616 186016 '#2'
+  atp ncm playlist tracks playlist:3778678
+
+More: atp guide ncm playlist";
+
+const EX_PLAYLIST_CREATE: &str = "\
+Examples:
+  atp ncm playlist create \"Road trip\"
+  atp ncm playlist create Demos --private
+
+More: atp guide ncm playlist create";
+
+const EX_PLAYLIST_ADD: &str = "\
+Examples:
+  atp ncm playlist add 24381616 186016 347230
+  atp ncm playlist add playlist:24381616 '#1'   # first song of the last list
+
+More: atp guide ncm playlist add";
+
+const EX_CLOUD: &str = "\
+Examples:
+  atp ncm cloud upload song.flac --artist Me --album Demos
+  atp ncm cloud ls
+  atp ncm cloud download '#1' -o ~/Music
+
+More: atp guide ncm cloud";
+
+const EX_CLOUD_UPLOAD: &str = "\
+Examples:
+  atp ncm cloud upload song.flac
+  atp ncm cloud upload *.mp3 --artist Me --album Demos
+
+More: atp guide ncm cloud upload";

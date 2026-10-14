@@ -32,7 +32,8 @@ use std::time::Duration;
 use api::Api;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Notification, Page,
-  PageReq, Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
+  User,
 };
 use refs::Target;
 
@@ -89,6 +90,10 @@ impl Platform for Zhihu {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(600),
+    kind: PlatformKind::Social,
+    token: "",
+    env: &[],
+    guest: "hot, daily",
     guide: include_str!("../GUIDE.md"),
   };
 

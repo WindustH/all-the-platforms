@@ -20,7 +20,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Media, Message, Page, PageReq, Platform,
-  PlatformInfo, Post, Result, User,
+  PlatformInfo, PlatformKind, Post, Result, User,
 };
 
 use crate::api::Api;
@@ -54,6 +54,10 @@ impl Platform for VoceChat {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(200),
+    kind: PlatformKind::Chat,
+    token: "SERVER|EMAIL|PASSWORD",
+    env: &["VOCECHAT_URL", "VOCECHAT_API_KEY"],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

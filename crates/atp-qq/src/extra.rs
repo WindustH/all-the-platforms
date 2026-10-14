@@ -8,10 +8,17 @@ use crate::{chats, messages};
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// A server's (频道) details
-  Server { server: String },
+  Server {
+    /// Server: `guild:<id>` or #N
+    server: String,
+  },
   /// A server's roles
-  Roles { server: String },
+  Roles {
+    /// Server: `guild:<id>` or #N
+    server: String,
+  },
   /// Open a 私信 session with a server member; prints its `dm:` chat
+  #[command(after_long_help = EX_OPEN_DM)]
   OpenDm {
     /// The member's user id
     user: String,
@@ -19,14 +26,35 @@ pub enum Command {
     server: String,
   },
   /// Pinned messages of a sub-channel
-  Pins { channel: String },
+  Pins {
+    /// Sub-channel id
+    channel: String,
+  },
   /// Pin a sub-channel message (or unpin it with --undo)
+  #[command(after_long_help = EX_PIN)]
   Pin {
+    /// Message: `CHANNEL/MESSAGE`, as `listen` and `pins` print it
     message: String,
+    /// Unpin it instead
     #[arg(long)]
     undo: bool,
   },
 }
+
+const EX_OPEN_DM: &str = "\
+Examples:
+  atp qq open-dm USER_ID guild:GUILD_ID      # prints dm:<session>
+  atp qq send dm:SESSION \"hello\"
+
+More: atp guide qq open-dm";
+
+const EX_PIN: &str = "\
+Examples:
+  atp qq pins CHANNEL_ID
+  atp qq pin CHANNEL_ID/MESSAGE_ID
+  atp qq pin CHANNEL_ID/MESSAGE_ID --undo
+
+More: atp guide qq pin";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;

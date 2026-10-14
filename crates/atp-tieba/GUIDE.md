@@ -1,3 +1,33 @@
+## Logging in
+
+- `atp tieba login` shows a Baidu passport QR code; scan it with the Tieba
+  or Baidu app and confirm. The login saves `BDUSS` and Tieba's `STOKEN`.
+- `atp tieba login --browser` imports the cookies of a browser logged in
+  at https://tieba.baidu.com (it reads the baidu.com and tieba.baidu.com
+  cookies).
+- `atp tieba login --cookie 'BDUSS=…; STOKEN=…'` takes the `Cookie` header
+  of a tieba.baidu.com request. `BDUSS` is the session; `STOKEN` (Tieba's
+  own, set for tieba.baidu.com) is needed by agrees, follows and saved
+  threads. `ATP_TIEBA_COOKIE` supplies such a header for one run, without
+  saving it.
+
+Most reading works without an account (see the commands below). Logged in
+come `collections [USER]` (followed forums with your level), `favorites`
+(收藏), `notifications`, `unread`, `user-replies` without a user, and
+every write.
+
+How long a session lasts is not known. When Tieba refuses it, commands
+fail with `not_authenticated` ("Tieba did not accept the session (BDUSS)")
+and a hint to log in again.
+
+Calls imitate the Android app, with a device id ATP makes once and keeps
+in the session. Tieba asks new or busy accounts for captchas: a
+`verification_required` error means post once in the app or browser and
+wait (on a terminal ATP opens tieba.baidu.com in a browser, see `atp guide
+login`). Answers such as 太快 or 频繁 become `rate_limited`. Requests are
+spaced at least a second apart, and every write waits 0.8 to 2 seconds
+first, as bursts get flagged.
+
 ## References
 
 - Threads: the id (`10083467821`) or a `https://tieba.baidu.com/p/<id>`
@@ -10,47 +40,113 @@
   (`search -t topic`, `collections`).
 - Hot topics: `#N` after `hot`, the topic id or its link.
 
-## Reading
+## Commands
 
-Most reading works without an account: `hot` (the 热议 board), `topic
-TOPIC` (its threads), `forum NAME [--sort reply|new|good]`, `forum-info
-NAME`, `read THREAD` (the first floor), `comments THREAD [--sort
-asc|desc|author]` (the other floors with their first replies inline;
-`--replies` fetches all), `replies THREAD FLOOR` (楼中楼), `search` (threads;
-`--sort relevant|new|old`, `--filter threads|posts`), `search -t topic`
-(forums), `search -t user`, `forum-search FORUM QUERY`, `user`,
-`user-posts` (threads), `user-replies`, `followers` and `following`.
+Reading without an account: `hot`, `topic`, `forum`, `forum-info`, `read`,
+`comments`, `replies`, `search`, `forum-search`, `user`, `user-posts`,
+`user-replies USER`, `followers` and `following`.
 
-Floors carry `extra.floor` and `extra.url`; their pictures are listed in
-`extra.images`. `download THREAD` saves the first floor's pictures, video
-and voice.
+### hot
 
-## Logging in
+The 热议 board.
 
-`atp tieba login` shows a Baidu passport QR code for the Tieba or Baidu
-app; `--browser` (a browser logged in to tieba.baidu.com) and `--cookie
-'BDUSS=…; STOKEN=…'` work too. `BDUSS` is the session; `STOKEN` (Tieba's
-own, set for tieba.baidu.com) is needed by agrees, follows and saved
-threads.
+### topic
 
-Logged in: `collections [USER]` (followed forums with your level),
-`favorites` (收藏), `notifications --type reply|at|agree`, `unread`.
+`topic TOPIC` lists the threads of a hot topic. `read` refuses a topic
+link and points here.
 
-## Writing
+### forum
 
-- `like THREAD` agrees (点赞) with a thread, or with a floor given by link.
-- `favorite THREAD [--undo]` saves the thread.
-- `comment THREAD TEXT [-i IMAGE]` adds a floor; `--reply-to FLOOR` (or a
-  floor link) replies inside that floor.
-- `post TEXT --topic FORUM [--title T] [-i IMAGE]` starts a thread.
-- `delete THREAD`, `delete-comment THREAD FLOOR`; for a reply inside a floor
-  name the floor in THREAD (`THREAD/FLOOR`) and the reply as COMMENT.
-- `follow USER`, `follow-forum FORUM [--undo]`, `unfollow-forum FORUM`.
-- `sign FORUM…` signs in (签到); `sign --all` signs every followed forum.
+`forum NAME [--sort reply|new|good]`: by last reply, newest first, or 精品
+only.
 
-Pictures go up in 512 KB chunks and are placed after the text. Tieba asks
-new or busy accounts for captchas: a `verification_required` error means
-post once in the app or browser and wait.
+### forum-info
+
+The forum's members, threads, posts, category and managers.
+
+### read
+
+The first floor of a thread. Floors carry `extra.floor` and `extra.url`;
+their pictures are listed in `extra.images`.
+
+### comments
+
+`comments THREAD [--sort asc|desc|author]`: the other floors with their
+first replies inline (`--replies` fetches all); `author` keeps the
+original poster's floors only (只看楼主).
+
+### replies
+
+`replies THREAD FLOOR` lists the replies inside a floor (楼中楼).
+
+### search
+
+Threads; `--sort relevant|new|old`, `--filter threads|posts`.
+`search -t topic` finds forums, `search -t user` users.
+
+### forum-search
+
+`forum-search FORUM QUERY` searches threads inside one forum, with the
+same `--sort` and `--filter`.
+
+### user-posts, user-replies
+
+`user-posts` lists the threads a user started, `user-replies` the replies
+they wrote.
+
+### collections
+
+`collections [USER]` lists followed forums with your level; it needs a
+login, also for another user's.
+
+### favorites
+
+Your saved threads (收藏) only; `favorites USER` is not supported.
+
+### notifications
+
+`--type reply|at|agree`: replies to you, @ mentions, agrees.
+
+### like
+
+`like THREAD` agrees (点赞) with a thread, or with a floor given by link.
+
+### favorite
+
+`favorite THREAD [--undo]` saves the thread.
+
+### comment
+
+`comment THREAD TEXT [-i IMAGE]` adds a floor; `--reply-to FLOOR` (or a
+floor link) replies inside that floor. Pictures go up in 512 KB chunks
+and are placed after the text.
+
+### post
+
+`post TEXT --topic FORUM [--title T] [-i IMAGE]` starts a thread in that
+forum; `--reply-to` and `--quote` are not supported. Pictures go up as for
+`comment`.
+
+### delete, delete-comment
+
+`delete THREAD`, `delete-comment THREAD FLOOR`; for a reply inside a floor
+name the floor in THREAD (`THREAD/FLOOR`) and the reply as COMMENT.
+
+### follow, follow-forum, unfollow-forum
+
+`follow USER` follows a user; `follow-forum FORUM [--undo]` and
+`unfollow-forum FORUM` join and leave forums.
+
+### sign
+
+`sign FORUM…` signs in (签到); `sign --all` signs every followed forum.
+Each forum gets a row with `ok`, `already` (signed today), the bonus and
+the days in a row. A lost session, a captcha or a rate limit stops the
+batch.
+
+### download
+
+`download THREAD` saves the first floor's pictures, video and voice.
 
 ## Limits
 

@@ -242,18 +242,28 @@ impl Stream {
   }
 }
 
-/// A byte-counting progress bar on stderr, labelled `label`; its length is
-/// set once known.
+/// A byte-counting progress line on stderr, labelled `label`. Until
+/// [`set_total`] gives the size it is a spinner with the bytes so far, so
+/// downloads of unknown size show no made-up total.
 pub(crate) fn progress(label: &str) -> indicatif::ProgressBar {
-  let bar = indicatif::ProgressBar::new(0);
-  bar.set_style(
-    indicatif::ProgressStyle::with_template(
-      "{msg:40!} {bytes:>10}/{total_bytes:10} {bar:24} {bytes_per_sec:>10}",
-    )
-    .unwrap_or_else(|_| indicatif::ProgressStyle::default_bar()),
-  );
+  let bar = indicatif::ProgressBar::no_length();
+  bar.set_style(style("{spinner} {msg:38!} {bytes:>10} {bytes_per_sec:>12}"));
   bar.set_message(label.to_owned());
+  bar.enable_steady_tick(std::time::Duration::from_millis(120));
   bar
+}
+
+/// The size became known: from now on a bar with the total.
+pub(crate) fn set_total(bar: &indicatif::ProgressBar, total: u64) {
+  bar.set_style(style(
+    "{msg:40!} {bytes:>10}/{total_bytes:10} {bar:24} {bytes_per_sec:>10}",
+  ));
+  bar.set_length(total);
+}
+
+fn style(template: &str) -> indicatif::ProgressStyle {
+  indicatif::ProgressStyle::with_template(template)
+    .unwrap_or_else(|_| indicatif::ProgressStyle::default_bar())
 }
 
 /// Progress / status line for people, on stderr so it never mixes with data.

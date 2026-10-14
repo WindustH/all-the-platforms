@@ -31,13 +31,23 @@ pub enum Command {
     name: Option<String>,
   },
   /// The city at a point, with its Dianping id (any city)
+  #[command(after_long_help = EX_LOCATE)]
   Locate {
+    /// Latitude of the point
     #[arg(allow_negative_numbers = true)]
     lat: f64,
+    /// Longitude of the point
     #[arg(allow_negative_numbers = true)]
     lng: f64,
   },
 }
+
+const EX_LOCATE: &str = "\
+Examples:
+  atp dp locate 30.2741 120.1551
+  DIANPING_CITY=3 atp dp search 西湖醋鱼
+
+More: atp guide dp locate";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

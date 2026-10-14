@@ -8,17 +8,29 @@ use atp_core::{Data, Error, Result};
 use crate::api::Api;
 use crate::{account, uploads};
 
+const EX_SCHEDULE: &str = "\
+Examples:
+  atp x schedule \"Launch day\" --at +2h
+  atp x schedule \"Good morning\" --at '2026-10-20 09:30' -i sunrise.jpg
+  atp x scheduled                      # ids for unschedule
+
+More: atp guide x schedule";
+
 #[derive(Debug, clap::Subcommand)]
 pub enum AccountCommand {
   /// Block a user (or unblock with --undo)
   Block {
+    /// User: handle, @handle, link, id or #N
     user: String,
+    /// Unblock instead
     #[arg(long)]
     undo: bool,
   },
   /// Mute a user (or unmute with --undo)
   Mute {
+    /// User: handle, @handle, link, id or #N
     user: String,
+    /// Unmute instead
     #[arg(long)]
     undo: bool,
   },
@@ -34,22 +46,31 @@ pub enum AccountCommand {
   },
   /// Pin a tweet to your profile (or unpin it with --undo)
   Pin {
+    /// Tweet: id, link or #N
     post: String,
+    /// Unpin instead
     #[arg(long)]
     undo: bool,
   },
   /// Your scheduled posts
   Scheduled,
   /// Schedule a post: --at 2026-10-20T09:30:00+08:00, '2026-10-20 09:30' or +2h
+  #[command(after_long_help = EX_SCHEDULE)]
   Schedule {
+    /// Text of the post
     text: String,
+    /// When: +30m, +2h, +1d, a local '2026-10-20 09:30' or an RFC 3339 time
     #[arg(long, value_name = "WHEN")]
     at: String,
+    /// Attach an image (repeatable, at most 4)
     #[arg(short = 'i', long = "image", value_name = "PATH")]
     images: Vec<PathBuf>,
   },
   /// Cancel a scheduled post
-  Unschedule { id: String },
+  Unschedule {
+    /// Scheduled post id, from `scheduled`
+    id: String,
+  },
 }
 
 pub(super) async fn run(api: &Api, command: AccountCommand) -> Result<Data> {

@@ -38,7 +38,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Insights, Media, Message, Page, PageReq,
-  Platform, PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
+  Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -83,6 +83,10 @@ impl Platform for Telegram {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(500),
+    kind: PlatformKind::Chat,
+    token: "BOT_TOKEN",
+    env: &["TELEGRAM_BOT_TOKEN", "TELEGRAM_API_ID", "TELEGRAM_API_HASH"],
+    guest: "public channels: messages, read, user, search-chat, listen, download",
     guide: include_str!("../GUIDE.md"),
   };
 

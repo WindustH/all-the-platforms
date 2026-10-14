@@ -25,7 +25,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Media, Message, Page, PageReq, Platform,
-  PlatformInfo, Post, Result, User,
+  PlatformInfo, PlatformKind, Post, Result, User,
 };
 
 use crate::api::Api;
@@ -59,6 +59,16 @@ impl Platform for Feishu {
     ],
     choices: Choices::NONE,
     min_interval: Duration::from_millis(250),
+    kind: PlatformKind::Chat,
+    token: "APP_ID:APP_SECRET",
+    env: &[
+      "FEISHU_APP_ID",
+      "FEISHU_APP_SECRET",
+      "FEISHU_BASE_URL",
+      "LARK_APP_ID",
+      "LARK_APP_SECRET",
+    ],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

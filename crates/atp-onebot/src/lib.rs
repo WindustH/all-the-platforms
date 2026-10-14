@@ -23,7 +23,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Ctx, Data, Message, Page, PageReq, Platform, PlatformInfo,
-  Post, Result, User,
+  PlatformKind, Post, Result, User,
 };
 
 use crate::api::Api;
@@ -56,6 +56,10 @@ impl Platform for OneBot {
     ],
     choices: Choices::NONE,
     min_interval: Duration::ZERO,
+    kind: PlatformKind::Chat,
+    token: "URL|ACCESS_TOKEN|WS_URL",
+    env: &["ONEBOT_URL", "ONEBOT_TOKEN", "ONEBOT_WS_URL"],
+    guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
 

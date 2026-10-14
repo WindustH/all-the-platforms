@@ -10,20 +10,51 @@ pub enum Command {
   /// Your teams
   Teams,
   /// About a channel: purpose, header, message count
-  Channel { chat: String },
+  #[command(after_long_help = EX_CHANNEL)]
+  Channel {
+    /// Channel: id, link, `TEAM/NAME`, `~name`, `@user` or #N
+    chat: String,
+  },
   /// Pinned posts of a channel
-  Pins { chat: String },
+  Pins {
+    /// Channel: id, link, `TEAM/NAME`, `~name`, `@user` or #N
+    chat: String,
+  },
   /// Pin a post, or unpin it with --undo
   Pin {
+    /// Post: permalink, id, `CHANNEL/POST` or #N
     post: String,
+    /// Unpin it instead
     #[arg(long)]
     undo: bool,
   },
   /// Join a channel
-  Join { chat: String },
+  #[command(after_long_help = EX_JOIN)]
+  Join {
+    /// Channel: id, link, `TEAM/NAME`, `~name` or #N
+    chat: String,
+  },
   /// Leave a channel
-  Leave { chat: String },
+  Leave {
+    /// Channel: id, link, `TEAM/NAME`, `~name` or #N
+    chat: String,
+  },
 }
+
+const EX_CHANNEL: &str = "\
+Examples:
+  atp mattermost channel town-square
+  atp mattermost channel myteam/off-topic
+  atp mattermost channel https://chat.example.com/myteam/channels/off-topic
+
+More: atp guide mattermost channel";
+
+const EX_JOIN: &str = "\
+Examples:
+  atp mattermost join myteam/releases
+  atp mattermost join '~releases'
+
+More: atp guide mattermost join";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;

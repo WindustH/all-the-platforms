@@ -36,7 +36,7 @@ use std::collections::BTreeMap;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Message, Notification,
-  Page, PageReq, Platform, PlatformInfo, Post, Query, Reply, Result, User,
+  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -102,6 +102,10 @@ impl Platform for Twitter {
       notification_kind: &["all", "verified", "mentions"],
     },
     min_interval: Duration::from_millis(1500),
+    kind: PlatformKind::Social,
+    token: "",
+    env: &[],
+    guest: "user, read, user-posts, download, insights of a tweet",
     guide: include_str!("../GUIDE.md"),
   };
 

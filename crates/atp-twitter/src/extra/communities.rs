@@ -10,10 +10,15 @@ use crate::communities::{self, Sort};
 #[derive(Debug, clap::Subcommand)]
 pub enum CommunityCommand {
   /// A community: description, rules, members, your role
-  Community { community: String },
+  Community {
+    /// Community: id, link or #N
+    community: String,
+  },
   /// Posts of a community
   CommunityPosts {
+    /// Community: id, link or #N
     community: String,
+    /// Which posts first
     #[arg(short, long, value_enum, default_value_t)]
     sort: Sort,
     #[command(flatten)]
@@ -21,7 +26,9 @@ pub enum CommunityCommand {
   },
   /// Members of a community (with --moderators, its moderators)
   CommunityMembers {
+    /// Community: id, link or #N
     community: String,
+    /// List the moderators instead
     #[arg(long)]
     moderators: bool,
     #[command(flatten)]
@@ -31,7 +38,9 @@ pub enum CommunityCommand {
   Communities,
   /// Join a community (or leave it with --undo)
   Join {
+    /// Community: id, link or #N
     community: String,
+    /// Leave instead
     #[arg(long)]
     undo: bool,
   },

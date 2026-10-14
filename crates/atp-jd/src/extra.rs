@@ -10,20 +10,21 @@ use crate::{comments, refs, search};
 pub enum Command {
   /// Words the search box suggests for a keyword
   Suggest {
+    /// The keyword typed so far
     keyword: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Searches an item page suggests
   Related {
-    /// SKU or item link
+    /// SKU, item link or #N
     item: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// An item's review summary: review count, good rate and review tags
   Rating {
-    /// SKU or item link
+    /// SKU, item link or #N
     item: String,
   },
 }

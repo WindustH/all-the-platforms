@@ -32,7 +32,7 @@ use std::time::Duration;
 use atp_core::output::Stream;
 use atp_core::{
   Action, Cap, Choices, Comment, Ctx, Data, Insights, Media, Page, PageReq, Platform, PlatformInfo,
-  Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -79,6 +79,10 @@ impl Platform for Kuaishou {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(1500),
+    kind: PlatformKind::Video,
+    token: "",
+    env: &[],
+    guest: "hot, feed, read, comments, live, rooms, gifts, download",
     guide: include_str!("../GUIDE.md"),
   };
 

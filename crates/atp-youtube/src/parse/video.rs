@@ -137,8 +137,8 @@ pub fn short(s: &Value) -> Option<Post> {
 
 /// What a `lockupViewModel` stands for.
 pub enum Lockup {
-  Video(Post),
-  Playlist(Collection),
+  Video(Box<Post>),
+  Playlist(Box<Collection>),
 }
 
 /// Texts of a lockup's metadata rows, with the channel link of a part if any.
@@ -190,9 +190,9 @@ pub fn lockup(l: &Value) -> Option<Lockup> {
   let parts = parts(meta);
   let badges = badges(l);
   if kind != "LOCKUP_CONTENT_TYPE_VIDEO" {
-    return Some(Lockup::Playlist(lockup_playlist(
+    return Some(Lockup::Playlist(Box::new(lockup_playlist(
       l, id, &kind, title, &parts, &badges,
-    )));
+    ))));
   }
   let mut p = base(id, false);
   p.title = title;
@@ -208,7 +208,7 @@ pub fn lockup(l: &Value) -> Option<Lockup> {
   }
   thumbnail(&mut p, l.at("contentImage.thumbnailViewModel.image"));
   p.raw = Some(l.clone());
-  Some(Lockup::Video(p))
+  Some(Lockup::Video(Box::new(p)))
 }
 
 /// A lockup of anything but a video: a playlist, mix, podcast ...

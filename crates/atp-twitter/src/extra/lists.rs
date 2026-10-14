@@ -11,15 +11,21 @@ use crate::{lists, posts};
 pub enum ListCommand {
   /// Latest tweets of a list (id or x.com/i/lists/... URL; see `collections`)
   List {
+    /// List: id, link or #N
     list: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// A list's name, description, owner and counts
-  ListInfo { list: String },
+  ListInfo {
+    /// List: id, link or #N
+    list: String,
+  },
   /// Members of a list (with --followers, the accounts following it)
   ListMembers {
+    /// List: id, link or #N
     list: String,
+    /// List the accounts following it instead
     #[arg(long)]
     followers: bool,
     #[command(flatten)]
@@ -27,6 +33,7 @@ pub enum ListCommand {
   },
   /// Lists a user (you, when omitted) is a member of
   ListMemberships {
+    /// User: handle, @handle, link, id or #N
     user: Option<String>,
     #[command(flatten)]
     page: PageArgs,

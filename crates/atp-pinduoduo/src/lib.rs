@@ -24,8 +24,8 @@ mod users;
 use std::time::Duration;
 
 use atp_core::{
-  Cap, Choices, Comment, Ctx, Data, Media, Page, PageReq, Platform, PlatformInfo, Post, Query,
-  Result, User,
+  Cap, Choices, Comment, Ctx, Data, Media, Page, PageReq, Platform, PlatformInfo, PlatformKind,
+  Post, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -60,6 +60,10 @@ impl Platform for Pinduoduo {
       ..Choices::NONE
     },
     min_interval: Duration::from_millis(2000),
+    kind: PlatformKind::Shopping,
+    token: "CLIENT_ID:CLIENT_SECRET:PID",
+    env: &["PDD_CLIENT_ID", "PDD_CLIENT_SECRET", "PDD_PID"],
+    guest: "feed, hot, categories, category (home page); share-link images",
     guide: include_str!("../GUIDE.md"),
   };
 
