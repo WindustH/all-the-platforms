@@ -105,6 +105,7 @@ pub fn floor(item: &Value, users: &Users, tid: &str) -> Comment {
     extra,
     raw: Some(item.clone()),
     id: pid,
+    ..Comment::default()
   }
 }
 

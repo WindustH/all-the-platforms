@@ -310,6 +310,7 @@ pub fn comment(v: &Value) -> Comment {
       ("pictures", &pictures),
     ]),
     raw: Some(v.clone()),
+    ..Comment::default()
   }
 }
 

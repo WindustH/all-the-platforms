@@ -25,8 +25,14 @@ Omitting USER in `user-posts`, `followers` and `following` (and in
 
 - `-n / --limit N` (default 20): pages are followed until N items arrive.
 - `--all` on `comments`: every comment, however many pages.
+- `--max-pages N` on any listing: stop after N upstream pages; the cursor
+  continues from there.
 - `--replies` on `comments`: also every reply under each comment (nested
   threads down to three levels).
+
+A listing also stops, keeping its cursor, after three pages in a row with
+nothing to keep (empty, repeated or outside `--since` / `--until`); both
+stops say so on stderr.
 
 ## Continuing later
 

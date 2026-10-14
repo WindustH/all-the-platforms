@@ -14,7 +14,9 @@ stderr with a non-zero exit code. Every row carries `platform` and
 `fetched_at`, so repeated runs (cron) build a time series directly.
 
 - Comment threads are flattened: each comment is a row with `depth` and
-  `parent_id`. `comments --all --replies` fetches every comment and every reply.
+  `parent_id`. `comments --all --replies` fetches every comment and every
+  reply; `--max-pages N` bounds each listing, and a thread cut short keeps
+  its cursor in `replies_cursor`.
 - Insights give one row per headline number (`section=total`), trend point
   (`section=series`, with `date`), distribution slice (`section=breakdown`)
   and warning (`section=warning`); `period` says what a number covers when it
@@ -85,8 +87,9 @@ Every platform maps its content onto the same shapes. Fields without a value
 are left out.
 
 **Listings** are pages: `items`, `has_more`, and `next_cursor` to pass back
-with `--cursor`. `--limit/-n` follows pages automatically; a cursor ending in
-`!N` resumes in the middle of an upstream page.
+with `--cursor`. `--limit/-n` follows pages automatically, `--max-pages N`
+stops after N upstream pages; a cursor ending in `!N` resumes in the
+middle of an upstream page.
 
 **Post**: `id`, `kind` (`video`, `note`, `tweet`, `answer`, `question`,
 `article`, `pin`, `dynamic` ...), `title`, `text`, `url`, `author` (a User),
@@ -106,7 +109,9 @@ ranges in, when it does not honour the `Range` header).
 `followed`, `created_at`, `extra`.
 
 **Comment**: `id`, `author`, `text`, `created_at`, `likes`, `reply_count`,
-`reply_to`, `location`, `replies` (nested comments).
+`reply_to`, `location`, `replies` (nested comments), `replies_cursor`
+(where a thread `comments --replies` cut short continues, for `replies
+POST ID --cursor`).
 
 **Collection** (topics, favorites folders, lists): `id`, `kind`, `name`,
 `description`, `url`, `items`, `followers`, `views`, `owner`.

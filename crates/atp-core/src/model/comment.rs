@@ -25,6 +25,10 @@ pub struct Comment {
   pub location: Option<String>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   pub replies: Vec<Comment>,
+  /// Where the replies of `comments --replies` stopped early (`--max-pages`):
+  /// `replies POST ID --cursor …` continues them.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub replies_cursor: Option<String>,
   #[serde(skip_serializing_if = "Extra::is_empty")]
   pub extra: Extra,
   #[serde(skip_serializing_if = "Option::is_none")]

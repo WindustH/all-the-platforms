@@ -58,7 +58,8 @@ Every platform maps its data onto the same shapes:
 - **User**: `id`, `name`, `handle`, `url`, `avatar`, `bio`, `verified`,
   `location`, `stats` (`followers`, `following`, `posts`, `likes` ...), `followed`.
 - **Comment**: `id`, `author`, `text`, `created_at`, `likes`, `reply_count`,
-  `reply_to`, `location`, `replies`.
+  `reply_to`, `location`, `replies`, `replies_cursor` (where a thread
+  `--replies` cut short continues).
 - **Collection** (topics, folders, playlists, subreddits): `id`, `kind`,
   `name`, `description`, `url`, `items`, `followers`.
 - **File** (cloud drives): `id`, `name`, `path`, `dir`, `size` (bytes),

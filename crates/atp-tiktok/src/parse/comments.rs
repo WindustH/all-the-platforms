@@ -36,5 +36,6 @@ pub fn comment(v: &Value) -> Comment {
     replies: Vec::new(),
     extra,
     raw: Some(v.clone()),
+    ..Comment::default()
   }
 }

@@ -31,7 +31,7 @@ line in `src/main.rs`.
 | `account` | `login` (QR / token / browser / cookie string), `logout`, `status` |
 | `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, proxy; `request` (building, sending, retries, streaming), `response` |
 | `store` | session file (0600), data files the user keeps beside it (`data`, `put_data`: lists and settings `logout` leaves alone), TTL cache (values and raw bytes), `#N` short-index lists |
-| `paging` | `collect`: follow cursors until `--limit` items; `collect_window`: `--since` / `--until` |
+| `paging` | `collect`: follow cursors until `--limit` items, dropping repeated items, until the upstream ends or repeats a cursor; `collect_within`: also `--max-pages` (`Bounds`); `collect_window`: `--since` / `--until` |
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg); `files`: a drive's files and folders under their own names, through `.part` files resumed by `Range`, with per-link headers and links renewed mid-file |
 | `upload` | files too big for memory: `LocalFile`, `Hashes` (md5, sha1, 4 MB block md5s, md5 of the first 256 KB in one read), `Parts` (part by part with retries, a progress bar and resume state in the private cache; optionally the SHA-1 state before each part, `Sha1Midway`) |
 | `task` | background work upstream: `wait` polls a task with growing gaps; `retry` backs off while a call fails with errors a predicate picks (rate limits, risk codes) |

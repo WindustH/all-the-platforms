@@ -13,6 +13,7 @@ mod input;
 mod library;
 mod media;
 mod read;
+mod threads;
 mod write;
 
 use std::process::ExitCode;

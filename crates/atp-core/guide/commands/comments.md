@@ -10,19 +10,23 @@ shows inline. `replies` lists the replies under one comment.
   `#N`; the numbers in the table are positions only.
 - `-n` counts top-level comments; inline replies come along uncounted.
   `--sort` takes the platform's values, listed above.
-- `--all` replaces `-n` with every comment, up to 200 upstream pages in one
-  run; a cursor continues when more remain.
+- `--all` replaces `-n` with every comment, however many pages that takes.
+  `--max-pages N` bounds a run (each reply thread of `--replies` too): it
+  stops after N upstream pages, says so on stderr and prints the cursor
+  that continues.
 - `--replies` completes the threads: where a comment carries fewer replies
   than its `reply_count`, all of them are fetched, three levels deep. It
-  needs `replies` on the platform; elsewhere only the inline ones come.
+  needs `replies` on the platform; elsewhere only the inline ones come. A
+  thread cut short by `--max-pages` keeps its cursor in `replies_cursor`
+  (`replies POST ID --cursor …` continues it).
 - `--since` / `--until` filter by `created_at`, and a page entirely older
-  than `--since` ends the listing. They apply to top-level comments and to
-  `replies`; the replies `--replies` fetches are not filtered.
+  than `--since` ends the listing. They apply to top-level comments, to
+  `replies`, and with `--replies` to every reply in the threads.
 - Output: a tree in the table, nested `replies` in JSON / YAML, and in JSON
   Lines / CSV one row per comment with `depth` (0 at the top) and
   `parent_id`. Fields: `id`, `author`, `text`, `created_at`, `likes`,
   `reply_count`, `reply_to` (whom it answers inside a thread),
-  `location`.
+  `location`, `replies_cursor`.
 - JSON Lines and CSV print rows only, without the cursor; use `--json` to
   continue a long export later.
 

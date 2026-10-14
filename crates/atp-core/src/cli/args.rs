@@ -5,7 +5,7 @@ use jiff::Timestamp;
 use crate::error::{Error, Result};
 use crate::model::{Dated, Keyed, Page};
 use crate::output::Format;
-use crate::paging::{Window, collect, collect_window};
+use crate::paging::{Bounds, Window, collect_window, collect_within};
 use crate::platform::PageReq;
 
 /// Options available on every command.
@@ -74,6 +74,9 @@ pub struct PageArgs {
   /// Only items published until then (same forms as --since)
   #[arg(long, value_parser = crate::text::parse_when, value_name = "WHEN")]
   pub until: Option<Timestamp>,
+  /// Stop after N upstream pages; the cursor continues from there
+  #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..))]
+  pub max_pages: Option<u32>,
 }
 
 impl PageArgs {
@@ -84,13 +87,20 @@ impl PageArgs {
     }
   }
 
+  /// `--limit` and `--max-pages`.
+  pub fn bounds(&self) -> Bounds {
+    Bounds {
+      pages: self.max_pages.map(|n| n as usize),
+      ..Bounds::items(self.limit)
+    }
+  }
+
   /// Follow a listing of dated items (posts, comments, notifications) within `--since` / `--until`.
   pub async fn collect_dated<T: Dated + Keyed>(
     &self,
     fetch: impl AsyncFnMut(PageReq) -> Result<Page<T>>,
   ) -> Result<Page<T>> {
-    let page = collect_window(self.limit, self.cursor.clone(), self.window(), fetch).await?;
-    Ok(dedup(page))
+    collect_window(self.bounds(), self.cursor.clone(), self.window(), fetch).await
   }
 
   /// Follow a listing without publication times (users, collections).
@@ -103,17 +113,6 @@ impl PageArgs {
         "--since / --until only apply to posts, comments and notifications",
       ));
     }
-    Ok(dedup(
-      collect(self.limit, self.cursor.clone(), fetch).await?,
-    ))
+    collect_within(self.bounds(), self.cursor.clone(), fetch).await
   }
-}
-
-/// Drop items an upstream repeated across pages (same id), keeping the first.
-fn dedup<T: Keyed>(mut page: Page<T>) -> Page<T> {
-  let mut seen = std::collections::HashSet::new();
-  page
-    .items
-    .retain(|i| i.key().is_empty() || seen.insert(i.key().to_owned()));
-  page
 }

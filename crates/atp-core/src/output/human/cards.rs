@@ -74,6 +74,13 @@ pub(super) fn comment(c: &Comment, depth: usize, index: Option<usize>) {
   for r in &c.replies {
     comment(r, depth + 1, None);
   }
+  if let Some(cursor) = &c.replies_cursor {
+    let more = format!("↳ more replies: replies POST {} --cursor {cursor}", c.id);
+    println!(
+      "{pad}  {}",
+      more.if_supports_color(Stream::Stdout, |t| t.dimmed())
+    );
+  }
 }
 
 pub(super) fn metrics_line(m: &Metrics) -> String {

@@ -66,5 +66,7 @@ Platforms watch for automation. For large jobs slow down:
     atp --interval 5 bili comments BV1xx411c7mD --all --replies -f jsonl
 
 `--interval SECS` (or `ATP_INTERVAL`) sets a minimum gap between requests,
-never below the platform's own pacing; random jitter is added. Stop when a
+never below the platform's own pacing; random jitter is added.
+`--max-pages N` caps the upstream pages of a run; the cursor it prints
+continues later. Stop when a
 command answers `verification_required` or `rate_limited`.

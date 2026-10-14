@@ -3,9 +3,10 @@
 use clap::Subcommand;
 
 use super::args::PageArgs;
+use super::threads::Threads;
 use crate::error::Result;
-use crate::model::{Comment, Data};
-use crate::paging::collect;
+use crate::model::Data;
+use crate::paging::Bounds;
 use crate::platform::{Cap, Platform, Query};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -66,10 +67,10 @@ pub enum ReadCommand {
     /// Comment order (values differ per platform)
     #[arg(short, long)]
     sort: Option<String>,
-    /// Fetch every comment (ignores --limit)
+    /// Fetch every comment (ignores --limit; --max-pages still applies)
     #[arg(long)]
     all: bool,
-    /// Also fetch every reply under each comment
+    /// Also fetch every reply under each comment (within --since / --until)
     #[arg(long)]
     replies: bool,
     #[command(flatten)]
@@ -284,35 +285,19 @@ async fn comments<P: Platform>(
     .collect_dated(async |r| p.comments(post, sort, &r).await)
     .await?;
   if replies {
-    complete_replies(p, post, &mut comments.items, 0).await?;
+    let threads = Threads {
+      post,
+      window: page.window(),
+      bounds: Bounds {
+        limit: usize::MAX,
+        notes: false,
+        ..page.bounds()
+      },
+    };
+    threads.complete(p, &mut comments.items, 0).await?;
+    threads.report(&comments.items);
   }
   Ok(Data::Comments(comments))
-}
-
-/// How deep `comments --replies` follows nested threads.
-const REPLY_DEPTH: usize = 3;
-
-/// Fetch the full reply thread of every comment whose inline replies are
-/// incomplete (platforms usually inline only a few), down to [`REPLY_DEPTH`].
-async fn complete_replies<P: Platform>(
-  p: &P,
-  post: &str,
-  comments: &mut [Comment],
-  depth: usize,
-) -> Result<()> {
-  if !P::INFO.supports(Cap::Replies) || depth >= REPLY_DEPTH {
-    return Ok(());
-  }
-  for c in comments.iter_mut() {
-    let expected = c.reply_count.unwrap_or(0) as usize;
-    if expected > 0 && c.replies.len() < expected {
-      let id = c.id.clone();
-      let all = collect(usize::MAX, None, async |r| p.replies(post, &id, &r).await).await?;
-      c.replies = all.items;
-    }
-    Box::pin(complete_replies(p, post, &mut c.replies, depth + 1)).await?;
-  }
-  Ok(())
 }
 
 /// A user argument, or the logged-in account when it is omitted.
@@ -341,8 +326,9 @@ Examples:
   atp reddit comments 1wsxldl --all --replies -f jsonl > thread.jsonl
   atp yt comments dQw4w9WgXcQ -n 500 --since 30d -f csv > comments.csv
 
---all fetches every comment; --replies also every reply under each (CSV and
-JSON Lines rows carry depth and parent_id). More: atp guide analysis";
+--all fetches every comment (--max-pages N bounds a run); --replies also
+every reply under each, within --since / --until (CSV and JSON Lines rows
+carry depth and parent_id). More: atp guide comments, atp guide analysis";
 
 const EX_INSIGHTS: &str = "\
 Examples:
