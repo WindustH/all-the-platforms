@@ -17,7 +17,7 @@
 
 ---
 
-`atp` reads, searches, publishes, chats and downloads on Zhihu,
+ATP (all-the-platforms) reads, searches, publishes, chats and downloads on Zhihu,
 Xiaohongshu, Weibo, Bilibili, Douyin, WeChat, Telegram, Discord, YouTube,
 TikTok, Reddit, Twitter / X and many more, with the same commands
 everywhere. It works in a terminal for people, and in scripts and AI agents

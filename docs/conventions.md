@@ -64,6 +64,8 @@ platform struct.
   `PageReq`), `resp` (a response); `v` is fine for a JSON value in parsers.
 - Constants are `SCREAMING_SNAKE_CASE`; session extra keys are constants in
   the module that owns them.
+- In prose (README, guides, promotion) the project is **ATP** or
+  all-the-platforms; lowercase `atp` only for the command itself.
 
 ## Size
 

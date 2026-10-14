@@ -17,7 +17,7 @@
 
 ---
 
-`atp` 用同一套命令在知乎、小红书、微博、哔哩哔哩、抖音、微信、Telegram、
+ATP（all-the-platforms）用同一套命令在知乎、小红书、微博、哔哩哔哩、抖音、微信、Telegram、
 Discord、YouTube、TikTok、Reddit、Twitter / X 等平台上浏览、搜索、发布、聊天和下载。
 在终端里给人看，在脚本和 AI Agent 里则输出稳定的 JSON / YAML；支持 Linux、macOS 和 Windows。
 
