@@ -9,7 +9,7 @@ use atp_core::text::html_to_text;
 use atp_core::{Comment, Media, Post, User, Value, ValueExt, json};
 use regex::Regex;
 
-use crate::api::item_url;
+use crate::api::{item_url, search_url};
 
 static USER_ID: LazyLock<Regex> =
   LazyLock::new(|| Regex::new(r#""userId"\s*:\s*"?(\d+)"#).expect("valid"));
@@ -210,4 +210,17 @@ pub fn push(decoded: &Value) -> Option<Value> {
     },
     "extension": {"sender_nick": m.at("10.sender_nick")},
   }}))
+}
+
+/// A suggested search word (`[word, count]` of `suggest.taobao.com`).
+pub fn keyword(v: &Value) -> Option<Post> {
+  let text = v.str("0").filter(|t| !t.trim().is_empty())?;
+  Some(Post {
+    id: text.clone(),
+    kind: "keyword".into(),
+    url: Some(search_url(&text)),
+    title: Some(text),
+    raw: Some(v.clone()),
+    ..Post::default()
+  })
 }

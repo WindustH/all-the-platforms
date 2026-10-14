@@ -18,6 +18,7 @@
   `download ITEM` saves the images.
 - `comments ITEM` lists reviews, 20 a page
   (`--sort all|pictures|good|neutral|bad`); nicknames come masked.
+- `suggest KEYWORD`: the words the search box suggests (no login needed).
 
 ## Chats
 
@@ -29,10 +30,13 @@
 
 ## Logging in
 
-Taobao serves nothing to guests. Log in on www.taobao.com in a browser and
-run `atp taobao login --browser`, or pass the cookies with `--cookie`
-(`unb`, `cookie2`, `_m_h5_tk`, plus `_nk_`, `cna`, `isg`, `x5sec` as the
-browser has them).
+Taobao serves nothing to guests. `atp taobao login` shows a QR code for
+the Taobao app. Taobao may ask for a face or SMS check first: finish it on
+the page the error names, then use `atp taobao login --browser`. You can
+also log in on www.taobao.com in a browser and run
+`atp taobao login --browser`, or pass the cookies with `--cookie` (`unb`,
+`cookie2`, `_m_h5_tk`, plus `_nk_`, `cna`, `isg`, `x5sec` as the browser
+has them).
 
 ## Limits
 

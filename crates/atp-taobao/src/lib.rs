@@ -3,14 +3,16 @@
 //! Items are posts (`kind` `item`, price in `extra.price`) read through the
 //! mtop gateway, signed with the `_m_h5_tk` token (atp-alibaba); reviews
 //! are comments; sellers are found by their items. Chats with shops run
-//! over DingTalk IMPaaS like Xianyu's. Everything needs a login from a
-//! browser (`--browser` or `--cookie`); risk control answers with walls
-//! (`RGV587`), which surface as `verification_required`.
+//! over DingTalk IMPaaS like Xianyu's. Everything needs a login (a QR code
+//! for the Taobao app, `--browser` or `--cookie`); risk control answers
+//! with walls (`RGV587`), which surface as `verification_required`.
 
 mod api;
 mod chats;
 mod comments;
+mod extra;
 mod live;
+mod login;
 mod messages;
 mod parse;
 mod posts;
@@ -23,8 +25,8 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Message, NoExtra, Page, PageReq, Platform,
-  PlatformInfo, Post, Query, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Message, Page, PageReq, Platform,
+  PlatformInfo, Post, QrStatus, QrTicket, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -43,6 +45,7 @@ impl Platform for Taobao {
     cookie_domains: &["taobao.com", "tmall.com"],
     required_cookies: api::LOGIN_COOKIES,
     caps: &[
+      Cap::QrLogin,
       Cap::Search,
       Cap::Read,
       Cap::Comments,
@@ -62,7 +65,7 @@ impl Platform for Taobao {
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = NoExtra;
+  type Extra = extra::Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self { api: Api::new(ctx) })
@@ -74,6 +77,14 @@ impl Platform for Taobao {
 
   async fn whoami(&self) -> Result<User> {
     users::whoami(&self.api).await
+  }
+
+  async fn qr_start(&self) -> Result<QrTicket> {
+    login::qr_start(&self.api).await
+  }
+
+  async fn qr_poll(&self, ticket: &QrTicket) -> Result<QrStatus> {
+    login::qr_poll(&self.api, ticket).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
@@ -114,6 +125,6 @@ impl Platform for Taobao {
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {
-    match command {}
+    extra::run(&self.api, command).await
   }
 }
