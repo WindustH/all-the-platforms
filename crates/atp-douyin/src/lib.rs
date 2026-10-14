@@ -11,7 +11,6 @@ mod api;
 mod comments;
 mod discover;
 mod extra;
-mod gateway;
 mod library;
 mod live;
 mod login;

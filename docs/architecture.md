@@ -9,6 +9,7 @@ src/main.rs                 registry: lists the platforms, nothing else
 crates/atp-core          platform-agnostic kernel
 crates/atp-<platform>    one crate per platform (atp-zhihu, atp-telegram ...)
 crates/atp-meta          Graph API pieces shared by atp-facebook, atp-instagram and atp-threads
+crates/atp-bytedance     what Douyin, Toutiao, Juejin and TikTok share: signing, passports, the webcast live protocol
 ```
 
 Naming, layout and size rules are in [conventions.md](conventions.md).
@@ -50,6 +51,7 @@ line in `src/main.rs`.
 | `chat` | `CHAT/MESSAGE` ids of messages without permalinks |
 | `live` | `listen` helpers: polling with de-duplication, `Backoff` (reconnect delays, task polling) |
 | `socket` | websocket connections through the same client |
+| `proto` | protobuf by hand for binary frames read without a schema: `Msg` (fields on demand) and writers |
 | `qr` | login QR codes in the terminal, from a URL or a QR image |
 | `verify` | human checks by hand: a Chromium-family browser over DevTools with the session cookies, then one retry (`chrome`, `cdp`); skipped for checks a browser cannot clear (`Error::unclearable`, `Platform::BROWSER_CHECKS`) |
 | `mcp` | `atp mcp`: JSON-RPC over stdio; tools `platforms`, `help`, `read`, `run` calling commands without printing; the guide as resources (`atp://guide/…`) |

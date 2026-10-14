@@ -10,6 +10,7 @@ implementation of everything more than one platform needs.
 src/main.rs                 registers platforms
 crates/atp-<platform>    one platform; depends on atp-core only
 crates/atp-meta          Graph API pieces of atp-facebook, atp-instagram and atp-threads
+crates/atp-bytedance     what Douyin, Toutiao, Juejin and TikTok share (signing, passports, webcast)
 crates/atp-core          everything shared; knows no platform
 ```
 
@@ -88,6 +89,7 @@ Use these instead of writing another copy:
 | `CHAT/MESSAGE` ids | `chat::{message_id, split_message_id, expect_message_id}` |
 | `listen` by polling (fixed or random interval), reconnect delays | `live::{poll, poll_between, Seen, Backoff}` |
 | websockets (default User-Agent included; `next_json_lenient` skips non-JSON frames) | `socket::Socket` via `Http::websocket` |
+| protobuf fields of binary frames, without a schema | `proto::{Msg, put_int, put_bytes}` |
 | proxy for non-HTTP connections | `Http::proxy` |
 | JSON access | `json::ValueExt` |
 | the props a Next.js page was rendered from (`__NEXT_DATA__`) | `json::next_data` |

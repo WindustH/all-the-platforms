@@ -8,6 +8,7 @@
 use std::time::Duration;
 
 use atp_bytedance::query::query_string;
+use atp_bytedance::webcast::{self, Event, Sender};
 use atp_core::http::USER_AGENT;
 use atp_core::output::Stream;
 use atp_core::socket::{Frame, Socket};
@@ -16,7 +17,6 @@ use atp_core::{Error, Post, Result, User, ValueExt, chat, json};
 use rand::Rng;
 
 use crate::api::Api;
-use crate::gateway::{self, Msg};
 use crate::refs;
 use crate::rooms::{self, Room};
 use crate::sign::frontier;
@@ -51,7 +51,7 @@ async fn room_loop(api: &Api, arg: &str, out: &Stream) -> Result<()> {
   let mut beat = tokio::time::interval(HEARTBEAT);
   loop {
     tokio::select! {
-      _ = beat.tick() => sock.send_binary(gateway::heartbeat()).await?,
+      _ = beat.tick() => sock.send_binary(webcast::frame(0, "", "hb", &[])).await?,
       frame = sock.next() => {
         let Some(frame) = frame? else {
           return Ok(());
@@ -59,7 +59,7 @@ async fn room_loop(api: &Api, arg: &str, out: &Stream) -> Result<()> {
         let Frame::Binary(data) = frame else {
           continue;
         };
-        let Some(batch) = gateway::decode(&data) else {
+        let Some(batch) = webcast::decode(&data, "") else {
           continue;
         };
         if let Some(ack) = batch.ack {
@@ -74,7 +74,7 @@ async fn room_loop(api: &Api, arg: &str, out: &Stream) -> Result<()> {
 }
 
 /// Print the events of a batch; whether the live ended.
-fn emit(room: &Room, messages: &[gateway::Message], out: &Stream) -> bool {
+fn emit(room: &Room, messages: &[webcast::Message], out: &Stream) -> bool {
   let mut ended = false;
   for post in messages.iter().filter_map(|m| event(room, m)) {
     ended |= post.kind == "offline";
@@ -154,35 +154,28 @@ async fn visitor_id(api: &Api) -> String {
 }
 
 /// One message as a post: its kind, text and sender.
-fn event(room: &Room, m: &gateway::Message) -> Option<Post> {
-  let msg = Msg(&m.payload);
-  let (kind, text, sender) = match m.method.as_str() {
-    "WebcastChatMessage" => ("message", msg.string(3), 2),
-    "WebcastGiftMessage" => ("gift", Some(gift(msg)), 7),
-    "WebcastLikeMessage" => ("like", msg.varint(2).map(|n| format!("× {n}")), 5),
-    "WebcastMemberMessage" => ("enter", Some("joined".into()), 2),
-    "WebcastSocialMessage" if msg.varint(4) == Some(1) => ("follow", Some("followed".into()), 2),
-    "WebcastSocialMessage" => ("share", Some("shared the room".into()), 2),
-    "WebcastRoomStatsMessage" => ("stats", msg.string(4), 0),
-    "WebcastControlMessage" if msg.varint(2) == Some(3) => {
-      ("offline", Some("live ended".into()), 0)
-    }
-    _ => return None,
-  };
-  let created = msg
-    .message(1)
-    .varint(4)
-    .and_then(|ms| from_millis(ms as i64));
+fn event(room: &Room, m: &webcast::Message) -> Option<Post> {
+  let Event {
+    kind,
+    text,
+    sender,
+    at_ms,
+    counts,
+  } = webcast::event(m)?;
   let mut post = Post {
     id: chat::message_id(&room.web_rid, &m.id.to_string()),
     kind: kind.into(),
     text,
-    author: user(msg.message(sender)),
-    created_at: created.or_else(|| Some(jiff::Timestamp::now())),
+    author: sender.and_then(user),
+    created_at: at_ms
+      .and_then(|ms| from_millis(ms as i64))
+      .or_else(|| Some(jiff::Timestamp::now())),
     raw: Some(json!({ "method": m.method, "msg_id": m.id.to_string() })),
     ..Post::default()
   };
-  counts(&mut post, msg);
+  for (name, n) in counts {
+    post.extra.insert(name.into(), json!(n));
+  }
   post
     .extra
     .insert("chat".into(), json!(format!("live:{}", room.web_rid)));
@@ -190,42 +183,13 @@ fn event(room: &Room, m: &gateway::Message) -> Option<Post> {
   Some(post)
 }
 
-/// `name × count` of a gift (`gift` 15 → `name` 16, `comboCount` 6).
-fn gift(msg: Msg) -> String {
-  let name = msg.message(15).string(16).unwrap_or_else(|| "gift".into());
-  format!("{name} × {}", msg.varint(6).unwrap_or(1).max(1))
-}
-
-/// The counters a message carries, in `extra`.
-fn counts(post: &mut Post, msg: Msg) {
-  let fields: &[(&str, u32)] = match post.kind.as_str() {
-    "gift" => &[("count", 6)],
-    "like" => &[("likes", 2), ("likes_total", 3)],
-    "enter" => &[("audience", 3)],
-    "stats" => &[("viewers", 5), ("viewers_total", 9)],
-    _ => &[],
-  };
-  for (name, number) in fields {
-    if let Some(n) = msg.varint(*number) {
-      post.extra.insert((*name).into(), json!(n));
-    }
-  }
-}
-
-/// A webcast `User`: `id` 1, `nickname` 3, `display_id` 38, `sec_uid` 46,
-/// `id_str` 1028.
-fn user(u: Msg) -> Option<User> {
-  let name = u.string(3)?;
-  let sec = u.string(46);
-  let id = sec
-    .clone()
-    .or_else(|| u.string(1028))
-    .or_else(|| u.varint(1).map(|id| id.to_string()))?;
+/// A sender as a Douyin user: known by `sec_uid` where it has one.
+fn user(s: Sender) -> Option<User> {
   Some(User {
-    id,
-    name,
-    handle: u.string(38),
-    url: sec.map(|s| refs::user_url(&s)),
+    id: s.sec_uid.clone().or(s.id)?,
+    name: s.nickname,
+    handle: s.display_id,
+    url: s.sec_uid.map(|sec| refs::user_url(&sec)),
     ..User::default()
   })
 }
