@@ -2,6 +2,7 @@
 
 mod cards;
 mod files;
+mod geo;
 mod insights;
 mod tables;
 
@@ -17,6 +18,7 @@ use owo_colors::{OwoColorize, Stream};
 pub use self::cards::stream_line;
 use self::cards::*;
 use self::files::*;
+use self::geo::*;
 use self::insights::*;
 use self::tables::*;
 
@@ -45,6 +47,8 @@ pub fn render(data: &Data) {
     Data::Transcript(t) => transcript(t),
     Data::Downloads(files) => downloads(files),
     Data::Insights(i) => insights(i),
+    Data::Routes(r) => routes(r),
+    Data::Distances(list) => distances(list),
     Data::Value(v) => print!("{}", serde_saphyr::to_string(v).unwrap_or_default()),
   }
 }

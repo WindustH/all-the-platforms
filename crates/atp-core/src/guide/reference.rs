@@ -49,10 +49,16 @@ fn arguments(cmd: &Command) -> String {
   section("Arguments", &lines)
 }
 
+/// Global options a platform adds itself (`--coord` of map platforms),
+/// listed with the command's own.
+fn platform_global(a: &Arg) -> bool {
+  a.is_global_set() && !a.is_hide_set() && a.get_id() == crate::cli::COORD
+}
+
 fn options(cmd: &Command) -> String {
   let mut args: Vec<&Arg> = cmd
     .get_arguments()
-    .filter(|a| shown(a) && !a.is_positional())
+    .filter(|a| (shown(a) || platform_global(a)) && !a.is_positional())
     .collect();
   // `--help` order: options a platform adjusted keep their place.
   args.sort_by_key(|a| a.get_display_order());

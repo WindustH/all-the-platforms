@@ -1,40 +1,19 @@
 //! Route planning 2.0 (`/v5/direction/*`) and batch distances
-//! (`/v3/distance`). Ends are `lng,lat` or place names, geocoded first.
+//! (`/v3/distance`). Ends are `LNG,LAT` or place names, geocoded first.
 
-use atp_core::text::fmt_duration;
-use atp_core::{Error, Result, Value, ValueExt, json};
+use atp_core::geo::{self, Distance, Mode, Polyline, Route, Routes, Step, System};
+use atp_core::{Error, Price, Result, Value, ValueExt};
 
 use crate::api::Api;
-use crate::geocoding::{self, Place};
+use crate::geocoding::{self, End};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-pub enum Mode {
-  Driving,
-  Walking,
-  Cycling,
-  Ebike,
-  Transit,
-}
-
-impl Mode {
-  fn name(self) -> &'static str {
-    match self {
-      Mode::Driving => "driving",
-      Mode::Walking => "walking",
-      Mode::Cycling => "cycling",
-      Mode::Ebike => "ebike",
-      Mode::Transit => "transit",
-    }
-  }
-
-  fn path(self) -> &'static str {
-    match self {
-      Mode::Driving => "driving",
-      Mode::Walking => "walking",
-      Mode::Cycling => "bicycling",
-      Mode::Ebike => "electrobike",
-      Mode::Transit => "transit/integrated",
-    }
+fn path(mode: Mode) -> &'static str {
+  match mode {
+    Mode::Driving => "driving",
+    Mode::Walking => "walking",
+    Mode::Cycling => "bicycling",
+    Mode::Ebike => "electrobike",
+    Mode::Transit => "transit/integrated",
   }
 }
 
@@ -93,13 +72,13 @@ pub async fn route(
   mode: Mode,
   city: Option<&str>,
   strategy_name: Option<&str>,
-) -> Result<Value> {
-  let origin = geocoding::place(api, from, city).await?;
-  let destination = geocoding::place(api, to, city).await?;
+) -> Result<Routes> {
+  let origin = geocoding::end(api, from, city).await?;
+  let destination = geocoding::end(api, to, city).await?;
   let mut params = vec![
-    ("origin", origin.location.clone()),
-    ("destination", destination.location.clone()),
-    ("show_fields", "cost".to_owned()),
+    ("origin", origin.lng_lat()),
+    ("destination", destination.lng_lat()),
+    ("show_fields", "cost,polyline".to_owned()),
   ];
   if let Some(code) = strategy(mode, strategy_name)? {
     params.push(("strategy", code));
@@ -109,102 +88,158 @@ pub async fn route(
     params.push(("city2", geocoding::citycode(api, &destination).await?));
   }
   let v = api
-    .get(&format!("/v5/direction/{}", mode.path()), &params)
+    .get(&format!("/v5/direction/{}", path(mode)), &params)
     .await?;
   let r = v.at("route");
-  let routes: Vec<Value> = match mode {
+  let routes: Vec<Route> = match mode {
     Mode::Transit => r.list("transits").iter().map(transit).collect(),
-    _ => r.list("paths").iter().map(path).collect(),
+    _ => r.list("paths").iter().map(drive).collect(),
   };
-  Ok(json!({
-    "mode": mode.name(),
-    "origin": end(&origin),
-    "destination": end(&destination),
-    "taxi_cost": r.str("taxi_cost"),
-    "routes": routes,
-  }))
+  let mut plan = Routes {
+    mode,
+    origin: origin.waypoint(),
+    destination: destination.waypoint(),
+    routes,
+    extra: Default::default(),
+  };
+  if let Some(cost) = r.f64("taxi_cost") {
+    plan.extra.insert("taxi_cost".into(), cost.into());
+  }
+  Ok(plan)
 }
 
-fn end(place: &Place) -> Value {
-  json!({ "name": place.name, "location": place.location })
+/// Travel time in seconds; cycling paths carry it outside `cost`.
+fn duration(v: &Value) -> Option<u64> {
+  v.u64("cost.duration").or_else(|| v.u64("duration"))
 }
 
-/// Travel time as text and seconds; cycling paths carry it outside `cost`.
-fn duration(v: &Value) -> (Option<String>, Option<u64>) {
-  let secs = v.u64("cost.duration").or_else(|| v.u64("duration"));
-  (secs.map(|s| fmt_duration(s as f64)), secs)
+/// A step's shape: a `lng,lat;…` string, or one inside `polyline`.
+fn shape(v: &Value) -> Option<String> {
+  v.str("polyline").or_else(|| v.str("polyline.polyline"))
 }
 
 /// One driving / walking / cycling path with its turn-by-turn steps.
-fn path(p: &Value) -> Value {
-  let (time, secs) = duration(p);
-  let steps: Vec<Value> = p
+fn drive(p: &Value) -> Route {
+  let mut points = Vec::new();
+  let steps: Vec<Step> = p
     .list("steps")
     .iter()
     .map(|s| {
-      json!({
-        "instruction": s.str("instruction"),
-        "road": s.str("road_name"),
-        "distance_m": s.u64("step_distance"),
-      })
+      if let Some(line) = shape(s) {
+        points.extend(Polyline::from_path(System::Gcj02, &line).points());
+      }
+      Step {
+        instruction: s.str("instruction").unwrap_or_default(),
+        road: s.str("road_name"),
+        distance_m: s.u64("step_distance"),
+        duration_s: s.u64("cost.duration"),
+        ..Step::default()
+      }
     })
     .collect();
-  json!({
-    "distance_m": p.u64("distance"),
-    "duration": time,
-    "duration_s": secs,
-    "tolls": p.str("cost.tolls"),
-    "toll_distance_m": p.u64("cost.toll_distance"),
-    "traffic_lights": p.u64("cost.traffic_lights"),
-    "restricted": p.str("restriction").as_deref() == Some("1"),
-    "steps": steps,
-  })
+  let mut route = Route {
+    distance_m: p.u64("distance"),
+    duration_s: duration(p),
+    tolls: p.f64("cost.tolls").map(Price::cny),
+    steps,
+    polyline: (!points.is_empty()).then(|| Polyline::new(System::Gcj02, &points)),
+    ..Route::default()
+  };
+  for (key, value) in [
+    (
+      "toll_distance_m",
+      p.u64("cost.toll_distance").map(Value::from),
+    ),
+    (
+      "traffic_lights",
+      p.u64("cost.traffic_lights").map(Value::from),
+    ),
+    (
+      "restricted",
+      Some((p.str("restriction").as_deref() == Some("1")).into()),
+    ),
+  ] {
+    if let Some(value) = value {
+      route.extra.insert(key.into(), value);
+    }
+  }
+  route
 }
 
-/// One public-transport plan, its legs as readable lines.
-fn transit(t: &Value) -> Value {
-  let (time, secs) = duration(t);
-  let legs: Vec<String> = t.list("segments").iter().flat_map(legs).collect();
-  json!({
-    "duration": time,
-    "duration_s": secs,
-    "distance_m": t.u64("distance"),
-    "walking_m": t.u64("walking_distance"),
-    "fee": t.str("cost.transit_fee"),
-    "night": t.str("nightflag").as_deref() == Some("1"),
-    "legs": legs,
-  })
+/// One public-transport plan, its legs as steps.
+fn transit(t: &Value) -> Route {
+  let mut route = Route {
+    distance_m: t.u64("distance"),
+    duration_s: duration(t),
+    fare: t.f64("cost.transit_fee").map(Price::cny),
+    steps: t.list("segments").iter().flat_map(legs).collect(),
+    ..Route::default()
+  };
+  if let Some(walk) = t.u64("walking_distance") {
+    route.extra.insert("walking_m".into(), walk.into());
+  }
+  let night = t.str("nightflag").as_deref() == Some("1");
+  route.extra.insert("night".into(), night.into());
+  route
 }
 
-fn legs(s: &Value) -> Vec<String> {
+fn legs(s: &Value) -> Vec<Step> {
   let mut out = Vec::new();
   if let Some(d) = s.u64("walking.distance").filter(|d| *d > 0) {
-    out.push(format!("walk {d} m"));
+    out.push(leg(
+      "walk",
+      format!("walk {}", geo::fmt_distance(d)),
+      Some(d),
+    ));
   }
   if let Some(line) = s.list("bus.buslines").first() {
+    let name = line.str("name").unwrap_or_default();
     let stops = line
       .u64("via_num")
       .map_or(String::new(), |n| format!(", {} stops", n + 1));
-    out.push(format!(
-      "{}: {} → {}{stops}",
-      line.str("name").unwrap_or_default(),
+    let text = format!(
+      "{name}: {} → {}{stops}",
       line.str("departure_stop.name").unwrap_or_default(),
       line.str("arrival_stop.name").unwrap_or_default(),
-    ));
+    );
+    let kind = line.str("type").unwrap_or_default();
+    let mode = if kind.contains("地铁") {
+      "subway"
+    } else {
+      "bus"
+    };
+    let mut step = leg(mode, text, line.u64("distance"));
+    step.duration_s = line.u64("cost.duration");
+    out.push(step);
   }
   if let Some(name) = s.str("railway.name") {
-    out.push(format!(
+    let text = format!(
       "{name}: {} → {}",
       s.str("railway.departure_stop.name").unwrap_or_default(),
       s.str("railway.arrival_stop.name").unwrap_or_default(),
-    ));
+    );
+    out.push(leg("rail", text, s.u64("railway.distance")));
   }
   if let Some(d) = s.u64("taxi.distance").filter(|d| *d > 0) {
-    out.push(format!("taxi {d} m"));
+    out.push(leg(
+      "taxi",
+      format!("taxi {}", geo::fmt_distance(d)),
+      Some(d),
+    ));
   }
   out
 }
 
+fn leg(mode: &str, instruction: String, distance_m: Option<u64>) -> Step {
+  Step {
+    instruction,
+    mode: Some(mode.to_owned()),
+    distance_m,
+    ..Step::default()
+  }
+}
+
+/// How `distance` measures (Amap offers no cycling distances).
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum Measure {
   Straight,
@@ -213,35 +248,38 @@ pub enum Measure {
 }
 
 /// Distances from up to 100 places to one destination.
-pub async fn distance(api: &Api, from: &[String], to: &str, measure: Measure) -> Result<Value> {
-  let mut origins = Vec::new();
+pub async fn distance(
+  api: &Api,
+  from: &[String],
+  to: &str,
+  measure: Measure,
+) -> Result<Vec<Distance>> {
+  let mut origins: Vec<End> = Vec::new();
   for arg in from {
-    origins.push(geocoding::place(api, arg, None).await?);
+    origins.push(geocoding::end(api, arg, None).await?);
   }
-  let destination = geocoding::place(api, to, None).await?;
-  let kind = match measure {
-    Measure::Straight => "0",
-    Measure::Driving => "1",
-    Measure::Walking => "3",
+  let destination = geocoding::end(api, to, None).await?;
+  let (kind, mode) = match measure {
+    Measure::Straight => ("0", geo::Measure::Straight),
+    Measure::Driving => ("1", geo::Measure::Driving),
+    Measure::Walking => ("3", geo::Measure::Walking),
   };
-  let locations: Vec<String> = origins.iter().map(|p| p.location.clone()).collect();
+  let locations: Vec<String> = origins.iter().map(End::lng_lat).collect();
   let params = [
     ("origins", locations.join("|")),
-    ("destination", destination.location.clone()),
+    ("destination", destination.lng_lat()),
     ("type", kind.to_owned()),
   ];
   let v = api.get("/v3/distance", &params).await?;
-  let results: Vec<Value> = v
-    .list("results")
-    .iter()
-    .map(|r| {
-      let index = r.u64("origin_id").unwrap_or(1).saturating_sub(1) as usize;
-      json!({
-        "from": origins.get(index).map(end),
-        "distance_m": r.u64("distance"),
-        "duration_s": r.u64("duration"),
-      })
+  let results = v.list("results").iter().filter_map(|r| {
+    let index = r.u64("origin_id").unwrap_or(1).saturating_sub(1) as usize;
+    Some(Distance {
+      from: origins.get(index)?.waypoint(),
+      to: destination.waypoint(),
+      mode,
+      distance_m: r.u64("distance"),
+      duration_s: r.u64("duration"),
     })
-    .collect();
-  Ok(json!({ "to": end(&destination), "results": results }))
+  });
+  Ok(results.collect())
 }

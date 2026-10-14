@@ -35,6 +35,11 @@ macro_rules! unsupported {
 pub trait Platform: Sized {
   const INFO: PlatformInfo;
 
+  /// Map platforms: the coordinate system points are given and printed in
+  /// unless `--coord` names another. `None` (the default) adds no
+  /// `--coord`.
+  const COORD: Option<crate::geo::System> = None;
+
   /// Platform-only commands, merged next to the shared ones.
   type Extra: clap::Subcommand;
 

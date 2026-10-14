@@ -21,6 +21,7 @@ mod weather;
 
 use std::time::Duration;
 
+use atp_core::geo::System;
 use atp_core::{
   Cap, Choices, Ctx, Data, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query,
   Result, User,
@@ -53,6 +54,8 @@ impl Platform for Amap {
     guest: "nothing",
     guide: include_str!("../GUIDE.md"),
   };
+
+  const COORD: Option<System> = Some(System::Gcj02);
 
   type Extra = extra::Command;
 

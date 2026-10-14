@@ -81,7 +81,7 @@ Use these instead of writing another copy:
 
 | Need | atp-core |
 | --- | --- |
-| environment variables, `login --token` fields, saved credentials | `credentials::{env, env_any, fields, expect, saved, save}` |
+| environment variables, `login --token` fields, saved credentials, keys shown masked | `credentials::{env, env_any, fields, expect, saved, save, mask}` |
 | access tokens that expire | `token::AccessToken` |
 | files to upload, MIME types, image sizes | `file::{Upload, Image, mime_for, sniff}`, `Upload::size` |
 | `CHAT/MESSAGE` ids | `chat::{message_id, split_message_id, expect_message_id}` |
@@ -91,6 +91,7 @@ Use these instead of writing another copy:
 | JSON access | `json::ValueExt` |
 | media kind of a MIME type | `MediaKind::from_mime` |
 | prices of products, listings, deals, tickets | `Post.price` (`Price::cny`, `original`, `label`); never in `extra` |
+| map platforms: points in their system, places, routes, distances, static map sizes | `geo::{Coord, System, Place, Routes, Route, Step, Distance, Polyline, image_size, save_map}`; a place is `Post.place`, never `extra`; `Platform::COORD` for `--coord` |
 | times, counts, text | `text::{from_secs, from_millis, from_beijing, parse_count, html_to_text, encode_uri_component, emoji_shortcode …}` |
 | dates without a time of day (`Oct 12, 2021`, `3 weeks ago`) | `text::date_only`: shown as a date, never with a made-up clock time |
 | listings | `cli::PageArgs`, `paging` (`paging::slice` for lists held in memory), `PageReq` |

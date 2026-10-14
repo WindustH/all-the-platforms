@@ -120,7 +120,7 @@ pub async fn nearby(
   req: &PageReq,
 ) -> Result<Page<Post>> {
   let params = vec![
-    ("location", refs::expect_location(location)?),
+    ("location", refs::expect_location(location, api.system())?),
     ("keywords", keyword.unwrap_or_default().to_owned()),
     ("types", filter.map(type_code).unwrap_or_default()),
     ("radius", radius.min(50_000).to_string()),
@@ -176,7 +176,10 @@ pub async fn tips(
   city: Option<&str>,
   location: Option<&str>,
 ) -> Result<Page<Post>> {
-  let location = location.map(refs::expect_location).transpose()?;
+  let system = api.system();
+  let location = location
+    .map(|l| refs::expect_location(l, system))
+    .transpose()?;
   let params = [
     ("keywords", keyword.to_owned()),
     ("city", city.unwrap_or_default().to_owned()),

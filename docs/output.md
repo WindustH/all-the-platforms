@@ -19,6 +19,9 @@ stderr with a non-zero exit code. Every row carries `platform` and
   (`section=series`, with `date`), distribution slice (`section=breakdown`)
   and warning (`section=warning`); `period` says what a number covers when it
   is not the series window.
+- Route plans give a row per route (`section=route`) and per step
+  (`section=step`), with `route` and `step` counting from 1; distance
+  tables a row per origin and destination.
 - Listings of posts, comments and notifications take `--since` / `--until`
   (`7d`, `12h`, `2026-09-01` or an RFC 3339 time).
 
@@ -128,6 +131,27 @@ on shares and on the files of someone's share) and `extra` (other hashes,
 counts, the member-only bits).
 
 **Downloads**: a list of `kind`, `path`, `bytes`.
+
+**Places** (map platforms: `search`, `read`, `nearby`, `tips`, `geocode`,
+`regeo`) are posts (`kind`: `poi`, `address`, `tip`, `query`) with a
+`place`: `location`, `address`, `category`, `phone`, `rating` (of 5),
+`distance_m` (from the point searched around), `country`, `province`,
+`city`, `district`, `adcode`, `hours`, `website`. Tables show them as
+names, distances, addresses and categories.
+
+**Points** of map platforms are `{lat, lng, system}`; `system` is `wgs84`,
+`gcj02` or `bd09`, the one `--coord` asks for (each map platform defaults
+to its own).
+
+**Routes** (`route`): `mode` (`driving`, `walking`, `cycling`, `ebike`,
+`transit`), `origin` and `destination` (`name`, `location`), `routes` of
+`distance_m`, `duration_s`, `label`, `tolls` / `fare` (prices), `steps`
+(`instruction`, `mode` of transit legs, `road`, `distance_m`,
+`duration_s`) and `polyline` (`system`, `encoded`: Google's encoded
+polyline format, precision 5), and `extra` (a taxi estimate …).
+
+**Distances** (`distance`): a list of `from`, `to` (`name`, `location`),
+`mode` (`straight`, `driving` …), `distance_m`, `duration_s`.
 
 **Insights** (`insights [POST]`, creator analytics of your account or one of
 your posts): `kind` (`account` / `post`), `subject`, `title`, `url`, `from` /

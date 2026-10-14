@@ -4,6 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
 use crate::error::{Error, Result};
+use crate::geo::System;
 use crate::http::Http;
 use crate::platform::PlatformInfo;
 use crate::store::{RefKind, Session, Store};
@@ -13,6 +14,9 @@ pub struct Ctx {
   pub info: PlatformInfo,
   pub http: Http,
   pub store: Store,
+  /// Map platforms: the system of the points users give and of the
+  /// points printed (`--coord`); `None` elsewhere.
+  pub coord: Option<System>,
   extra: RefCell<BTreeMap<String, String>>,
   extra_changed: Cell<bool>,
 }
@@ -28,6 +32,7 @@ impl Ctx {
       info,
       http,
       store,
+      coord: None,
       extra: RefCell::new(extra),
       extra_changed: Cell::new(false),
     }

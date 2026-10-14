@@ -30,14 +30,17 @@ console). ATP waits 150 ms between requests.
 - Places (POIs): the id (`B000A83M61`), a place link
   (`https://www.amap.com/place/B000A83M61`, `…?poiid=…`), or `#N` after a
   list.
-- Points: `LNG,LAT` in Amap's GCJ-02 coordinates (`116.481,39.990`). Use
-  `convert` for GPS (WGS-84), Baidu or Mapbar ones. `route` and `distance`
-  also take place names and geocode them.
+- Points: `LNG,LAT` (`116.481,39.990`), longitude first, in Amap's
+  GCJ-02 unless `--coord` says otherwise (`--coord wgs84` for GPS points).
+  `convert` asks Amap itself to convert GPS, Baidu or Mapbar points. `route`
+  and `distance` also take place names and geocode them.
 - Regions: a city or district name (`北京`, `朝阳区`) or its 6-digit adcode.
 
 ## Commands
 
-Place lists hold at most 25 places a page and 200 per query.
+Place lists hold at most 25 places a page and 200 per query. Results carry
+their points as `{lat, lng, system}`; `--coord wgs84|gcj02|bd09` converts
+both what you give and what is printed.
 
 ### search
 
@@ -63,8 +66,10 @@ keeps them inside a city, `--location` ranks those nearby first.
 
 ### geocode, regeo, ip
 
-`geocode ADDRESS [--city]`, `regeo LNG,LAT [--pois]`, `ip [IP]` (your own
-address by default; mainland China only).
+`geocode ADDRESS [--city]` lists the matches as addresses; `regeo LNG,LAT`
+gives the address there, and with `--pois` the places nearby after it.
+`ip [IP]` (your own address by default; mainland China only) gives the
+city and the corners of its rectangle.
 
 ### district
 
@@ -78,7 +83,8 @@ adcodes and centres; `中国` lists the provinces.
 ### route
 
 `route FROM TO --type driving|walking|cycling|ebike|transit`: distance,
-time, tolls, traffic lights and steps; transit gives each plan's legs.
+time, tolls, traffic lights, steps and an encoded polyline; transit gives
+each plan's walks and rides with the fare.
 `--strategy` picks driving (`avoid-jam`, `highway`, `no-highway`,
 `least-fee`, `big-road`, `fastest`, `no-toll`) or transit (`cheapest`,
 `fewest-transfers`, `least-walk`, `comfortable`, `no-subway`, `subway`,

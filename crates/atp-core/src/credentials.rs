@@ -58,3 +58,14 @@ pub fn save(ctx: &Ctx, pairs: &[(&str, &str)]) {
     ctx.set_extra(k, v);
   }
 }
+
+/// A key or token for display: its first and last four characters.
+pub fn mask(secret: &str) -> String {
+  let chars: Vec<char> = secret.chars().collect();
+  if chars.len() <= 8 {
+    return "*".repeat(chars.len());
+  }
+  let head: String = chars[..4].iter().collect();
+  let tail: String = chars[chars.len() - 4..].iter().collect();
+  format!("{head}…{tail}")
+}

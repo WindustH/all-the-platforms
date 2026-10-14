@@ -47,6 +47,10 @@ pub enum Data {
   Transcript(Transcript),
   Downloads(Vec<Downloaded>),
   Insights(Box<Insights>),
+  /// Routes between two places (map platforms).
+  Routes(Box<crate::geo::Routes>),
+  /// Distances between places (map platforms).
+  Distances(Vec<crate::geo::Distance>),
   /// Anything else; printed as YAML in the terminal.
   Value(Value),
 }

@@ -3,6 +3,9 @@
 use super::*;
 
 pub(super) fn post_table(posts: &[Post]) {
+  if is_places(posts) {
+    return place_table(posts);
+  }
   // Counts chat messages lack stay out.
   let likes = posts.iter().any(|p| p.metrics.likes.is_some());
   let comments = posts.iter().any(|p| p.metrics.comments.is_some());

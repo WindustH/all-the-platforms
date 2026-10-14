@@ -3,11 +3,12 @@
 use std::path::PathBuf;
 
 use atp_core::cli::PageArgs;
+use atp_core::geo::Mode;
 use atp_core::{Data, Error, Result};
 
 use crate::api::Api;
 use crate::maps::{self, MapOptions};
-use crate::routes::{self, Measure, Mode};
+use crate::routes::{self, Measure};
 use crate::traffic::{self, Area};
 use crate::{districts, geocoding, pois, weather};
 
@@ -25,7 +26,7 @@ pub enum Command {
   },
   /// Coordinates → address
   Regeo {
-    /// LNG,LAT (GCJ-02)
+    /// LNG,LAT
     location: String,
     /// Also list places and roads nearby
     #[arg(long)]
@@ -126,7 +127,7 @@ More: atp guide amap convert";
 
 #[derive(Debug, clap::Args)]
 pub struct NearbyArgs {
-  /// LNG,LAT (GCJ-02)
+  /// LNG,LAT
   location: String,
   /// Keyword the places must match
   keyword: Option<String>,
@@ -178,7 +179,7 @@ pub struct TrafficArgs {
 
 #[derive(Debug, clap::Args)]
 pub struct MapArgs {
-  /// LNG,LAT (GCJ-02)
+  /// LNG,LAT
   location: String,
   /// 1 (world) to 17 (street)
   #[arg(long, default_value_t = 15)]
@@ -206,12 +207,12 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
     Command::Nearby(args) => nearby(api, args).await?,
     Command::Geocode { address, city } => {
-      Data::Value(geocoding::geocode(api, &address, city.as_deref()).await?)
+      Data::Posts(geocoding::geocode(api, &address, city.as_deref()).await?)
     }
-    Command::Regeo { location, pois } => Data::Value(geocoding::regeo(api, &location, pois).await?),
+    Command::Regeo { location, pois } => geocoding::regeo(api, &location, pois).await?,
     Command::Route(args) => route(api, args).await?,
     Command::Distance { from, to, mode } => {
-      Data::Value(routes::distance(api, &from, &to, mode).await?)
+      Data::Distances(routes::distance(api, &from, &to, mode).await?)
     }
     Command::Tips {
       keyword,
@@ -249,7 +250,7 @@ async fn route(api: &Api, args: RouteArgs) -> Result<Data> {
   let city = args.city.as_deref();
   let strategy = args.strategy.as_deref();
   let route = routes::route(api, &args.from, &args.to, args.mode, city, strategy).await?;
-  Ok(Data::Value(route))
+  Ok(Data::Routes(Box::new(route)))
 }
 
 /// The area `traffic` looks at, from its arguments.

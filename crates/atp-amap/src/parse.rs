@@ -1,18 +1,46 @@
 //! Amap answers → the core model. Amap writes missing values as `[]`, which
-//! `ValueExt::str` already reads as absent.
+//! `ValueExt::str` already reads as absent; its points are GCJ-02
+//! `lng,lat` strings.
 
-use atp_core::{Collection, Media, Post, Value, ValueExt};
+use atp_core::geo::{Coord, Place, System};
+use atp_core::{Collection, Media, Post, Value, ValueExt, json};
 
 use crate::refs::place_url;
 
-/// A POI of the place APIs (v5) as a post: name as title, address as text.
+/// A GCJ-02 point from Amap's `lng,lat`.
+pub fn coord(text: &str) -> Option<Coord> {
+  Coord::parse(text, System::Gcj02)
+}
+
+/// The point at `path` as JSON, for `extra` and values.
+pub fn coord_at(v: &Value, path: &str) -> Option<Value> {
+  let c = coord(&v.str(path)?)?;
+  Some(json!(c))
+}
+
+/// A POI of the place APIs (v5) as a post: the name as title, the rest in
+/// `place`.
 pub fn poi(v: &Value) -> Option<Post> {
   let id = v.str("id")?;
+  let place = Place {
+    location: v.str("location").as_deref().and_then(coord),
+    address: v.str("address"),
+    category: v.str("type"),
+    phone: v.str("business.tel"),
+    rating: v.f64("business.rating"),
+    distance_m: v.u64("distance"),
+    province: v.str("pname"),
+    city: v.str("cityname"),
+    district: v.str("adname"),
+    adcode: v.str("adcode"),
+    hours: v.str("business.opentime_today"),
+    ..Place::default()
+  };
   let mut post = Post {
     kind: "poi".into(),
     title: v.str("name"),
-    text: address(v),
     url: Some(place_url(&id)),
+    place: Some(Box::new(place)),
     media: photos(v),
     raw: Some(v.clone()),
     ..Post::default()
@@ -23,49 +51,29 @@ pub fn poi(v: &Value) -> Option<Post> {
       post.extra.insert((*key).into(), value.into());
     }
   }
-  if let Some(n) = v.u64("distance") {
-    post.extra.insert("distance_m".into(), n.into());
+  for (key, path) in [
+    ("entrance", "navi.entr_location"),
+    ("exit", "navi.exit_location"),
+  ] {
+    if let Some(point) = coord_at(v, path) {
+      post.extra.insert(key.into(), point);
+    }
   }
   Some(post)
 }
 
 /// Extra fields of a POI: (name in `extra`, path in the answer).
 const POI_FIELDS: &[(&str, &str)] = &[
-  ("location", "location"),
-  ("type", "type"),
   ("typecode", "typecode"),
-  ("province", "pname"),
-  ("city", "cityname"),
-  ("district", "adname"),
-  ("adcode", "adcode"),
   ("citycode", "citycode"),
   ("parent", "parent"),
-  ("tel", "business.tel"),
-  ("rating", "business.rating"),
   ("cost", "business.cost"),
   ("business_area", "business.business_area"),
-  ("open_today", "business.opentime_today"),
   ("open_week", "business.opentime_week"),
   ("tag", "business.tag"),
   ("alias", "business.alias"),
-  ("entrance", "navi.entr_location"),
-  ("exit", "navi.exit_location"),
   ("floor", "indoor.truefloor"),
 ];
-
-/// "province city district address", without repeats (municipalities name
-/// the city twice).
-fn address(v: &Value) -> Option<String> {
-  let mut parts: Vec<String> = Vec::new();
-  for path in ["pname", "cityname", "adname", "address"] {
-    if let Some(p) = v.str(path)
-      && !parts.contains(&p)
-    {
-      parts.push(p);
-    }
-  }
-  (!parts.is_empty()).then(|| parts.join(" "))
-}
 
 /// Photos, sent as an array or as a single object.
 fn photos(v: &Value) -> Vec<Media> {
@@ -89,28 +97,48 @@ fn photos(v: &Value) -> Vec<Media> {
 pub fn tip(v: &Value) -> Option<Post> {
   let name = v.str("name")?;
   let id = v.str("id");
+  let place = Place {
+    location: v.str("location").as_deref().and_then(coord),
+    address: v.str("address"),
+    district: v.str("district"),
+    adcode: v.str("adcode"),
+    ..Place::default()
+  };
   let mut post = Post {
     id: id.clone().unwrap_or_else(|| name.clone()),
     kind: "tip".into(),
     title: Some(name),
-    text: [v.str("district"), v.str("address")]
-      .into_iter()
-      .flatten()
-      .reduce(|a, b| format!("{a} {b}")),
     url: id.as_deref().map(place_url),
+    place: Some(Box::new(place)),
     raw: Some(v.clone()),
     ..Post::default()
   };
-  for (key, path) in [
-    ("location", "location"),
-    ("adcode", "adcode"),
-    ("typecode", "typecode"),
-  ] {
-    if let Some(value) = v.str(path) {
-      post.extra.insert(key.into(), value.into());
-    }
+  if let Some(code) = v.str("typecode") {
+    post.extra.insert("typecode".into(), code.into());
   }
   Some(post)
+}
+
+/// A place of reverse geocoding (`regeocode.pois`).
+pub fn nearby_poi(v: &Value) -> Option<Post> {
+  let id = v.str("id")?;
+  let place = Place {
+    location: v.str("location").as_deref().and_then(coord),
+    address: v.str("address"),
+    category: v.str("type"),
+    phone: v.str("tel"),
+    distance_m: v.f64("distance").map(|d| d.round() as u64),
+    ..Place::default()
+  };
+  Some(Post {
+    url: Some(place_url(&id)),
+    id,
+    kind: "poi".into(),
+    title: v.str("name"),
+    place: Some(Box::new(place)),
+    raw: Some(v.clone()),
+    ..Post::default()
+  })
 }
 
 /// An administrative district (`/v3/config/district`).
@@ -123,8 +151,10 @@ pub fn district(v: &Value, parent: Option<&str>) -> Option<Collection> {
     raw: Some(v.clone()),
     ..Collection::default()
   };
+  if let Some(center) = coord_at(v, "center") {
+    c.extra.insert("center".into(), center);
+  }
   for (key, value) in [
-    ("center", v.str("center")),
     ("citycode", v.str("citycode")),
     ("parent", parent.map(str::to_owned)),
   ] {

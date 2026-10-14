@@ -7,6 +7,7 @@
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
+use crate::geo::Routes;
 use crate::model::{Comment, Data, Insights};
 
 fn value<T: Serialize>(item: &T) -> Value {
@@ -66,6 +67,41 @@ fn insights(i: &Insights) -> Vec<Value> {
   out
 }
 
+/// A `section: route` row per route, then a `section: step` row per step
+/// (`route` and `step` count from 1).
+fn routes(r: &Routes) -> Vec<Value> {
+  let base = json!({
+    "mode": r.mode, "origin": r.origin, "destination": r.destination,
+  });
+  let with = |fields: Value| {
+    let mut row = base.clone();
+    if let (Value::Object(m), Value::Object(f)) = (&mut row, fields) {
+      m.extend(f);
+    }
+    row
+  };
+  let mut out = Vec::new();
+  for (i, route) in r.routes.iter().enumerate() {
+    let mut fields = value(route);
+    if let Value::Object(m) = &mut fields {
+      m.remove("steps");
+      m.insert("section".into(), "route".into());
+      m.insert("route".into(), (i + 1).into());
+    }
+    out.push(with(fields));
+    for (j, step) in route.steps.iter().enumerate() {
+      let mut fields = value(step);
+      if let Value::Object(m) = &mut fields {
+        m.insert("section".into(), "step".into());
+        m.insert("route".into(), (i + 1).into());
+        m.insert("step".into(), (j + 1).into());
+      }
+      out.push(with(fields));
+    }
+  }
+  out
+}
+
 pub fn rows(data: &Data) -> Vec<Value> {
   match data {
     Data::Posts(p) => each(&p.items),
@@ -91,6 +127,8 @@ pub fn rows(data: &Data) -> Vec<Value> {
       .collect(),
     Data::Downloads(x) => each(x),
     Data::Insights(i) => insights(i),
+    Data::Routes(r) => routes(r),
+    Data::Distances(x) => each(x),
     Data::Value(Value::Array(a)) => a.clone(),
     Data::Value(v) => vec![v.clone()],
   }

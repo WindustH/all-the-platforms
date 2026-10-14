@@ -16,6 +16,7 @@ pub mod ctx;
 pub mod download;
 pub mod error;
 pub mod file;
+pub mod geo;
 pub mod guide;
 pub mod http;
 pub mod json;

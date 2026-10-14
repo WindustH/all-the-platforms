@@ -1,6 +1,7 @@
 //! Live traffic (`/v3/traffic/status/*`) on a named road, in a rectangle,
 //! or around a point.
 
+use atp_core::geo::System;
 use atp_core::{Error, Result, Value, ValueExt, json};
 
 use crate::api::Api;
@@ -19,10 +20,13 @@ pub async fn status(api: &Api, area: Area<'_>) -> Result<Value> {
       let adcode = districts::adcode(api, city).await?;
       ("road", vec![("name", name.to_owned()), ("adcode", adcode)])
     }
-    Area::Rect(rect) => ("rectangle", vec![("rectangle", rectangle(rect)?)]),
+    Area::Rect(rect) => (
+      "rectangle",
+      vec![("rectangle", rectangle(rect, api.system())?)],
+    ),
     Area::Around { location, radius } => {
       let params = vec![
-        ("location", refs::expect_location(location)?),
+        ("location", refs::expect_location(location, api.system())?),
         ("radius", radius.clamp(1, 5000).to_string()),
       ];
       ("circle", params)
@@ -37,10 +41,10 @@ pub async fn status(api: &Api, area: Area<'_>) -> Result<Value> {
 }
 
 /// `LNG,LAT;LNG,LAT`: the south-west and north-east corners.
-fn rectangle(arg: &str) -> Result<String> {
+fn rectangle(arg: &str, system: System) -> Result<String> {
   let corners: Vec<String> = arg
     .split([';', '|'])
-    .map(refs::expect_location)
+    .map(|c| refs::expect_location(c, system))
     .collect::<Result<_>>()?;
   if corners.len() != 2 {
     return Err(Error::input("--rect takes two corners: LNG,LAT;LNG,LAT"));

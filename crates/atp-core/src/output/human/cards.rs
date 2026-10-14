@@ -113,6 +113,9 @@ pub(super) fn post_card(p: &Post) {
       .join(" · ")
       .if_supports_color(Stream::Stdout, |t| t.dimmed())
   );
+  if let Some(place) = &p.place {
+    place_lines(place);
+  }
   let metrics = metrics_line(&p.metrics);
   if !metrics.is_empty() {
     println!("{metrics}");

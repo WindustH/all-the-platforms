@@ -33,6 +33,7 @@ pub use self::write::{PublishArgs, WriteCommand};
 use crate::account::Loaded;
 use crate::ctx::Ctx;
 use crate::error::{Error, ErrorCode, Result};
+use crate::geo::{self, System};
 use crate::http::{Http, HttpConfig};
 use crate::model::Data;
 use crate::output;
@@ -158,8 +159,25 @@ pub fn command<P: Platform>() -> clap::Command {
   if info.supports(Cap::Files) {
     cmd = drive_words(cmd, info.id);
   }
+  if let Some(system) = P::COORD {
+    cmd = cmd.arg(coord_arg(system));
+  }
   cmd
 }
+
+/// `--coord` of map platforms, on every command.
+fn coord_arg(default: System) -> clap::Arg {
+  clap::Arg::new(COORD)
+    .long(COORD)
+    .global(true)
+    .value_name("SYSTEM")
+    .value_parser(clap::value_parser!(System))
+    .default_value(default.name())
+    .help("Coordinate system of the points you give and the points printed")
+}
+
+/// Id of `--coord`.
+pub(crate) const COORD: &str = "coord";
 
 /// On a drive the shared commands handle files, not posts.
 fn drive_words(cmd: clap::Command, id: &str) -> clap::Command {
@@ -281,10 +299,14 @@ async fn attempt<P: Platform>(
   let info: PlatformInfo = P::INFO;
   let http = Http::new(&http_config(global, &info), loaded.session.cookies.clone())?;
   let store = Store::new(info.id);
-  let platform = P::new(Ctx::new(info, http, store, loaded.session.extra.clone()))?;
+  let mut ctx = Ctx::new(info, http, store, loaded.session.extra.clone());
+  // Only map platforms define `--coord` (asking clap for it elsewhere panics).
+  ctx.coord = P::COORD.and_then(|_| matches.get_one::<System>(COORD).copied());
+  let coord = ctx.coord;
+  let platform = P::new(ctx)?;
 
   let name = matches.subcommand_name().unwrap_or_default();
-  let outcome = if CommonCommand::has_subcommand(name) {
+  let mut outcome = if CommonCommand::has_subcommand(name) {
     let cmd = CommonCommand::from_arg_matches(matches).map_err(|e| Error::input(e.to_string()))?;
     let run = Run {
       loaded,
@@ -306,6 +328,9 @@ async fn attempt<P: Platform>(
     session.source = loaded.session.source.clone();
     session.saved_at = loaded.session.saved_at;
     ctx.store.save_session(&session)?;
+  }
+  if let Some(system) = coord {
+    geo::localize(&mut outcome.data, system);
   }
   remember(ctx, &outcome.data);
   Ok((outcome.data, outcome.code))

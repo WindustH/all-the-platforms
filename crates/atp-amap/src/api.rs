@@ -4,6 +4,7 @@
 //! KEY[:SIGN_SECRET]`; `infocode`s map onto atp errors.
 
 use atp_core::credentials;
+use atp_core::geo::System;
 use atp_core::http::{Req, Resp};
 use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 
@@ -43,6 +44,11 @@ impl Api {
     let key = self.ctx.extra(KEY).filter(|k| !k.is_empty())?;
     let secret = self.ctx.extra(SECRET).filter(|s| !s.is_empty());
     Some(Creds { key, secret })
+  }
+
+  /// The system of the points users give and see (`--coord`).
+  pub fn system(&self) -> System {
+    self.ctx.coord.unwrap_or(System::Gcj02)
   }
 
   pub fn logged_in(&self) -> bool {

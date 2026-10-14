@@ -140,6 +140,9 @@ pub struct Post {
   /// What it costs, for products, listings, deals, tickets and rooms.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub price: Option<Price>,
+  /// Where it is, for places of map platforms (POIs, addresses).
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub place: Option<Box<crate::geo::Place>>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
   pub media: Vec<Media>,
   #[serde(skip_serializing_if = "Vec::is_empty")]
