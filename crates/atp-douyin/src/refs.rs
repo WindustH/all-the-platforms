@@ -101,10 +101,14 @@ pub fn music(arg: &str) -> Result<String> {
     .ok_or_else(|| Error::input(format!("not a Douyin music: {arg}")))
 }
 
-/// A live room's `web_rid` from an id or `live.douyin.com/<id>` link.
+/// A live room's `web_rid` from an id, `live:<id>` or a
+/// `live.douyin.com/<id>` link.
 pub fn live(arg: &str) -> Result<String> {
-  id_after(arg, &["live.douyin.com/", "/follow/live/", "/live/"])
-    .ok_or_else(|| Error::input(format!("not a Douyin live room: {arg}")))
+  id_after(
+    arg,
+    &["live.douyin.com/", "/follow/live/", "/live/", "live:"],
+  )
+  .ok_or_else(|| Error::input(format!("not a Douyin live room: {arg}")))
 }
 
 fn id_after(arg: &str, markers: &[&str]) -> Option<String> {

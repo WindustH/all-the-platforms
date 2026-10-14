@@ -96,7 +96,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Jike 即刻 | `jike` | posts and reposts, comments, the following and recommended feeds, topics (圈子), notifications, posting with pictures | QR, token |
 | | RSS | `rss` | RSS, Atom and JSON feeds, a subscription list with one timeline, RSSHub routes, Miniflux | not needed, Miniflux key |
 | Video | Bilibili 哔哩哔哩 | `bili` | videos, danmaku, subtitles, coins, creator data | QR, browser |
-| | Douyin 抖音 | `douyin` | videos, image posts, hot boards, no-watermark downloads | browser |
+| | Douyin 抖音 | `douyin` | videos, image posts, hot boards, live danmaku, no-watermark downloads | QR, phone, browser |
 | | YouTube | `youtube` | videos, Shorts, transcripts, playlists, analytics | browser |
 | | TikTok | `tiktok` | videos, sounds, hashtags, ads | QR, browser |
 | | Kuaishou 快手 | `kuaishou` | videos, image sets, comments, hot board, live rooms | QR, browser |

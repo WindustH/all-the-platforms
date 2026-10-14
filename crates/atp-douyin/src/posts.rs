@@ -1,15 +1,16 @@
-//! One post: detail, downloadable media, related posts.
+//! One post: detail, downloadable media, related posts, likes.
 //!
 //! The detail comes from `/aweme/v1/web/aweme/detail/`. Visitors without a
 //! browser `UIFID` are refused there; the share page's own API
 //! (`iesdouyin.com/web/api/v2/aweme/iteminfo/`) answers them instead.
 
-use atp_core::{Error, ErrorCode, Media, Page, PageReq, Post, Result, Value, ValueExt};
+use atp_core::{Action, Error, ErrorCode, Media, Page, PageReq, Post, Result, Value, ValueExt};
 
-use crate::api::Api;
-use crate::{parse, refs};
+use crate::api::{Api, WWW};
+use crate::{parse, refs, users};
 
 const DETAIL: &str = "/aweme/v1/web/aweme/detail/";
+const DIGG: &str = "/aweme/v1/web/commit/item/digg/";
 const RELATED: &str = "/aweme/v1/web/aweme/related/";
 const ITEMINFO: &str = "/web/api/v2/aweme/iteminfo/";
 
@@ -116,4 +117,21 @@ pub async fn related(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>>
   let next = (v.i64("has_more") == Some(1) && !items.is_empty())
     .then(|| (page.number_or(1) + 1).to_string());
   Ok(Page::new(items, next))
+}
+
+/// Like a post, or with `undo` take the like back.
+pub async fn like(api: &Api, arg: &str, undo: bool) -> Result<Action> {
+  let id = refs::aweme(api, arg).await?;
+  let uid = users::uid_hash(api).await?;
+  api
+    .write(DIGG, false, &uid)
+    .await?
+    .header("referer", format!("{WWW}/discover?modal_id={id}"))
+    .field("aweme_id", &id)
+    .field("item_type", "0")
+    .field("type", if undo { "0" } else { "1" })
+    .send()
+    .await?;
+  let name = if undo { "unlike" } else { "like" };
+  Ok(Action::done(name, &id).with_url(refs::video_url(&id)))
 }

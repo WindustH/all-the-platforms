@@ -8,6 +8,7 @@
 //! and exports again to collect the authorization — importing it in the
 //! account's home datacenter when Telegram says it lives elsewhere.
 
+use atp_core::cli::prompt;
 use atp_core::output::note;
 use atp_core::{Ctx, Error, QrStatus, QrTicket, Result, User};
 use base64::Engine;
@@ -21,7 +22,6 @@ use crate::api::Api;
 use crate::bot::{self, Bot};
 use crate::mt::{self, Conn, Mt, error};
 use crate::parse;
-use crate::prompt;
 
 /// Start a QR login on a fresh connection.
 pub async fn qr_start(api: &Api) -> Result<QrTicket> {

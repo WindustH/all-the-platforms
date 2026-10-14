@@ -23,7 +23,6 @@ mod login;
 mod messages;
 mod mt;
 mod parse;
-mod prompt;
 mod proxy;
 mod refs;
 mod search;

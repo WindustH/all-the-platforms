@@ -41,3 +41,6 @@ unicode-width = "0.2"
 url.workspace = true
 wreq = { version = "6.0.0-rc.31", features = ["json", "form", "query", "multipart", "stream", "cookies", "gzip", "brotli", "deflate", "zstd", "socks", "ws"] }
 wreq-util = "3.0.0-rc.14"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }

@@ -1,5 +1,5 @@
 //! A live room (`live.douyin.com/<web_rid>`): title, anchor, audience and
-//! the pull stream addresses.
+//! the pull stream addresses; its ids for `listen`.
 
 use atp_core::text::from_secs;
 use atp_core::{Error, Extra, Post, Result, Value, ValueExt};
@@ -8,6 +8,29 @@ use crate::api::Api;
 use crate::{parse, refs};
 
 const ENTER: &str = "/webcast/room/web/enter/";
+
+/// A room as `listen` connects to it.
+pub struct Room {
+  pub web_rid: String,
+  pub id: String,
+  pub title: String,
+  pub live: bool,
+}
+
+pub async fn find(api: &Api, arg: &str) -> Result<Room> {
+  let web_rid = refs::live(arg)?;
+  let v = enter(api, &web_rid).await?;
+  let room = v.at("data.data.0");
+  let Some(id) = room.str("id_str").filter(|id| id != "0") else {
+    return Err(Error::not_found(format!("no Douyin live room {web_rid}")));
+  };
+  Ok(Room {
+    id,
+    title: room.str("title").unwrap_or_default(),
+    live: room.i64("status") == Some(2),
+    web_rid,
+  })
+}
 
 pub async fn room(api: &Api, arg: &str) -> Result<Post> {
   let web_rid = refs::live(arg)?;

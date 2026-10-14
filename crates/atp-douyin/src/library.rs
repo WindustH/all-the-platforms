@@ -1,10 +1,12 @@
-//! The logged-in account's saved posts (收藏) and folders, viewing history,
-//! and the post lists of a mix (合集) or a music.
+//! The logged-in account's saved posts (收藏) and folders, saving and
+//! unsaving, viewing history, and the post lists of a mix (合集) or a music.
 
-use atp_core::{Collection, Error, Page, PageReq, Post, Result, Value, ValueExt};
+use atp_core::{Action, Collection, Error, Page, PageReq, Post, Result, Value, ValueExt};
 
-use crate::api::Api;
-use crate::{parse, refs};
+use crate::api::{Api, WWW};
+use crate::{parse, refs, users};
+
+const COLLECT: &str = "/aweme/v1/web/aweme/collect/";
 
 const SAVED: &str = "/aweme/v1/web/aweme/listcollection/";
 const FOLDERS: &str = "/aweme/v1/web/collects/list/";
@@ -128,4 +130,24 @@ pub async fn music(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
     .send()
     .await?;
   Ok(awemes(&v, "cursor"))
+}
+
+/// Save a post to the account's favorites, or with `undo` remove it.
+pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
+  if folder.is_some() {
+    return Err(Error::unsupported("favorite --folder"));
+  }
+  let id = refs::aweme(api, arg).await?;
+  let uid = users::uid_hash(api).await?;
+  api
+    .write(COLLECT, false, &uid)
+    .await?
+    .header("referer", format!("{WWW}/?recommend=1"))
+    .field("action", if undo { "0" } else { "1" })
+    .field("aweme_id", &id)
+    .field("aweme_type", "0")
+    .send()
+    .await?;
+  let name = if undo { "unfavorite" } else { "favorite" };
+  Ok(Action::done(name, &id).with_url(refs::video_url(&id)))
 }

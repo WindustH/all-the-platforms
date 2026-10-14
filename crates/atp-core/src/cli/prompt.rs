@@ -1,9 +1,9 @@
-//! Questions a login asks on the terminal: the phone number, the code, and
-//! the two-step verification password (read without echo).
+//! Questions a login asks on the terminal: a phone number, the code sent
+//! to it, a two-step verification password (read without echo).
 
 use std::io::{BufRead, IsTerminal, Write};
 
-use atp_core::{Error, Result};
+use crate::error::{Error, Result};
 
 /// One line from the terminal.
 pub fn line(question: &str) -> Result<String> {

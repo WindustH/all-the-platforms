@@ -101,6 +101,7 @@ Use these instead of writing another copy:
 | RSS / Atom / JSON feeds: fetching (conditional requests, feed discovery), parsing into posts, `FEED_URL#ENTRY_ID` references | `feed::{load, get, parse, discover, entry_ref, split_entry_ref}` |
 | lists and settings a user keeps (neither credentials nor cache) | `Store::{data, put_data}` |
 | text and file arguments, confirmations (a terminal is asked; pipes need `--yes`) | `cli::{read_text, check_images, check_files, confirm}` |
+| questions a login asks on the terminal (a phone number, a texted code, a password without echo) | `cli::prompt::{line, secret}` |
 | HTTP errors | `http::status_error`, `Req::retries` |
 | a declared client name for open APIs that challenge look-alike browsers | `http::TOOL_USER_AGENT` |
 

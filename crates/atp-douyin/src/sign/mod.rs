@@ -1,9 +1,16 @@
-//! Douyin's own request signature. `a_bogus`, the query encoding and the
-//! visitor fingerprint are shared with Toutiao and live in atp-bytedance.
+//! Douyin's own request signatures. `a_bogus`, the query encoding, the
+//! visitor fingerprint and the ticket-guard keys are shared with Toutiao
+//! and live in atp-bytedance.
 //!
 //! [`web_sign`]: `x-secsdk-web-signature` (secsdk `webSignUrl`), added on
 //! the paths the SDK protects when the visitor has a `UIFID`
 //! (`Evil0ctal/Douyin_TikTok_Download_API`, `websign.py`, Apache-2.0).
+//! [`guard`] and [`dtrait`] add what writes carry, [`frontier`] signs the
+//! webcast websocket.
+
+pub mod dtrait;
+pub mod frontier;
+pub mod guard;
 
 use md5::{Digest, Md5};
 

@@ -1,7 +1,8 @@
 //! Users: profiles, the logged-in account, their posts and liked posts,
-//! followers and following.
+//! followers and following; following and unfollowing.
 
-use atp_core::{Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt};
+use atp_core::{Action, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt};
+use md5::{Digest, Md5};
 
 use crate::api::Api;
 use crate::refs::{self, UserArg};
@@ -13,6 +14,7 @@ const POSTS: &str = "/aweme/v1/web/aweme/post/";
 const LIKES: &str = "/aweme/v1/web/aweme/favorite/";
 const FOLLOWERS: &str = "/aweme/v1/web/user/follower/list/";
 const FOLLOWING: &str = "/aweme/v1/web/user/following/list/";
+const FOLLOW: &str = "/aweme/v1/web/commit/follow/user/";
 
 /// The `sec_uid` of a user reference; `@douyin_id` is looked up by search.
 pub async fn sec_uid(api: &Api, arg: &str) -> Result<String> {
@@ -81,7 +83,7 @@ pub async fn whoami(api: &Api) -> Result<User> {
     .await?;
   parse::user(v.at("user")).ok_or_else(|| {
     Error::auth("Douyin did not return the logged-in account")
-      .with_hint("run `atp douyin login --browser`")
+      .with_hint("run `atp douyin login` (QR code) or `atp douyin login --browser`")
   })
 }
 
@@ -179,4 +181,41 @@ pub async fn followers(api: &Api, arg: &str, page: &PageReq) -> Result<Page<User
 
 pub async fn following(api: &Api, arg: &str, page: &PageReq) -> Result<Page<User>> {
   relations(api, arg, FOLLOWING, "followings", page).await
+}
+
+/// The MD5 of the logged-in account's uid, which the web client appends
+/// to its writes.
+pub async fn uid_hash(api: &Api) -> Result<String> {
+  let me = whoami(api).await?;
+  let uid = me
+    .extra
+    .get("uid")
+    .and_then(Value::as_str)
+    .ok_or_else(|| Error::upstream("Douyin returned the account without its uid"))?;
+  Ok(
+    Md5::digest(uid.as_bytes())
+      .iter()
+      .map(|b| format!("{b:02x}"))
+      .collect(),
+  )
+}
+
+/// Follow a user, or with `undo` unfollow.
+pub async fn follow(api: &Api, arg: &str, undo: bool) -> Result<Action> {
+  let sec = sec_uid(api, arg).await?;
+  let uid = profile_raw(api, &sec)
+    .await?
+    .str("uid")
+    .ok_or_else(|| Error::upstream("profile without uid"))?;
+  let me = uid_hash(api).await?;
+  api
+    .write(FOLLOW, false, &me)
+    .await?
+    .header("referer", refs::user_url(&sec))
+    .field("type", if undo { "0" } else { "1" })
+    .field("user_id", &uid)
+    .send()
+    .await?;
+  let name = if undo { "unfollow" } else { "follow" };
+  Ok(Action::done(name, &sec).with_url(refs::user_url(&sec)))
 }

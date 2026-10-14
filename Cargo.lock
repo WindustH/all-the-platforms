@@ -540,11 +540,17 @@ name = "atp-bytedance"
 version = "0.1.0"
 dependencies = [
  "atp-core",
+ "base64 0.22.1",
+ "hmac 0.12.1",
  "jiff",
  "rand 0.9.5",
+ "ring",
  "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "sm3",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -579,6 +585,7 @@ dependencies = [
  "tracing-subscriber",
  "unicode-width",
  "url",
+ "windows-sys 0.61.2",
  "wreq",
  "wreq-util",
 ]
@@ -683,12 +690,19 @@ dependencies = [
 name = "atp-douyin"
 version = "0.1.0"
 dependencies = [
+ "aes 0.8.4",
  "atp-bytedance",
  "atp-core",
+ "base64 0.22.1",
+ "cbc 0.1.2",
  "clap",
+ "flate2",
+ "futures-util",
  "jiff",
  "md-5",
+ "rand 0.9.5",
  "regex",
+ "rsa",
  "serde",
  "serde_json",
  "tokio",
@@ -1207,14 +1221,12 @@ dependencies = [
  "grammers-session",
  "grammers-tl-types",
  "jiff",
- "libc",
  "regex",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "url",
- "windows-sys 0.61.2",
 ]
 
 [[package]]

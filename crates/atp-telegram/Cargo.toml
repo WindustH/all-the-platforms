@@ -13,7 +13,6 @@ grammers-mtsender = { version = "0.10", features = ["proxy"] }
 grammers-session = { version = "0.10", default-features = false, features = ["serde"] }
 grammers-tl-types = "0.10"
 jiff.workspace = true
-libc = "0.2"
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -21,6 +20,3 @@ atp-core.workspace = true
 tokio = { workspace = true, features = ["sync", "net"] }
 tracing.workspace = true
 url.workspace = true
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }

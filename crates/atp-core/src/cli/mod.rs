@@ -12,6 +12,7 @@ mod command;
 mod input;
 mod library;
 mod media;
+pub mod prompt;
 mod read;
 mod threads;
 mod write;

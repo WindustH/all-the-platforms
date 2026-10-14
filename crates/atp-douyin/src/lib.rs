@@ -2,14 +2,19 @@
 //!
 //! Posts are awemes: videos (`douyin.com/video/<id>`) and image posts
 //! (`/note/<id>`); users are `sec_uid`s. Every web API call is signed with
-//! `a_bogus` (see [`sign`]). Writes are not offered: the web checks them
-//! with ticket-guard headers bound to keys the browser created at login.
+//! `a_bogus` (see [`sign`]). Writes carry ticket-guard headers signed with
+//! the key ATP registers when it logs in (QR code or texted code), so a
+//! session copied from a browser reads but does not write. `listen` follows
+//! live rooms over the webcast websocket.
 
 mod api;
 mod comments;
 mod discover;
 mod extra;
+mod gateway;
 mod library;
+mod live;
+mod login;
 mod notifications;
 mod parse;
 mod posts;
@@ -20,9 +25,10 @@ mod users;
 
 use std::time::Duration;
 
+use atp_core::output::Stream;
 use atp_core::{
-  Cap, Choices, Collection, Comment, Ctx, Data, Media, Notification, Page, PageReq, Platform,
-  PlatformInfo, PlatformKind, Post, Query, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Media, Notification, Page, PageReq,
+  Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -36,11 +42,12 @@ impl Platform for Douyin {
     id: "douyin",
     name: "Douyin",
     aliases: &["dy"],
-    about: "Douyin (抖音): videos, image posts, comments, users and hot boards",
+    about: "Douyin (抖音): videos, image posts, comments, users, hot boards and live danmaku",
     home: "https://www.douyin.com",
     cookie_domains: &["douyin.com"],
     required_cookies: api::LOGIN_COOKIES,
     caps: &[
+      Cap::QrLogin,
       Cap::Search,
       Cap::SearchUsers,
       Cap::Hot,
@@ -57,6 +64,12 @@ impl Platform for Douyin {
       Cap::Likes,
       Cap::History,
       Cap::Notifications,
+      Cap::Like,
+      Cap::Favorite,
+      Cap::Comment,
+      Cap::DeleteComment,
+      Cap::Follow,
+      Cap::Listen,
       Cap::Download,
     ],
     choices: Choices {
@@ -71,7 +84,7 @@ impl Platform for Douyin {
     kind: PlatformKind::Video,
     token: "",
     env: &[],
-    guest: "hot, user, read, download (via the share page)",
+    guest: "hot, user, read, download (via the share page), listen",
     guide: include_str!("../GUIDE.md"),
   };
 
@@ -92,6 +105,14 @@ impl Platform for Douyin {
   async fn prepare_login(&self) -> Result<()> {
     atp_bytedance::visitor::ensure(&self.api.ctx).await;
     Ok(())
+  }
+
+  async fn qr_start(&self) -> Result<QrTicket> {
+    login::qr_start(&self.api).await
+  }
+
+  async fn qr_poll(&self, ticket: &QrTicket) -> Result<QrStatus> {
+    login::qr_poll(&self.api, ticket).await
   }
 
   async fn search(&self, query: &Query, page: &PageReq) -> Result<Page<Post>> {
@@ -172,6 +193,30 @@ impl Platform for Douyin {
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
     notifications::list(&self.api, kind, page).await
+  }
+
+  async fn like(&self, post: &str, undo: bool) -> Result<Action> {
+    posts::like(&self.api, post, undo).await
+  }
+
+  async fn favorite(&self, post: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
+    library::favorite(&self.api, post, folder, undo).await
+  }
+
+  async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
+    comments::send(&self.api, post, reply).await
+  }
+
+  async fn delete_comment(&self, post: &str, comment: &str) -> Result<Action> {
+    comments::delete(&self.api, post, comment).await
+  }
+
+  async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
+    users::follow(&self.api, user, undo).await
+  }
+
+  async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
+    live::listen(&self.api, chats, out).await
   }
 
   async fn media(&self, post: &str, audio_only: bool) -> Result<(Post, Vec<Media>)> {

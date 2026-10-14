@@ -87,7 +87,7 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 | | 即刻 | `jike` | 动态与转发、评论、关注与推荐动态流、圈子、通知、带图发动态 | 扫码、Token |
 | | RSS | `rss` | RSS、Atom 与 JSON Feed、订阅列表与合并时间线、RSSHub 路由、Miniflux | 无需登录、Miniflux Key |
 | 视频 | 哔哩哔哩 | `bili` | 视频、弹幕、字幕、投币、创作者数据 | 扫码、浏览器 |
-| | 抖音 | `douyin` | 视频、图文、热榜、无水印下载 | 浏览器 |
+| | 抖音 | `douyin` | 视频、图文、热榜、直播弹幕、无水印下载 | 扫码、手机号、浏览器 |
 | | YouTube | `youtube` | 视频、Shorts、字幕文本、播放列表、数据 | 浏览器 |
 | | TikTok | `tiktok` | 视频、音乐、话题、广告 | 扫码、浏览器 |
 | | 快手 | `kuaishou` | 视频、图集、评论、热榜、直播间 | 扫码、浏览器 |

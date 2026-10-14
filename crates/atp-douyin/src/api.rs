@@ -5,6 +5,10 @@
 //!
 //! The query is built and signed here as one string and sent exactly as
 //! signed: the signature covers its bytes. [`Api`] owns the context.
+//! Writes ([`Api::write`]) add the ticket-guard and device-trait headers
+//! and the secsdk CSRF token, and wait 2 to 6 s first.
+
+use std::time::Duration;
 
 use atp_core::http::{Method, USER_AGENT};
 use atp_core::{Ctx, Error, ErrorCode, Http, Result, Value, ValueExt};
@@ -14,12 +18,13 @@ use atp_bytedance::query::{encode, query_string};
 use atp_bytedance::visitor;
 
 use crate::sign;
+use crate::sign::guard::Guard;
 
 pub const WWW: &str = "https://www.douyin.com";
 /// Cookies of a logged-in web session.
 pub const LOGIN_COOKIES: &[&str] = &["sessionid"];
-const LOGIN_HINT: &str = "log in with `atp douyin login --browser` (a browser where you \
-   opened douyin.com) or `--cookie`";
+const LOGIN_HINT: &str = "log in with `atp douyin login` (QR code), `atp douyin login-sms`, \
+   `--browser` (a browser where you opened douyin.com) or `--cookie`";
 const WALL_HINT: &str = "Douyin refuses this to visitors or flagged clients: log in with \
    `atp douyin login --browser`, retry later, or use a residential network in mainland China";
 
@@ -46,6 +51,46 @@ impl Api {
   /// Fail with `not_authenticated` unless the session cookie is present.
   pub fn require_login(&self) -> Result<()> {
     self.ctx.require_login(LOGIN_COOKIES)
+  }
+
+  /// A write as a form POST to `path`, after a pause of 2 to 6 s. `signed`
+  /// writes (comments) carry a ticket-guard signature over the path, the
+  /// others only name the key. `uid` is the MD5 of the account's uid,
+  /// which the web client appends unsigned.
+  pub async fn write(&self, path: &str, signed: bool, uid: &str) -> Result<Call<'_>> {
+    self.require_login()?;
+    let guard = Guard::load(&self.ctx)?;
+    let mut call = self.post(path).tail("uid", uid);
+    for (name, value) in guard.headers(path, signed)? {
+      call = call.header(name, value);
+    }
+    call = call.header("x-tt-session-dtrait", sign::dtrait::header(path)?);
+    let (min, max) = (Duration::from_secs(2), Duration::from_secs(6));
+    self.ctx.http.pause(min, max).await;
+    if let Some(token) = self.csrf_token().await {
+      call = call.header("x-secsdk-csrf-token", token);
+    }
+    Ok(call)
+  }
+
+  /// The secsdk CSRF token, asked for with a `HEAD` request
+  /// (`x-ware-csrf-token: 0,<token>,…`).
+  async fn csrf_token(&self) -> Option<String> {
+    let resp = self
+      .ctx
+      .http
+      .request(Method::HEAD, format!("{WWW}/service/2/abtest_config/"))
+      .header("x-secsdk-csrf-request", "1")
+      .header("x-secsdk-csrf-version", "1.2.22")
+      .send()
+      .await
+      .ok()?;
+    let header = resp.header("x-ware-csrf-token")?;
+    header
+      .split(',')
+      .nth(1)
+      .filter(|t| !t.is_empty())
+      .map(str::to_owned)
   }
 }
 
@@ -97,6 +142,9 @@ pub struct Call<'a> {
   method: Method,
   query: Vec<(String, String)>,
   form: Vec<(String, String)>,
+  /// Parameters after the signature (not signed).
+  tail: Vec<(String, String)>,
+  headers: Vec<(&'static str, String)>,
   bare: bool,
 }
 
@@ -108,8 +156,22 @@ impl<'a> Call<'a> {
       method,
       query: Vec::new(),
       form: Vec::new(),
+      tail: Vec::new(),
+      headers: Vec::new(),
       bare: false,
     }
+  }
+
+  /// A header of this call only.
+  pub fn header(mut self, name: &'static str, value: impl ToString) -> Self {
+    self.headers.push((name, value.to_string()));
+    self
+  }
+
+  /// A query parameter after the signature, which does not cover it.
+  pub fn tail(mut self, key: &str, value: impl ToString) -> Self {
+    self.tail.push((key.to_owned(), value.to_string()));
+    self
   }
 
   /// Query parameter; later ones replace common parameters of the same name.
@@ -168,10 +230,14 @@ impl<'a> Call<'a> {
     let now = jiff::Timestamp::now().as_millisecond();
     let a_bogus = abogus::sign(DOUYIN, &query, body, USER_AGENT, now);
     let signed = format!("{query}&a_bogus={}", encode(&a_bogus));
-    match uifid {
+    let signed = match uifid {
       Some(u) if sign::is_protected(&self.path) => sign::web_sign(&signed, &u, now / 1000),
       _ => signed,
+    };
+    if self.tail.is_empty() {
+      return signed;
     }
+    format!("{signed}&{}", query_string(&self.tail))
   }
 
   /// Send and return the JSON body after checking `status_code`.
@@ -197,6 +263,9 @@ impl<'a> Call<'a> {
     // Browsers send the visitor id as a header too.
     if let Some(uifid) = ctx.http.cookie("UIFID") {
       req = req.header("uifid", uifid);
+    }
+    for (name, value) in &self.headers {
+      req = req.header(name, value);
     }
     if form {
       req = req.header("origin", WWW).bytes(
