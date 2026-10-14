@@ -472,6 +472,7 @@ dependencies = [
 name = "atp-core"
 version = "0.1.0"
 dependencies = [
+ "anstyle-query",
  "clap",
  "comfy-table",
  "csv",
@@ -828,6 +829,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

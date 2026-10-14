@@ -116,6 +116,8 @@ impl App {
 
   pub fn run(self) -> ExitCode {
     restore_sigpipe();
+    // Windows consoles show colors only once asked to; a no-op elsewhere.
+    let _ = anstyle_query::windows::enable_ansi_colors();
     let mut args: Vec<OsString> = std::env::args_os().collect();
     let invoked = args
       .first()

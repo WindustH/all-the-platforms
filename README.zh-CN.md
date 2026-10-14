@@ -19,7 +19,7 @@
 
 `atp` 用同一套命令在知乎、小红书、微博、哔哩哔哩、抖音、微信、Telegram、
 Discord、YouTube、TikTok、Reddit、Twitter / X 等平台上浏览、搜索、发布、聊天和下载。
-在终端里给人看，在脚本和 AI Agent 里则输出稳定的 JSON / YAML。
+在终端里给人看，在脚本和 AI Agent 里则输出稳定的 JSON / YAML；支持 Linux、macOS 和 Windows。
 
 ```console
 $ atp bili search "rust 教程" -n 3
@@ -93,8 +93,9 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 
 ## 快速开始
 
-从源码构建（需要 Rust 1.88+，以及构建 TLS 库所需的 `cmake` 和 `clang`；
-`ffmpeg` 可选，用于合并视频和音频）：
+从 [Releases](https://github.com/WindustH/all-the-platforms/releases) 下载 Linux、macOS 或
+Windows 版本，或从源码构建（需要 Rust 1.88+，以及构建 TLS 库所需的 `cmake` 和 `clang`，
+Windows 上还需要 NASM；`ffmpeg` 可选，用于合并视频和音频）：
 
 ```sh
 cargo install --path .
@@ -175,7 +176,8 @@ atp bili search --help    # 单个命令的选项和示例
 - `ATP_<平台>_COOKIE`（例如 `ATP_BILI_COOKIE`）可以临时提供 Cookie 而不保存。
   `--proxy` 或 `HTTPS_PROXY` 让请求走代理。
 - `--interval 5`（或 `ATP_INTERVAL=5`）让请求之间至少间隔 5 秒，适合大批量采集。
-- 登录状态保存在 `~/.config/all-the-platforms/<平台>/session.json`（仅本人可读），
+- 登录状态保存在 `~/.config/all-the-platforms/<平台>/session.json`（仅本人可读；
+  macOS 为 `~/Library/Application Support`，Windows 为 `%APPDATA%`），
   `atp <平台> logout` 即可删除。
 - 机器人 Token、API 密钥和应用凭证通过 `login --token` 填入（`-` 表示从标准输入读取）；
   `atp guide <平台>` 说明该平台需要哪种格式、能解锁哪些功能。

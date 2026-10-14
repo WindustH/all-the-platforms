@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15, windows-2022]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install NASM
+        if: runner.os == 'Windows'
+        uses: ilammy/setup-nasm@v1
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          atp=target/debug/atp
+          "$atp" --version
+          "$atp" platforms --json > /dev/null
+          "$atp" guide mcp > /dev/null
+          "$atp" bili search --help > /dev/null
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | "$atp" mcp > mcp.out
+          grep -q '"protocolVersion":"2025-06-18"' mcp.out
+          grep -q '"name":"read"' mcp.out

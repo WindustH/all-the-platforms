@@ -35,13 +35,46 @@ fn ask(question: &str, hidden: bool) -> Result<String> {
 #[cfg(unix)]
 struct EchoOff(libc::termios);
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+struct EchoOff(windows_sys::Win32::Foundation::HANDLE, u32);
+
+#[cfg(not(any(unix, windows)))]
 struct EchoOff;
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 impl EchoOff {
   fn new() -> Option<Self> {
     None
+  }
+}
+
+#[cfg(windows)]
+impl EchoOff {
+  fn new() -> Option<Self> {
+    use windows_sys::Win32::System::Console::{
+      ENABLE_ECHO_INPUT, GetConsoleMode, GetStdHandle, STD_INPUT_HANDLE, SetConsoleMode,
+    };
+    // SAFETY: console mode calls on this process's stdin handle.
+    unsafe {
+      let handle = GetStdHandle(STD_INPUT_HANDLE);
+      let mut mode = 0;
+      if GetConsoleMode(handle, &mut mode) == 0 {
+        return None;
+      }
+      (SetConsoleMode(handle, mode & !ENABLE_ECHO_INPUT) != 0).then_some(Self(handle, mode))
+    }
+  }
+}
+
+#[cfg(windows)]
+impl Drop for EchoOff {
+  fn drop(&mut self) {
+    // SAFETY: restores the mode read in `new`.
+    unsafe {
+      windows_sys::Win32::System::Console::SetConsoleMode(self.0, self.1);
+    }
+    // Without echo the Enter key left no line break.
+    eprintln!();
   }
 }
 

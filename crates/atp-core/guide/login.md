@@ -41,7 +41,9 @@ platform. Every command uses it automatically.
 
 ## Where sessions live
 
-`~/.config/all-the-platforms/<platform>/session.json`, readable by you only.
+`~/.config/all-the-platforms/<platform>/session.json` on Linux (macOS:
+`~/Library/Application Support/…`, Windows: `%APPDATA%\…`), readable by
+you only.
 `ATP_HOME=<dir>` moves config and cache under `<dir>`. Only logged-in
 sessions are saved; cookies a platform refreshes are written back.
 

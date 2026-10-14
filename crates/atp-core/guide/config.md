@@ -31,8 +31,14 @@ the names (never the values) of cookies responses set.
 
 | Path | Content |
 | --- | --- |
-| `~/.config/all-the-platforms/<platform>/session.json` | saved session (mode 0600) |
-| `~/.cache/all-the-platforms/<platform>/` | caches (signing keys, query ids, tokens; mode 0600), `#N` lists, the login QR code |
+| `<config>/all-the-platforms/<platform>/session.json` | saved session (only you can read it) |
+| `<cache>/all-the-platforms/<platform>/` | caches (signing keys, query ids, tokens), `#N` lists, the login QR code |
+
+| System | `<config>` | `<cache>` |
+| --- | --- | --- |
+| Linux | `~/.config` (`$XDG_CONFIG_HOME`) | `~/.cache` (`$XDG_CACHE_HOME`) |
+| macOS | `~/Library/Application Support` | `~/Library/Caches` |
+| Windows | `%APPDATA%` | `%LOCALAPPDATA%` |
 
 `ATP_HOME=<dir>` puts both under `<dir>/config` and `<dir>/cache`,
 handy for separate accounts:
@@ -45,6 +51,9 @@ Link the binary under a platform name to skip the platform word:
 
     ln -s "$(which atp)" ~/.local/bin/bili
     bili hot -n 5                       # same as: atp bili hot -n 5
+
+On Windows, a copy or a hard link named after the platform does the same:
+`mklink /H bili.exe atp.exe`.
 
 ## Exit codes
 

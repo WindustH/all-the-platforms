@@ -21,7 +21,7 @@
 Xiaohongshu, Weibo, Bilibili, Douyin, WeChat, Telegram, Discord, YouTube,
 TikTok, Reddit, Twitter / X and many more, with the same commands
 everywhere. It works in a terminal for people, and in scripts and AI agents
-through a stable JSON / YAML output.
+through a stable JSON / YAML output, on Linux, macOS and Windows.
 
 ```console
 $ atp bili search "rust 教程" -n 3
@@ -102,8 +102,10 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 
 ## Quick start
 
-Build from source (Rust 1.88+, plus `cmake` and `clang` for the TLS library;
-`ffmpeg` is optional and used for merging video and audio):
+Download a build for Linux, macOS or Windows from the
+[releases](https://github.com/WindustH/all-the-platforms/releases), or build
+from source (Rust 1.88+, plus `cmake` and `clang` for the TLS library, and
+NASM on Windows; `ffmpeg` is optional and used for merging video and audio):
 
 ```sh
 cargo install --path .
@@ -184,7 +186,8 @@ atp bili search --help    # a command's options, with examples
 - `--interval 5` (or `ATP_INTERVAL=5`) spaces requests at least five seconds
   apart, for large collection jobs.
 - Sessions live in `~/.config/all-the-platforms/<platform>/session.json` (readable by
-  you only); `atp <platform> logout` removes them.
+  you only; `~/Library/Application Support` on macOS, `%APPDATA%` on Windows);
+  `atp <platform> logout` removes them.
 - Bot tokens, API keys and app credentials go in with `login --token`
   (`-` reads them from stdin); `atp guide <platform>` says which form a
   platform takes and what it unlocks.

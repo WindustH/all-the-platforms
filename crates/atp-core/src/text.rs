@@ -154,9 +154,9 @@ pub fn file_stem(s: &str) -> String {
       }
     })
     .collect();
+  // Windows drops trailing dots and spaces from names, so none are left.
   truncate(cleaned.trim().trim_start_matches('.'), 80)
-    .trim_end_matches('…')
-    .trim()
+    .trim_end_matches(['…', '.', ' '])
     .to_owned()
 }
 

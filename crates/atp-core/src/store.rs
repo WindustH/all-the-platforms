@@ -1,6 +1,7 @@
 //! Per-platform files: the saved session, a TTL cache and the short-index list.
 //!
-//! Layout (override the root with `ATP_HOME`):
+//! Layout under the system's config and cache directories (Linux shown;
+//! override the root with `ATP_HOME`):
 //! - `~/.config/all-the-platforms/<platform>/session.json` (mode 0600)
 //! - `~/.cache/all-the-platforms/<platform>/*.json`
 

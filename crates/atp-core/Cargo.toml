@@ -11,6 +11,7 @@ default = []
 browser = ["dep:rookie"]
 
 [dependencies]
+anstyle-query = "1"
 clap.workspace = true
 comfy-table = "8"
 csv = "1"
