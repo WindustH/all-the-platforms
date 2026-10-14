@@ -13,6 +13,8 @@ These work anywhere on the command line:
 | `--timeout SECS` | | per request, default 30 |
 | `--interval SECS` | `ATP_INTERVAL` | minimum gap between requests |
 | `-v, --verbose` | `ATP_LOG` | log requests (method, host, status, time) to stderr |
+| `--no-verify` | `ATP_NO_VERIFY=1` | fail on captchas instead of opening them in a browser |
+| | `ATP_BROWSER` | the browser for human checks: a path or a command (`chromium`) |
 
 `ATP_LOG` takes a tracing filter, e.g. `ATP_LOG=media=trace` also logs
 the names (never the values) of cookies responses set.

@@ -53,7 +53,15 @@ pub fn import(browser: Option<&str>, domains: &[&str]) -> Result<Vec<(String, Co
     };
     match loader(Some(domains.clone())) {
       Ok(list) => {
-        let jar = pick(list, wanted);
+        let jar = pick(
+          list.into_iter().map(|c| Stored {
+            name: c.name,
+            value: c.value,
+            domain: c.domain,
+            expires: c.expires,
+          }),
+          wanted,
+        );
         if !jar.is_empty() {
           found.push((name.to_owned(), jar));
         }
@@ -64,12 +72,20 @@ pub fn import(browser: Option<&str>, domains: &[&str]) -> Result<Vec<(String, Co
   Ok(found)
 }
 
+/// A cookie as a browser stores it.
+pub(crate) struct Stored {
+  pub name: String,
+  pub value: String,
+  pub domain: String,
+  /// Unix seconds; `None` for a session cookie.
+  pub expires: Option<u64>,
+}
+
 /// One value per cookie name. Browsers filter domains by substring (`x.com`
 /// also matches `netflix.com`), so keep only the platform's own domains; among
 /// duplicates prefer the earlier listed domain, the domain itself over its
 /// subdomains, then the cookie that expires last (the newest).
-#[cfg(feature = "browser")]
-fn pick(list: Vec<rookie::enums::Cookie>, wanted: &[&str]) -> Cookies {
+pub(crate) fn pick(list: impl IntoIterator<Item = Stored>, wanted: &[&str]) -> Cookies {
   use std::cmp::Reverse;
   use std::collections::BTreeMap;
 

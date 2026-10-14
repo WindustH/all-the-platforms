@@ -29,6 +29,7 @@ pub mod socket;
 pub mod store;
 pub mod text;
 pub mod token;
+mod verify;
 
 pub use app::App;
 pub use ctx::Ctx;

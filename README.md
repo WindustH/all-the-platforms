@@ -61,6 +61,8 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
   merged, audio only, or speech-recognition-ready WAV segments.
 - **Behaves like a browser.** Browser network fingerprints, each platform's
   request signatures and polite pacing keep requests looking ordinary.
+- **Captchas stay in your hands.** When a site asks for a human check, it
+  opens in your browser with your session; pass it and the command carries on.
 
 ## Platforms
 

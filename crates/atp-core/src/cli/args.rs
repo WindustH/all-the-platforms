@@ -36,6 +36,9 @@ pub struct GlobalArgs {
   /// Log requests to stderr
   #[arg(short, long, global = true)]
   pub verbose: bool,
+  /// Fail on captchas and risk checks instead of opening them in a browser
+  #[arg(long, global = true, env = "ATP_NO_VERIFY")]
+  pub no_verify: bool,
 }
 
 impl GlobalArgs {

@@ -58,6 +58,14 @@ pub fn error(e: &Error) {
       hint
     );
   }
+  if let Some(url) = &e.url
+    && !e.hint.as_deref().unwrap_or_default().contains(url.as_str())
+  {
+    eprintln!(
+      "{} {url}",
+      "open:".if_supports_color(Stream::Stderr, |t| t.yellow())
+    );
+  }
 }
 
 pub fn note(message: &str) {

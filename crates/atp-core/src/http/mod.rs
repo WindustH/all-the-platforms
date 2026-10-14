@@ -31,6 +31,22 @@ pub const SEC_CH_UA_PLATFORM: &str = r#""macOS""#;
 
 pub type Cookies = BTreeMap<String, String>;
 
+/// The proxy in effect: `explicit` (`--proxy`), then `ATP_PROXY`,
+/// `ALL_PROXY`, `HTTPS_PROXY` (either case).
+pub fn proxy_url(explicit: Option<&str>) -> Option<String> {
+  let var = |name: &str| {
+    std::env::var(name)
+      .or_else(|_| std::env::var(name.to_ascii_lowercase()))
+      .ok()
+      .filter(|v| !v.trim().is_empty())
+  };
+  explicit
+    .map(str::to_owned)
+    .or_else(|| var("ATP_PROXY"))
+    .or_else(|| var("ALL_PROXY"))
+    .or_else(|| var("HTTPS_PROXY"))
+}
+
 #[derive(Debug, Clone)]
 pub struct HttpConfig {
   pub proxy: Option<String>,
@@ -188,18 +204,7 @@ impl Http {
   /// third-party websockets): `--proxy`, then `ATP_PROXY`, `ALL_PROXY`,
   /// `HTTPS_PROXY` (either case).
   pub fn proxy(&self) -> Option<String> {
-    let var = |name: &str| {
-      std::env::var(name)
-        .or_else(|_| std::env::var(name.to_ascii_lowercase()))
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-    };
-    self
-      .proxy
-      .clone()
-      .or_else(|| var("ATP_PROXY"))
-      .or_else(|| var("ALL_PROXY"))
-      .or_else(|| var("HTTPS_PROXY"))
+    proxy_url(self.proxy.as_deref())
   }
 
   /// Whether the session cookies go to `host`: the platform's own domains

@@ -233,15 +233,13 @@ fn failure(gateway: &Gateway, code: &str, url: Option<String>) -> Error {
     "FAIL_SYS_USER_VALIDATE",
     "FAIL_SYS_ILLEGAL_ACCESS",
   ]) {
-    let hint = match url {
-      Some(url) => format!(
-        "open {url} in a browser and pass the check, or wait a few minutes; then import the browser's cookies again"
-      ),
-      None => {
-        "wait a few minutes, or open the site in a browser once and import its cookies again".into()
-      }
+    let error = Error::new(ErrorCode::VerificationRequired, message).with_hint(
+      "pass the check in a browser (atp opens it when run on a terminal), or wait a few minutes",
+    );
+    return match url {
+      Some(url) => error.with_url(url),
+      None => error,
     };
-    return Error::new(ErrorCode::VerificationRequired, message).with_hint(hint);
   }
   if has(&[
     "FAIL_SYS_TRAFFIC_LIMIT",

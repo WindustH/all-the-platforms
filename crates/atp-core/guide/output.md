@@ -19,7 +19,8 @@ hints go to stderr, so they never mix with data.
     fetched_at: 2026-09-30T02:00:00Z
     data: ...
 
-On failure `ok: false` and `error: {code, message, hint}` replace `data`, and
+On failure `ok: false` and `error: {code, message, hint, url}` replace `data`
+(`url`: the page that clears the error, such as a captcha), and
 the exit code is non-zero: 2 for bad input, 3 when not logged in, 1 otherwise.
 
 Error codes: `not_authenticated`, `verification_required`, `ip_blocked`,

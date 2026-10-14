@@ -50,6 +50,24 @@ sessions are saved; cookies a platform refreshes are written back.
 | Error code | Meaning | What to do |
 | --- | --- | --- |
 | `not_authenticated` | no session, or it expired | log in again |
-| `verification_required` | captcha / risk control | pass the check in the browser, wait, or change network (`--proxy`) |
+| `verification_required` | captcha / risk control | pass the check in the browser (below), wait, or change network (`--proxy`) |
 | `rate_limited` | too many requests | wait; slow down with `--interval` |
 | `ip_blocked` | the network is blocked | change network |
+
+## Captchas and risk checks
+
+When a platform asks for a human check and atp runs on a terminal, it opens
+the check in a browser instead of failing:
+
+1. Chrome, Chromium, Edge or Brave starts on a throwaway profile that
+   carries the atp session, through the same proxy as atp.
+2. Pass the check there, then press Enter in the terminal.
+3. The cookies the site set come back into the session (saved when logged
+   in) and the command runs once more.
+
+Without one of those browsers the page opens in the default browser and the
+command is retried as is; checks tied to the network clear that way, checks
+tied to cookies may need a new `login`. `ATP_BROWSER` picks the browser (a
+path or a command name). Pipes, scripts and `--no-verify` (`ATP_NO_VERIFY=1`)
+get the error with the page in `error.url` instead. atp never solves
+captchas itself.

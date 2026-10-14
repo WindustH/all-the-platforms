@@ -31,12 +31,14 @@ pub use self::read::{ReadCommand, SearchArgs, SearchKind};
 pub use self::write::{PublishArgs, WriteCommand};
 
 use crate::ctx::Ctx;
-use crate::error::{Error, Result};
+use crate::account::Loaded;
+use crate::error::{Error, ErrorCode, Result};
 use crate::http::{Http, HttpConfig};
 use crate::model::Data;
 use crate::output;
 use crate::platform::{Cap, Platform, PlatformInfo};
 use crate::store::{RefKind, Store};
+use crate::verify;
 
 /// Which capability a shared subcommand needs; `None` means always available.
 fn required_cap(name: &str) -> Option<&'static [Cap]> {
@@ -196,25 +198,38 @@ async fn execute<P: Platform>(
   matches: &ArgMatches,
 ) -> Result<(Data, ExitCode)> {
   let info: PlatformInfo = P::INFO;
-  let store = Store::new(info.id);
-  let loaded = crate::account::load_session(&info, &store)?;
-  let config = HttpConfig {
-    cookie_domains: info.cookie_domains,
-    proxy: global.proxy.clone(),
-    timeout: std::time::Duration::from_secs(global.timeout),
-    min_interval: global
-      .interval
-      .map(|s| std::time::Duration::from_secs_f64(s.max(0.0)))
-      .map_or(info.min_interval, |d| d.max(info.min_interval)),
+  let mut loaded = crate::account::load_session(&info, &Store::new(info.id))?;
+  let error = match attempt::<P>(global, matches, &loaded, false).await {
+    Err(e) if e.code == ErrorCode::VerificationRequired && verify::wanted(global.no_verify) => e,
+    done => return done,
   };
-  let http = Http::new(&config, loaded.session.cookies.clone())?;
+  let session = &loaded.session.cookies;
+  let Some(cookies) = verify::complete(&info, &error, session, global.proxy.as_deref()).await
+  else {
+    return Err(error);
+  };
+  loaded.session.cookies.extend(cookies);
+  attempt::<P>(global, matches, &loaded, true).await
+}
+
+/// Run the command once on `loaded`; `verified` saves the session even when
+/// the run itself changed nothing (the cookies of a passed check).
+async fn attempt<P: Platform>(
+  global: &GlobalArgs,
+  matches: &ArgMatches,
+  loaded: &Loaded,
+  verified: bool,
+) -> Result<(Data, ExitCode)> {
+  let info: PlatformInfo = P::INFO;
+  let http = Http::new(&http_config(global, &info), loaded.session.cookies.clone())?;
+  let store = Store::new(info.id);
   let platform = P::new(Ctx::new(info, http, store, loaded.session.extra.clone()))?;
 
   let name = matches.subcommand_name().unwrap_or_default();
   let outcome = if CommonCommand::has_subcommand(name) {
     let cmd = CommonCommand::from_arg_matches(matches).map_err(|e| Error::input(e.to_string()))?;
     let run = Run {
-      loaded: &loaded,
+      loaded,
       format: global.output_format(),
       raw: global.raw,
     };
@@ -227,7 +242,8 @@ async fn execute<P: Platform>(
 
   let ctx = platform.ctx();
   // Only logged-in sessions are saved; guest cookies are not worth keeping.
-  if outcome.persist && platform.logged_in() && !loaded.from_env && ctx.session_changed() {
+  let changed = verified || ctx.session_changed();
+  if outcome.persist && platform.logged_in() && !loaded.from_env && changed {
     let mut session = ctx.session();
     session.source = loaded.session.source.clone();
     session.saved_at = loaded.session.saved_at;
@@ -235,6 +251,18 @@ async fn execute<P: Platform>(
   }
   remember(ctx, &outcome.data);
   Ok((outcome.data, outcome.code))
+}
+
+fn http_config(global: &GlobalArgs, info: &PlatformInfo) -> HttpConfig {
+  HttpConfig {
+    cookie_domains: info.cookie_domains,
+    proxy: global.proxy.clone(),
+    timeout: std::time::Duration::from_secs(global.timeout),
+    min_interval: global
+      .interval
+      .map(|s| std::time::Duration::from_secs_f64(s.max(0.0)))
+      .map_or(info.min_interval, |d| d.max(info.min_interval)),
+  }
 }
 
 /// Remember the references of a printed list, for `#N` in later commands.

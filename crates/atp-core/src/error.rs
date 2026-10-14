@@ -58,6 +58,9 @@ pub struct Error {
   pub message: String,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub hint: Option<String>,
+  /// A page that clears the error in a browser: a captcha, a risk check.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub url: Option<String>,
 }
 
 impl Error {
@@ -66,12 +69,29 @@ impl Error {
       code,
       message: message.into(),
       hint: None,
+      url: None,
     }
   }
 
   pub fn with_hint(mut self, hint: impl Into<String>) -> Self {
     self.hint = Some(hint.into());
     self
+  }
+
+  pub fn with_url(mut self, url: impl Into<String>) -> Self {
+    self.url = Some(url.into());
+    self
+  }
+
+  /// The page to open for this error: `url`, else the first link in the
+  /// hint or the message.
+  pub fn link(&self) -> Option<String> {
+    self.url.clone().or_else(|| {
+      [self.hint.as_deref(), Some(self.message.as_str())]
+        .into_iter()
+        .flatten()
+        .find_map(first_link)
+    })
   }
 
   pub fn auth(message: impl Into<String>) -> Self {
@@ -105,6 +125,16 @@ impl Error {
       format!("`{operation}` is not supported on this platform"),
     )
   }
+}
+
+/// The first `http(s)://` link in `text`, without trailing punctuation.
+fn first_link(text: &str) -> Option<String> {
+  let start = text.find("https://").or_else(|| text.find("http://"))?;
+  let link: String = text[start..]
+    .chars()
+    .take_while(|c| !c.is_whitespace() && !"\"'`<>()（）「」，。".contains(*c))
+    .collect();
+  Some(link.trim_end_matches(['.', ',', ';', ':', '!', '?']).to_owned())
 }
 
 impl fmt::Display for Error {

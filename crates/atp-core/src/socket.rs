@@ -75,6 +75,16 @@ impl Http {
 }
 
 impl Socket {
+  /// A websocket to this machine (a browser's DevTools), never through a proxy.
+  pub async fn local(url: &str) -> Result<Self> {
+    let client = wreq::Client::builder()
+      .no_proxy()
+      .build()
+      .map_err(|e| Error::internal(format!("http client: {e}")))?;
+    let inner = client.websocket(url).send().await?.into_websocket().await?;
+    Ok(Self { inner })
+  }
+
   pub async fn send_text(&mut self, text: impl Into<String>) -> Result<()> {
     let text: String = text.into();
     Ok(self.inner.send(Message::text(text)).await?)
