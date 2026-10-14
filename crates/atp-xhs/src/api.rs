@@ -59,6 +59,16 @@ impl Api {
     self.send_main(path, Body::Query(params), &[]).await
   }
 
+  /// Signed GET with extra headers.
+  pub async fn get_with(
+    &self,
+    path: &str,
+    params: &[(&str, &str)],
+    headers: &[(&str, &str)],
+  ) -> Result<Value> {
+    self.send_main(path, Body::Query(params), headers).await
+  }
+
   pub async fn post(&self, path: &str, body: &Value) -> Result<Value> {
     self.post_with(path, body, &[]).await
   }

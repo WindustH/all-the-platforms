@@ -37,8 +37,8 @@ in again.
 ### Risk control
 
 Xiaohongshu is quick to flag automation. Requests are spaced at least a
-second apart; likes, collects, comments and follows wait another 0.8-2 s,
-and publishing 1-2.5 s.
+second apart; likes, collects, comments, follows and private messages
+wait another 0.8-2 s, and publishing 1-2.5 s.
 
 A captcha (`verification_required`, HTTP 461 / 471) means stop: ATP first
 waits 5 s (doubling with each captcha in a row, up to 30 s), then on a
@@ -65,7 +65,9 @@ links it shows. Use:
 Users: the id, a `/user/profile/<id>` link, or a short link.
 
 Chats: the other account's user id (from `chats`) or a profile link;
-messages are `<chat>/<message id>`. Boards: the id or a `/board/<id>` link.
+messages are `<chat>/<message id>`. Live rooms (`listen`): `live:ROOM`, a
+`/livestream/<room>` link or the room number. Boards: the id or a
+`/board/<id>` link.
 
 Activities (EVENT): `#N` of the last list, the activity id, its link, or
 its exact name.
@@ -124,8 +126,27 @@ notes.
 ### chats, messages
 
 `chats` lists your private-message conversations (私信) and
-`messages CHAT` reads one, newest first. Sending is not offered: the web
-app sends over its message websocket as encrypted protobuf frames.
+`messages CHAT` reads one, newest first.
+
+### send
+
+`send CHAT TEXT` sends a text private message to the account CHAT names,
+over the web's push connection (`apppush-rws.xiaohongshu.com`), as the
+message page does, and waits up to 10 s for the receipt. Text only: no
+`--attach` or `--reply-to`. When no receipt comes the message may still
+have gone out; check `messages CHAT` before sending it again. Not yet
+verified against a live account.
+
+### listen
+
+`listen` prints the private messages your account receives as they
+arrive; `listen CHAT …` keeps to those conversations. `listen live:ROOM …`
+follows live rooms over the same connection: posts of kind `message` (a
+comment), `gift` (name × count), `like`, `enter`, `follow` or `notice`,
+with `extra.chat` `live:ROOM`; private messages then come only from the
+users named alongside. Both need a login (the connection logs in with the
+session's token from `celestial/lt`) and are not yet verified against a
+live account. A dropped connection is opened again.
 
 ### post, delete
 

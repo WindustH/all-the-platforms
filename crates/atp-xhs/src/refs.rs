@@ -49,6 +49,29 @@ pub fn user_url(id: &str) -> String {
   format!("{HOME}/user/profile/{id}")
 }
 
+/// A live room: `live:ROOM`, a `/livestream/…/ROOM` link (or one with
+/// `room_id=`), or a room number; `None` for anything else.
+pub fn live_room(arg: &str) -> Option<String> {
+  let arg = arg.trim();
+  let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+  if let Some(room) = arg.strip_prefix("live:") {
+    return digits(room).then(|| room.to_owned());
+  }
+  if arg.contains("/livestream/") {
+    let path = arg.split(['?', '#']).next().unwrap_or(arg);
+    return path.rsplit('/').find(|s| digits(s)).map(str::to_owned);
+  }
+  if let Some((_, rest)) = arg.split_once("room_id=") {
+    let room: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    return digits(&room).then_some(room);
+  }
+  (digits(arg) && arg.len() != 24).then(|| arg.to_owned())
+}
+
+pub fn live_url(room: &str) -> String {
+  format!("{HOME}/livestream/{room}")
+}
+
 /// Keep query-significant characters of a token from breaking the URL.
 fn sanitize(token: &str) -> String {
   token

@@ -4,17 +4,21 @@
 //! - [`refs`]: note and user references; [`parse`]: JSON → models; [`pages`]: note pages.
 //! - Endpoints by subject: [`search`], [`feeds`], [`notes`] (reading, publishing),
 //!   [`uploads`], [`users`], [`notifications`], [`interactions`], [`history`],
-//!   [`boards`], [`messages`] (private messages, read-only), [`events`] (activity
+//!   [`boards`], [`messages`] (private messages), [`events`] (activity
 //!   center), [`insights`], [`login`]; platform-only commands in [`extra`].
+//! - [`gateway`]: the push connection private messages and live rooms use;
+//!   [`live`]: `listen`.
 
 mod api;
 mod boards;
 mod events;
 mod extra;
 mod feeds;
+mod gateway;
 mod history;
 mod insights;
 mod interactions;
+mod live;
 mod login;
 mod messages;
 mod notes;
@@ -31,10 +35,11 @@ use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Notification, Page,
-  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
-  User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Message, Notification,
+  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply,
+  Result, User,
 };
 
 use api::Api;
@@ -84,6 +89,8 @@ impl Platform for Xhs {
       Cap::PostInsights,
       Cap::Chats,
       Cap::Messages,
+      Cap::Send,
+      Cap::Listen,
     ],
     choices: Choices {
       search_sort: search::SEARCH_SORTS,
@@ -257,6 +264,14 @@ impl Platform for Xhs {
 
   async fn messages(&self, chat: &str, page: &PageReq) -> Result<Page<Post>> {
     messages::messages(&self.api, chat, page).await
+  }
+
+  async fn send(&self, chat: &str, message: &Message) -> Result<Action> {
+    messages::send(&self.api, chat, message).await
+  }
+
+  async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {
+    live::listen(&self.api, chats, out).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

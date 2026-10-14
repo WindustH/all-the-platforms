@@ -75,7 +75,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | | Platform | Command | Highlights | Sign in |
 | --- | --- | --- | --- | --- |
 | Social | Zhihu 知乎 | `zhihu` | answers, articles, pins, questions, creator analytics | QR, browser |
-| | Xiaohongshu 小红书 | `xhs` | notes, comments, activity center, creator data | QR, browser |
+| | Xiaohongshu 小红书 | `xhs` | notes, comments, private messages, live comments, activity center, creator data | QR, browser |
 | | Weibo 微博 | `weibo` | posts, hot search, comments, reposts, analytics | QR, browser |
 | | Tieba 百度贴吧 | `tieba` | forums, threads, floors, check-in | QR, browser |
 | | Toutiao 今日头条 | `toutiao` | articles, videos, 微头条, comments, hot board | QR, browser |

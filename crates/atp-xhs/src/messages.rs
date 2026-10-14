@@ -1,19 +1,21 @@
-//! Private messages (私信), read-only: the conversation list and a
-//! conversation's history, as the web message page loads them.
-//!
-//! Sending goes over the message websocket as RSA-encrypted protobuf frames,
-//! so it is not offered. A conversation is the other account's user id; a
-//! message's id is `<chat>/<message id>`.
+//! Private messages (私信): the conversation list and a conversation's
+//! history as the web message page loads them; sending over the push
+//! connection ([`crate::gateway`]), as the web does. A conversation is the
+//! other account's user id; a message's id is `<chat>/<message id>`.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
 
 use atp_core::chat;
 use atp_core::text::from_millis;
-use atp_core::{Collection, Error, Page, PageReq, Post, Result, User, Value, ValueExt};
+use atp_core::{
+  Action, Collection, Error, Message, Page, PageReq, Post, Result, User, Value, ValueExt,
+};
 
 use crate::api::Api;
+use crate::gateway::{self, Incoming};
 use crate::refs::user_url;
+use crate::users;
 
 const CHATS: &str = "/api/im/web/v3/chats";
 const HISTORY: &str = "/api/im/web/messages/history";
@@ -121,11 +123,12 @@ fn remember_names(api: &Api, chats: &[Collection]) {
 
 fn message(item: &Value, peer: &str, peer_name: Option<&str>) -> Option<Post> {
   let id = item.str("id")?;
-  let sender = item.str("sender_id").unwrap_or_default();
+  let sender = item.first_str(&["sender_id", "sender"]).unwrap_or_default();
   // `content` is itself JSON: `{content, content_type, …}`.
   let body: Value = item
     .str("content")
     .and_then(|s| serde_json::from_str(&s).ok())
+    .or_else(|| item.get("content").filter(|c| c.is_object()).cloned())
     .unwrap_or(Value::Null);
   let content_type = body.i64("content_type");
   let text = match content_type {
@@ -162,9 +165,65 @@ fn message(item: &Value, peer: &str, peer_name: Option<&str>) -> Option<Post> {
   Some(post)
 }
 
+/// A message the push connection delivered, as `messages` shows it; its
+/// chat is the other account (the receiver of what you sent).
+pub fn incoming(api: &Api, im: &Incoming, me: &str) -> Option<Post> {
+  let mut item = im.body.clone();
+  let obj = item.as_object_mut()?;
+  let id = if im.id.is_empty() { &im.mid } else { &im.id };
+  obj.entry("id").or_insert_with(|| Value::from(id.as_str()));
+  if let Some(ms) = im.at_ms {
+    obj.entry("created_at").or_insert_with(|| Value::from(ms));
+  }
+  let sender = item.first_str(&["sender_id", "sender"]).unwrap_or_default();
+  let peer = if sender.is_empty() || sender == me {
+    item.first_str(&["receiver_id", "receiver"])?
+  } else {
+    sender
+  };
+  let name = names(api).remove(&peer);
+  message(&item, &peer, name.as_deref())
+}
+
+/// Send a text over the push connection and wait for its receipt.
+pub async fn send(api: &Api, chat: &str, msg: &Message) -> Result<Action> {
+  api.require_login()?;
+  if !msg.files.is_empty() || msg.reply_to.is_some() {
+    return Err(Error::unsupported(
+      "send --attach / --reply-to (Xiaohongshu private messages)",
+    ));
+  }
+  if msg.text.trim().is_empty() {
+    return Err(Error::input("the message is empty"));
+  }
+  let peer = chat_id(chat)?;
+  let me = users::whoami(api).await?.id;
+  api.write_pause().await;
+  let mut push = gateway::connect(api, &me, &[]).await?;
+  let mid = gateway::uuid();
+  let payload = gateway::text_message(&mid, &me, &peer, &msg.text);
+  let Some(ack) = push.send_message(&mid, &payload).await? else {
+    return Err(Error::upstream(format!(
+      "the message went out but no receipt came back; check `atp xhs messages {peer}` before sending it again"
+    )));
+  };
+  if ack.code != 0 {
+    return Err(Error::upstream(format!(
+      "Xiaohongshu did not deliver the message: {} ({})",
+      ack.message, ack.code
+    )));
+  }
+  let id = if ack.id.is_empty() { mid } else { ack.id };
+  Ok(
+    Action::done("send", peer.clone())
+      .with_id(chat::message_id(&peer, &id))
+      .with_url(user_url(&peer)),
+  )
+}
+
 /// A conversation: the other account's user id, a profile link, or a
 /// message id (`<chat>/<id>`).
-fn chat_id(arg: &str) -> Result<String> {
+pub fn chat_id(arg: &str) -> Result<String> {
   let arg = arg.trim();
   let hex24 = |s: &&str| s.len() == 24 && s.bytes().all(|b| b.is_ascii_hexdigit());
   let id = if arg.starts_with("http") {
