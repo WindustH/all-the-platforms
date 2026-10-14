@@ -41,5 +41,6 @@ fn main() -> ExitCode {
   .platform::<atp_toutiao::Toutiao>()
   .platform::<atp_xianyu::Xianyu>()
   .platform::<atp_taobao::Taobao>()
+  .platform::<atp_amap::Amap>()
   .run()
 }

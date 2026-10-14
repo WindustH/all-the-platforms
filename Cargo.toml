@@ -58,6 +58,7 @@ atp-toutiao = { path = "crates/atp-toutiao" }
 atp-alibaba = { path = "crates/atp-alibaba" }
 atp-xianyu = { path = "crates/atp-xianyu" }
 atp-taobao = { path = "crates/atp-taobao" }
+atp-amap = { path = "crates/atp-amap" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -117,6 +118,7 @@ atp-kuaishou.workspace = true
 atp-toutiao.workspace = true
 atp-xianyu.workspace = true
 atp-taobao.workspace = true
+atp-amap.workspace = true
 
 [profile.release]
 lto = "thin"
