@@ -114,10 +114,7 @@ async fn connect(api: &Api, token: &Token) -> Result<(Socket, Duration)> {
   let (url, headers): (&str, Vec<(&str, &str)>) = match token.kind {
     Kind::Bot => (
       BOT_GATEWAY,
-      vec![(
-        "User-Agent",
-        "DiscordBot (https://github.com/WindustH/atp)",
-      )],
+      vec![("User-Agent", "DiscordBot (https://github.com/WindustH/atp)")],
     ),
     Kind::User => (USER_GATEWAY, SOCKET_HEADERS.to_vec()),
   };
