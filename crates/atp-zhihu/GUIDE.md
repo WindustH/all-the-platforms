@@ -205,9 +205,9 @@ reads Zhihu Daily (知乎日报), no login needed.
 
 ### create-folder, delete-folder
 
-`create-folder TITLE [-d TEXT] [--private]` and `delete-folder FOLDER -y`
-manage favorites folders (`collections` lists them). The default folder
-cannot be deleted.
+`create-folder TITLE [-d TEXT] [--private]` and `delete-folder FOLDER
+[-y]` (asks first; `-y` in scripts) manage favorites folders
+(`collections` lists them). The default folder cannot be deleted.
 
 ## Limits
 

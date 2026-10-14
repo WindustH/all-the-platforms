@@ -1,10 +1,10 @@
 //! Your library: history and watch-later management, favorites folders,
 //! follow groups and the blacklist.
 
-use atp_core::cli::PageArgs;
+use atp_core::cli::{PageArgs, confirm};
 use atp_core::{Data, Result};
 
-use super::{confirm, video_ref};
+use super::video_ref;
 use crate::api::Api;
 use crate::{folders, history, relations};
 

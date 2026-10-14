@@ -1,9 +1,8 @@
 //! Comments beyond the shared commands.
 
-use atp_core::cli::PageArgs;
+use atp_core::cli::{PageArgs, confirm};
 use atp_core::{Data, Result};
 
-use super::confirm;
 use crate::api::Api;
 use crate::comments;
 

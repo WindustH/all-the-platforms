@@ -1,8 +1,8 @@
 //! Your account: votes, comment likes, blocks, favorites folders and the
 //! creator center's list of your posts.
 
-use atp_core::cli::PageArgs;
-use atp_core::{Data, Error, Result};
+use atp_core::cli::{PageArgs, confirm};
+use atp_core::{Data, Result};
 
 use super::title_and_images;
 use crate::api::Api;
@@ -51,7 +51,7 @@ pub enum AccountCommand {
   DeleteFolder {
     /// Folder id (see `collections`) or #N after it
     folder: String,
-    /// Confirm the deletion (required; there is no question)
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
@@ -96,12 +96,8 @@ pub async fn run(api: &Api, command: AccountCommand) -> Result<Data> {
       Ok(Data::Action(done.await?))
     }
     AccountCommand::DeleteFolder { folder, yes } => {
-      if !yes {
-        return Err(Error::input(format!(
-          "refusing to delete folder {folder} without --yes"
-        )));
-      }
       let folder = api.ctx.collection_ref(&folder)?;
+      confirm(yes, &format!("delete folder {folder}"))?;
       Ok(Data::Action(library::delete_folder(api, &folder).await?))
     }
     AccountCommand::Creations { kind, page } => {

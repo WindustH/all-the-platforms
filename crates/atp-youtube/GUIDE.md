@@ -225,7 +225,7 @@ Your own playlists:
   by default;
 - `playlist-add PLAYLIST VIDEO…`, `playlist-remove PLAYLIST VIDEO…`;
 - `playlist-edit PLAYLIST [--title] [--description] [--privacy]`;
-- `playlist-delete PLAYLIST -y`.
+- `playlist-delete PLAYLIST [-y]` (asks first; `-y` in scripts).
 
 ### playlist-save
 

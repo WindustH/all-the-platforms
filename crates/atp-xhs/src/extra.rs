@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-use atp_core::cli::{PageArgs, check_images, read_text};
-use atp_core::{Action, Data, Draft, Error, Result};
+use atp_core::cli::{PageArgs, check_images, confirm, read_text};
+use atp_core::{Action, Data, Draft, Result};
 
 use crate::api::Api;
 use crate::{events, feeds, history, insights, interactions, notes, notifications, search, users};
@@ -107,7 +107,7 @@ pub enum Command {
   },
   /// Empty the browsing history of notes
   HistoryClear {
-    /// Confirm clearing the history (required; there is no question)
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
@@ -206,11 +206,7 @@ async fn history_delete(api: &Api, notes: &[String]) -> Result<Action> {
 }
 
 async fn history_clear(api: &Api, yes: bool) -> Result<Action> {
-  if !yes {
-    return Err(Error::input(
-      "refusing to clear the browsing history without --yes",
-    ));
-  }
+  confirm(yes, "clear the browsing history")?;
   history::clear(api).await
 }
 

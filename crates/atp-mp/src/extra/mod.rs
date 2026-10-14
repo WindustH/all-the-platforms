@@ -7,10 +7,8 @@ mod followers;
 mod material;
 mod tools;
 
-use std::io::IsTerminal;
-
 use atp_core::cli::PageArgs;
-use atp_core::{Data, Error, Result};
+use atp_core::{Data, Result};
 
 use self::comments::CommentCommand;
 use self::drafts::DraftCommand;
@@ -66,22 +64,4 @@ async fn album_posts(api: &Api, album: &str, page: PageArgs) -> Result<Data> {
     .collect_dated(async |r| Ok(albums::page(&api.ctx, &album, &r).await?.1))
     .await?;
   Ok(Data::Posts(posts))
-}
-
-/// Ask before something irreversible, unless `--yes`.
-fn confirm(yes: bool, what: &str) -> Result<()> {
-  if yes {
-    return Ok(());
-  }
-  if !std::io::stdin().is_terminal() {
-    return Err(Error::input(format!("refusing to {what} without --yes")));
-  }
-  eprint!("{what}? [y/N] ");
-  let mut answer = String::new();
-  std::io::stdin().read_line(&mut answer)?;
-  if matches!(answer.trim(), "y" | "Y" | "yes") {
-    Ok(())
-  } else {
-    Err(Error::input("cancelled"))
-  }
 }

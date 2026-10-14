@@ -1,9 +1,9 @@
 //! Bookmark folders.
 
-use atp_core::cli::PageArgs;
+use atp_core::cli::{PageArgs, confirm};
 use atp_core::{Data, Result};
 
-use super::{confirm, one};
+use super::one;
 use crate::api::Api;
 use crate::{account, users};
 
@@ -40,7 +40,7 @@ pub enum FolderCommand {
   FolderDelete {
     /// Folder: id or #N, from `folders`
     folder: String,
-    /// Confirm the deletion (required)
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
@@ -59,8 +59,9 @@ pub(super) async fn run(api: &Api, command: FolderCommand) -> Result<Data> {
       Data::Action(account::rename_folder(api, &ctx.collection_ref(&folder)?, &name).await?)
     }
     FolderCommand::FolderDelete { folder, yes } => {
-      confirm(yes, "delete the folder")?;
-      Data::Action(account::delete_folder(api, &ctx.collection_ref(&folder)?).await?)
+      let folder = ctx.collection_ref(&folder)?;
+      confirm(yes, &format!("delete bookmark folder {folder}"))?;
+      Data::Action(account::delete_folder(api, &folder).await?)
     }
   })
 }

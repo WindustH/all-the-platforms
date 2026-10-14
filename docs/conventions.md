@@ -100,7 +100,7 @@ Use these instead of writing another copy:
 | lyrics and track lists of music platforms | `music::{Lyrics, with_tracks}` |
 | RSS / Atom / JSON feeds: fetching (conditional requests, feed discovery), parsing into posts, `FEED_URL#ENTRY_ID` references | `feed::{load, get, parse, discover, entry_ref, split_entry_ref}` |
 | lists and settings a user keeps (neither credentials nor cache) | `Store::{data, put_data}` |
-| text and file arguments, confirmations | `cli::{read_text, check_images, check_files, confirm}` |
+| text and file arguments, confirmations (a terminal is asked; pipes need `--yes`) | `cli::{read_text, check_images, check_files, confirm}` |
 | HTTP errors | `http::status_error`, `Req::retries` |
 | a declared client name for open APIs that challenge look-alike browsers | `http::TOOL_USER_AGENT` |
 
@@ -137,11 +137,12 @@ complete.
 
 - **clap doc comments.** Every command, nested subcommand and argument of
   a platform (`extra.rs`), positionals included, has a `///` comment;
-  `-y, --yes` reads "Skip the confirmation question (needed in scripts)".
-  Commands whose usage is not obvious (several argument forms, special
-  syntax, nested subcommands, a particular login) get examples in
-  `after_long_help`: a `const EX_…` in the `Examples:` format of
-  atp-core, ending with `More: atp guide <id> <command>`.
+  `-y, --yes` reads "Skip the confirmation question (needed in scripts)"
+  and goes to `cli::confirm`, which asks on a terminal (never a refusal
+  that asks nothing). Commands whose usage is not obvious (several
+  argument forms, special syntax, nested subcommands, a particular login)
+  get examples in `after_long_help`: a `const EX_…` in the `Examples:`
+  format of atp-core, ending with `More: atp guide <id> <command>`.
 - **`crates/atp-core/guide/commands/*.md`.** What a shared command means
   on every platform: arguments, paging, `--since` / `--until`, `#N`,
   confirmation and `--yes`, output shapes. `guide/command.rs` maps command

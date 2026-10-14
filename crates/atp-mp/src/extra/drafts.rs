@@ -2,10 +2,9 @@
 
 use std::path::PathBuf;
 
-use atp_core::cli::{PageArgs, check_images, read_text};
+use atp_core::cli::{PageArgs, check_images, confirm, read_text};
 use atp_core::{Data, Result, json};
 
-use super::confirm;
 use crate::api::Api;
 use crate::drafts::{self, Compose};
 use crate::publish;

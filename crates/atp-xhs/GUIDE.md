@@ -108,7 +108,8 @@ lists only as counts, and nobody's followers.
 ### history, history-count, history-delete, history-clear
 
 `history` is your browsing history (浏览记录), with `extra.read_at`;
-`history-count`, `history-delete NOTE…` and `history-clear --yes` manage it.
+`history-count`, `history-delete NOTE…` and `history-clear [-y]` (asks
+first; `-y` in scripts) manage it.
 
 ### search-saved
 

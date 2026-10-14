@@ -96,7 +96,8 @@ Favorites are bookmarks, which only you see: `favorites` takes no USER;
 
 Bookmark folders (an X Premium feature): `folders` lists their ids for
 `--folder`, `folder-create NAME`, `folder-rename FOLDER NAME`,
-`folder-delete FOLDER -y` (its bookmarks stay bookmarked).
+`folder-delete FOLDER [-y]` (asks first; `-y` in scripts; its bookmarks
+stay bookmarked).
 
 ### notifications, unread
 
@@ -155,7 +156,7 @@ Your lists:
 
 - `list-create NAME [-d TEXT] [--private]`;
 - `list-update LIST [--name] [-d] [--private true|false]`;
-- `list-delete LIST -y`;
+- `list-delete LIST [-y]` (asks first; `-y` in scripts);
 - `list-add LIST USER [--undo]`, `list-follow LIST [--undo]`.
 
 ### community, community-posts, community-members, communities, join

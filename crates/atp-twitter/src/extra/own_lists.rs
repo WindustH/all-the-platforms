@@ -1,8 +1,8 @@
 //! Managing your lists: create, edit, delete, members, following.
 
+use atp_core::cli::confirm;
 use atp_core::{Data, Result};
 
-use super::confirm;
 use crate::api::Api;
 use crate::lists;
 
@@ -51,7 +51,7 @@ pub enum OwnListCommand {
   ListDelete {
     /// List: id, link or #N
     list: String,
-    /// Confirm the deletion (required)
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
@@ -100,8 +100,9 @@ pub(super) async fn run(api: &Api, command: OwnListCommand) -> Result<Data> {
       .await?,
     ),
     OwnListCommand::ListDelete { list, yes } => {
-      confirm(yes, "delete the list")?;
-      Data::Action(lists::delete(api, &ctx.collection_ref(&list)?).await?)
+      let list = ctx.collection_ref(&list)?;
+      confirm(yes, &format!("delete list {list}"))?;
+      Data::Action(lists::delete(api, &list).await?)
     }
     OwnListCommand::ListAdd { list, user, undo } => Data::Action(
       lists::member(

@@ -1,7 +1,8 @@
 //! Managing the account: dislikes, comment ratings, the bell, playlists,
 //! watch history, the account's channels and the one-time OAuth grant.
 
-use atp_core::{Action, Data, Error, Page, Result, json};
+use atp_core::cli::confirm;
+use atp_core::{Action, Data, Page, Result, json};
 
 use crate::api::Api;
 use crate::{account, channels, comments, insights, library, playlists, refs};
@@ -59,12 +60,8 @@ pub async fn create_playlist(
 }
 
 pub async fn delete_playlist(api: &Api, playlist: &str, yes: bool) -> Result<Data> {
-  if !yes {
-    return Err(Error::input(format!(
-      "refusing to delete playlist {playlist} without --yes"
-    )));
-  }
   let playlist = api.ctx.collection_ref(playlist)?;
+  confirm(yes, &format!("delete playlist {playlist}"))?;
   Ok(Data::Action(playlists::delete(api, &playlist).await?))
 }
 

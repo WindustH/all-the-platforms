@@ -216,24 +216,26 @@ live start / end as they happen (names are hidden from logged-out viewers).
 ### history-search, history-delete, history-pause, history-clear
 
 `history-search Q`, `history-delete VIDEO`, `history-pause [--undo]`,
-`history-clear --yes`.
+`history-clear [-y]` (asks first; `-y` in scripts).
 
 ### watch-later, later-add, later-remove, later-clear
 
 `watch-later`, `later-add VIDEO`, `later-remove VIDEO`, `later-clear
-[--watched] [--yes]` (`--yes` only when emptying the whole list).
+[--watched] [-y]` (emptying the whole list asks first; `-y` in scripts).
 
 ### folder-create, folder-edit, folder-clean, folder-delete, saved-folders, save
 
 `folder-create TITLE [--intro] [--private]`, `folder-edit`, `folder-clean`
-(drops unavailable videos), `folder-delete --yes`, `saved-folders` (folders
-and 合集 you saved), `save FOLDER|LIST [--undo]`.
+(drops unavailable videos), `folder-delete [-y]` (asks first; `-y` in
+scripts), `saved-folders` (folders and 合集 you saved), `save FOLDER|LIST
+[--undo]`.
 
 ### groups, group, group-create, group-rename, group-delete, group-assign, special
 
 `groups`, `group GROUP`, `group-create`, `group-rename`, `group-delete
---yes` (its people move to the default group), `group-assign USER… --to
-GROUP…` (replaces their groups), `special USER [--undo]` (特别关注).
+[-y]` (asks first, `-y` in scripts; its people move to the default group),
+`group-assign USER… --to GROUP…` (replaces their groups), `special USER
+[--undo]` (特别关注).
 
 ### blacklist, block, shared-following
 

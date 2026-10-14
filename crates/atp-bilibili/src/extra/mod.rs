@@ -5,7 +5,7 @@ mod interact;
 mod library;
 
 use atp_core::cli::PageArgs;
-use atp_core::{Data, Error, Result};
+use atp_core::{Data, Result};
 
 use crate::api::Api;
 use crate::refs::{self, Video};
@@ -122,17 +122,6 @@ More: atp guide bili insights";
 
 async fn video_ref(api: &Api, arg: &str) -> Result<Video> {
   refs::video(api, &api.ctx.post_ref(arg)?).await
-}
-
-/// Destructive commands need `--yes`.
-fn confirm(yes: bool, what: &str) -> Result<()> {
-  if yes {
-    Ok(())
-  } else {
-    Err(Error::input(format!(
-      "this would {what}; add --yes to go ahead"
-    )))
-  }
 }
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {

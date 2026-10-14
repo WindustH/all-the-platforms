@@ -181,7 +181,7 @@ pub enum Command {
   PlaylistDelete {
     /// Your playlist: id, link or #N
     playlist: String,
-    /// Confirm the deletion
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },

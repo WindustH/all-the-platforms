@@ -10,7 +10,7 @@ mod lists;
 mod own_lists;
 mod posts;
 
-use atp_core::{Collection, Data, Error, Page, Result};
+use atp_core::{Collection, Data, Page, Result};
 
 use crate::api::Api;
 
@@ -47,12 +47,4 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
 /// One collection as a list.
 pub(super) fn one(c: Collection) -> Data {
   Data::Collections(Page::last(vec![c]))
-}
-
-pub(super) fn confirm(yes: bool, what: &str) -> Result<()> {
-  if yes {
-    Ok(())
-  } else {
-    Err(Error::input(format!("pass --yes to {what}")))
-  }
 }
