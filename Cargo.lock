@@ -88,6 +88,7 @@ dependencies = [
  "atp-facebook",
  "atp-feishu",
  "atp-instagram",
+ "atp-jd",
  "atp-kook",
  "atp-kuaishou",
  "atp-line",
@@ -590,6 +591,23 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "url",
+]
+
+[[package]]
+name = "atp-jd"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "url",
 ]
 
