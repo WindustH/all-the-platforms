@@ -54,9 +54,11 @@ GROUPS = [
         ("meituan", "美团", "Meituan", "meituan", "#FFD100"),
         ("dianping", "大众点评", "Dianping", "app:351091731", ""),
     ]),
-    ("地图、出行与网盘", "MAPS · TRAVEL · DRIVES", [
+    ("地图与出行", "MAPS · TRAVEL", [
         ("amap", "高德地图", "Amap", "app:461703208", ""),
         ("ctrip", "携程", "Ctrip", "app:379395415", ""),
+    ]),
+    ("网盘", "DRIVES", [
         ("quark", "夸克网盘", "Quark Drive", "app:6755949705", ""),
         ("baidupan", "百度网盘", "Baidu Netdisk", "app:547166701", ""),
     ]),
@@ -109,20 +111,31 @@ COMING = [
 ]
 
 THEMES = {
-    "dark": dict(bg="#13151A", panel="#1A1D24", card="#20242C", line="#2E333D",
-                 text="#E8EAED", sub="#A2A9B4", mono="#6E7681", head="#8B949E",
-                 coming="#E3B341", tile_line="#3A404C"),
-    "light": dict(bg="#FFFFFF", panel="#F6F7F9", card="#FFFFFF", line="#E1E4E8",
-                  text="#1F2328", sub="#57606A", mono="#8C959F", head="#57606A",
-                  coming="#9A6700", tile_line="#D0D7DE"),
+    "dark": dict(panel="#16181D", chip="#1F232B", line="#2C313B", text="#E6E8EB",
+                 sub="#959DA8", accent="#E08A5F", prompt="#7D8590", tile_line="#3A404C"),
+    "light": dict(panel="#FBFAF8", chip="#F1EEEA", line="#E2DDD6", text="#1F2328",
+                  sub="#6A6F76", accent="#B8582E", prompt="#8C959F", tile_line="#D6D0C8"),
 }
 
 SANS = "'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Noto Sans CJK SC','Source Han Sans SC',system-ui,sans-serif"
-MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+MONO = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Noto Sans Mono CJK SC',monospace"
 
-COLS, CARD_W, CARD_H, GAP, PAD = 5, 200, 76, 14, 32
-WIDTH = PAD * 2 + COLS * CARD_W + (COLS - 1) * GAP
-TILE = 44
+WIDTH, PAD, LABEL_W = 1100, 36, 150
+ICON, CHIP_H, GAP_X, GAP_Y = 26, 38, 10, 10
+# The mitochondrion of docs/assets/atp-icon.svg: outer and inner membrane.
+LOGO = (
+    "M 30,64 C 40,24 98,8 134,32 C 152,44 170,42 196,48 C 232,56 244,96 232,126 "
+    "C 218,158 170,164 126,154 C 96,147 74,158 48,148 C 12,134 20,94 30,64 Z"
+)
+CRISTAE = (
+    "M 52.2,102.3 C 46.8,81.2 52.2,60 64.8,53 C 79.2,46 84.6,63.6 81,81.2 "
+    "C 77.4,98.8 88.2,111.1 99,98.8 C 109.8,86.4 104.4,60 117,53 C 129.6,46 135,65.3 129.6,86.4 "
+    "C 124.2,107.6 135,118.1 145.8,105.8 C 156.6,93.5 151.2,65.3 163.8,60 "
+    "C 176.4,54.8 181.8,74.1 178.2,93.5 C 174.6,112.8 183.6,118.1 192.6,107.6 "
+    "C 198,98.8 196.2,81.2 201.6,76.8 C 208.8,72.4 212.4,93.5 207,114.6 "
+    "C 199.8,134 172.8,139.2 136.8,137.5 C 104.4,134 82.8,141 64.8,130.4 "
+    "C 55.8,124.3 54,112.8 52.2,102.3 Z"
+)
 
 
 def glyph(slug, cache={}):
@@ -160,13 +173,15 @@ def picture(icon, cache={}):
     return cache[icon]
 
 
-def tile(x, y, icon, color, t):
-    out = []
+def tile(x, y, icon, color, t, size):
+    """A square app icon: a fetched picture, or a brand glyph on its color."""
+    corner = f'rx="{size * 0.24:.1f}"'
+    box = f'x="{x:.1f}" y="{y:.1f}" width="{size}" height="{size}"'
     if ":" in icon:
         clip = "clip-" + re.sub(r"\W", "-", icon)
-        return (f'<clipPath id="{clip}"><rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="11"/></clipPath>'
-                f'<image href="{picture(icon)}" x="{x}" y="{y}" width="{TILE}" height="{TILE}" clip-path="url(#{clip})"/>'
-                f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="11" fill="none" stroke="{t["tile_line"]}" stroke-opacity=".6"/>')
+        return (f'<clipPath id="{clip}"><rect {box} {corner}/></clipPath>'
+                f'<image href="{picture(icon)}" {box} clip-path="url(#{clip})"/>'
+                f'<rect {box} {corner} fill="none" stroke="{t["tile_line"]}" stroke-opacity=".6"/>')
     if color == "instagram":
         fill, ink = "url(#ig)", "#FFFFFF"
     elif color == "tiktok":
@@ -175,78 +190,109 @@ def tile(x, y, icon, color, t):
         fill, ink = color, "#111111" if light(color) else "#FFFFFF"
     dark_tile = color in ("tiktok", "#000000", "#111111", "#1F1F1F")
     stroke = f' stroke="{t["tile_line"]}"' if dark_tile else ""
-    out.append(f'<rect x="{x}" y="{y}" width="{TILE}" height="{TILE}" rx="11" fill="{fill}"{stroke}/>')
+    out = [f'<rect {box} {corner} fill="{fill}"{stroke}/>']
     d = glyph(icon)
-    scale = (TILE - 18) / 24
-    offset = (TILE - 24 * scale) / 2
+    scale = size * 0.6 / 24
+    offset = (size - 24 * scale) / 2
 
     def path(dx, dy, color_):
         return (f'<path transform="translate({x + offset + dx:.1f} {y + offset + dy:.1f}) '
                 f'scale({scale:.3f})" fill="{color_}" d="{d}"/>')
 
     if color == "tiktok":
-        out.append(path(-1.2, -1.2, "#25F4EE"))
-        out.append(path(1.2, 1.2, "#FE2C55"))
+        out.append(path(-0.9, -0.9, "#25F4EE"))
+        out.append(path(0.9, 0.9, "#FE2C55"))
     out.append(path(0, 0, ink))
     return "".join(out)
 
 
-def card(x, y, name, latin, foot, icon, color, t, coming=False):
-    dash = ' stroke-dasharray="6 5"' if coming else ""
-    fill = "none" if coming else t["card"]
-    body = [f'<rect x="{x}" y="{y}" width="{CARD_W}" height="{CARD_H}" rx="14" fill="{fill}" stroke="{t["line"]}"{dash}/>']
-    body.append(tile(x + 14, y + (CARD_H - TILE) / 2, icon, color, t))
-    tx = x + 14 + TILE + 12
-    size = 17 if len(name) <= 6 or not name.isascii() else 15
-    body.append(f'<text x="{tx}" y="{y + 27}" fill="{t["text"]}" font-family="{SANS}" font-size="{size}" font-weight="700">{escape(name)}</text>')
-    body.append(f'<text x="{tx}" y="{y + 46}" fill="{t["sub"]}" font-family="{SANS}" font-size="12.5">{escape(latin)}</text>')
-    foot_color = t["coming"] if coming else t["mono"]
-    body.append(f'<text x="{tx}" y="{y + 63}" fill="{foot_color}" font-family="{MONO}" font-size="11.5">{escape(foot)}</text>')
-    return "".join(body)
+def width_of(text, size, mono=False):
+    """A rough rendered width: CJK is square, Latin about half to 0.6 em."""
+    latin = 0.6 if mono else 0.56
+    return sum(size if ord(c) > 0x2E80 else size * latin for c in text)
 
 
-def header(y, text, t, color=None):
-    return (f'<text x="{PAD}" y="{y}" fill="{color or t["head"]}" font-family="{SANS}" '
-            f'font-size="13" font-weight="700" letter-spacing="1.5">{escape(text)}</text>')
+def chip(x, y, command, name, icon, color, t, soon=False):
+    """One entry: icon, the command (the name when not shipped yet) and a label."""
+    title = name if soon else command
+    same = re.sub(r"\W", "", name.lower()) == command
+    label = "" if soon or same else name
+    w = 6 + ICON + 9 + width_of(title, 14, mono=not soon) + 14
+    if label:
+        w += width_of(label, 13) + 8
+    style = (f'fill="none" stroke="{t["line"]}" stroke-dasharray="4 4"' if soon
+             else f'fill="{t["chip"]}"')
+    out = [f'<g opacity="{0.62 if soon else 1}">',
+           f'<rect x="{x:.0f}" y="{y}" width="{w:.0f}" height="{CHIP_H}" rx="{CHIP_H / 2}" {style}/>',
+           tile(x + 6, y + (CHIP_H - ICON) / 2, icon, color, t, ICON)]
+    tx = x + 6 + ICON + 9
+    font = SANS if soon else MONO
+    out.append(f'<text x="{tx:.0f}" y="{y + 24}" fill="{t["text"]}" font-family="{font}" '
+               f'font-size="14" font-weight="600">{escape(title)}</text>')
+    if label:
+        lx = tx + width_of(title, 14, mono=True) + 8
+        out.append(f'<text x="{lx:.0f}" y="{y + 24}" fill="{t["sub"]}" font-family="{SANS}" '
+                   f'font-size="13">{escape(label)}</text>')
+    out.append("</g>")
+    return "".join(out), w
 
 
-def grid(items, y, t, coming=False):
-    parts = []
-    for i, item in enumerate(items):
-        col, row = i % COLS, i // COLS
-        x = PAD + col * (CARD_W + GAP)
-        yy = y + row * (CARD_H + GAP)
-        parts.append(card(x, yy, *item, t, coming=coming))
-    rows = (len(items) + COLS - 1) // COLS
-    return "".join(parts), y + rows * (CARD_H + GAP) - GAP
+def flow(entries, y, t, soon=False):
+    """Chips left to right, wrapping inside the column next to the labels."""
+    x0, right = PAD + LABEL_W, WIDTH - PAD
+    x, parts = x0, []
+    for entry in entries:
+        svg, w = chip(x, y, *entry, t, soon=soon)
+        if x > x0 and x + w > right:
+            x, y = x0, y + CHIP_H + GAP_Y
+            svg, w = chip(x, y, *entry, t, soon=soon)
+        parts.append(svg)
+        x += w + GAP_X
+    return "".join(parts), y + CHIP_H
+
+
+def label(y, zh, en, count, t, color=None):
+    return (f'<text x="{PAD}" y="{y + 17}" fill="{color or t["text"]}" font-family="{SANS}" '
+            f'font-size="15" font-weight="700">{escape(zh)}</text>'
+            f'<text x="{PAD}" y="{y + 35}" fill="{t["sub"]}" font-family="{MONO}" '
+            f'font-size="11.5">{escape(en.lower())} · {count}</text>')
+
+
+def heading(t, shipped, soon):
+    logo = (f'<g transform="translate({PAD - 2} 28) scale(0.16) rotate(-10 120 88)">'
+            f'<path d="{LOGO}" fill="#CF6F42"/><path d="{CRISTAE}" fill="none" '
+            f'stroke="{t["panel"]}" stroke-width="10" stroke-linejoin="round"/></g>')
+    prompt = (f'<text x="{PAD + 44}" y="52" font-family="{MONO}" font-size="17">'
+              f'<tspan fill="{t["accent"]}">$</tspan>'
+              f'<tspan dx="10" fill="{t["text"]}" font-weight="600">atp platforms</tspan></text>')
+    summary = (f'<text x="{WIDTH - PAD}" y="52" text-anchor="end" fill="{t["prompt"]}" '
+               f'font-family="{MONO}" font-size="13">{shipped} supported · {soon} on the way</text>')
+    rule = f'<line x1="{PAD}" y1="76" x2="{WIDTH - PAD}" y2="76" stroke="{t["line"]}"/>'
+    return logo + prompt + summary + rule
 
 
 def draw(t):
-    parts, y = [], PAD + 8
-    total = sum(len(items) for _, _, items in GROUPS)
-    parts.append(header(y, f"已支持 · SUPPORTED · {total}", t, t["text"]))
-    y += 30
+    shipped = sum(len(items) for _, _, items in GROUPS)
+    parts, y = [heading(t, shipped, len(COMING))], 98
     for zh, en, items in GROUPS:
-        parts.append(header(y, f"{zh} · {en} · {len(items)}", t))
-        y += 14
-        cards = [(n, l, c, i, col) for c, n, l, i, col in items]
-        block, y = grid(cards, y, t)
+        parts.append(label(y, zh, en, len(items), t))
+        block, bottom = flow([(c, n, i, col) for c, n, _, i, col in items], y, t)
         parts.append(block)
-        y += 34
-    y += 6
-    parts.append(header(y, f"正在开发 · IN PROGRESS · {len(COMING)}", t, t["coming"]))
-    y += 14
-    cards = [(n, l, "coming soon", i, col) for n, l, i, col in COMING]
-    block, y = grid(cards, y, t, coming=True)
+        y = max(bottom, y + 40) + 24
+    parts.append(f'<line x1="{PAD}" y1="{y - 6}" x2="{WIDTH - PAD}" y2="{y - 6}" '
+                 f'stroke="{t["line"]}" stroke-dasharray="2 6"/>')
+    y += 16
+    parts.append(label(y, "即将支持", "Coming", len(COMING), t, t["accent"]))
+    block, bottom = flow([("", n, i, col) for n, _, i, col in COMING], y, t, soon=True)
     parts.append(block)
-    height = y + PAD
+    height = bottom + PAD
     defs = ('<defs><linearGradient id="ig" x1="0" y1="1" x2="1" y2="0">'
             '<stop offset="0" stop-color="#FEDA75"/><stop offset=".3" stop-color="#FA7E1E"/>'
             '<stop offset=".6" stop-color="#D62976"/><stop offset="1" stop-color="#4F5BD5"/>'
             '</linearGradient></defs>')
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{height}" '
-            f'viewBox="0 0 {WIDTH} {height}" role="img" aria-label="Supported platforms">{defs}'
-            f'<rect width="{WIDTH}" height="{height}" rx="24" fill="{t["panel"]}"/>'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{height:.0f}" '
+            f'viewBox="0 0 {WIDTH} {height:.0f}" role="img" aria-label="Supported platforms">{defs}'
+            f'<rect width="{WIDTH}" height="{height:.0f}" rx="18" fill="{t["panel"]}"/>'
             + "".join(parts) + "</svg>\n")
 
 

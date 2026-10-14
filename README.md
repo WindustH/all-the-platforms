@@ -23,6 +23,11 @@ TikTok, Reddit, Twitter / X and many more, with the same commands
 everywhere. It works in a terminal for people, and in scripts and AI agents
 through a stable JSON / YAML output, on Linux, macOS and Windows.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/platforms-dark.svg">
+  <img src="docs/assets/platforms-light.svg" alt="Supported platforms" width="100%">
+</picture>
+
 ```console
 $ atp bili search "rust 教程" -n 3
  #  Content                                                      Author        Likes  Cmts  Views   Time
@@ -66,11 +71,6 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
   opens in your browser with your session; pass it and the command carries on.
 
 ## Platforms
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/platforms-dark.svg">
-  <img src="docs/assets/platforms-light.svg" alt="Supported platforms" width="100%">
-</picture>
 
 | | Platform | Command | Highlights | Sign in |
 | --- | --- | --- | --- | --- |
