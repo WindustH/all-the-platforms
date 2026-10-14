@@ -12,7 +12,7 @@ pub enum Command {
   /// Ratings a user received from the people they traded with
   #[command(after_long_help = EX_RATINGS)]
   Ratings {
-    /// User id, profile link or `me`
+    /// User id, profile link, `me`, or #N from the last list
     user: String,
     #[command(flatten)]
     page: PageArgs,
@@ -35,11 +35,11 @@ More: atp guide xianyu ratings";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
-    Command::Ratings { user, page } => Data::Comments(
-      page
-        .collect_dated(async |r| users::ratings(api, &user, &r).await)
-        .await?,
-    ),
+    Command::Ratings { user, page } => {
+      let user = api.ctx.user_ref(&user)?;
+      let ratings = page.collect_dated(async |r| users::ratings(api, &user, &r).await);
+      Data::Comments(ratings.await?)
+    }
     Command::Suggest { keyword, page } => Data::Posts(
       page
         .collect(async |r| search::suggest(api, &keyword, &r).await)

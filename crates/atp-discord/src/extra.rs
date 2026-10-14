@@ -14,30 +14,30 @@ pub enum Command {
   /// About a server: members online, boosts, features, channels and roles
   #[command(visible_alias = "guild", after_long_help = EX_SERVER)]
   Server {
-    /// Server: id, `server:ID` or a discord.com/channels/SERVER link
+    /// Server: id, `server:ID`, a discord.com/channels/SERVER link, or #N after `chats`
     server: String,
   },
   /// Roles of a server
   Roles {
-    /// Server: id, `server:ID` or a discord.com/channels/SERVER link
+    /// Server: id, `server:ID`, a discord.com/channels/SERVER link, or #N after `chats`
     server: String,
   },
   /// Custom emoji of a server (the `name:id` form `react` takes)
   #[command(after_long_help = EX_EMOJIS)]
   Emojis {
-    /// Server: id, `server:ID` or a discord.com/channels/SERVER link
+    /// Server: id, `server:ID`, a discord.com/channels/SERVER link, or #N after `chats`
     server: String,
   },
   /// Pinned messages of a channel
   Pins {
-    /// Channel: id, link, `<#ID>`, `channel:ID`, or a user for your direct chat
+    /// Channel: id, link, `<#ID>`, `channel:ID`, a user for your direct chat, or #N after `chats`
     chat: String,
     #[command(flatten)]
     page: PageArgs,
   },
   /// Pin a message, or unpin it with --undo
   Pin {
-    /// Message: link, `CHANNEL/MESSAGE` or `CHANNEL-MESSAGE`
+    /// Message: link, `CHANNEL/MESSAGE`, `CHANNEL-MESSAGE`, or #N from the last list
     message: String,
     /// Unpin it instead
     #[arg(long)]
@@ -51,7 +51,7 @@ pub enum Command {
   },
   /// Open invites of a server (needs the Manage Server permission)
   Invites {
-    /// Server: id, `server:ID` or a discord.com/channels/SERVER link
+    /// Server: id, `server:ID`, a discord.com/channels/SERVER link, or #N after `chats`
     server: String,
   },
   /// Friends and friend requests of a user account
@@ -84,18 +84,21 @@ Examples:
 More: atp guide discord invite";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
+  let server_ref = |arg: &str| server_id(&api.ctx.collection_ref(arg)?);
   Ok(match command {
-    Command::Server { server } => Data::Value(server_detail(api, &server_id(&server)?).await?),
-    Command::Roles { server } => Data::Value(roles(api, &server_id(&server)?).await?),
-    Command::Emojis { server } => Data::Value(emojis(api, &server_id(&server)?).await?),
-    Command::Pins { chat, page } => Data::Posts(
-      page
-        .collect_dated(async |r| pins::list(api, &chat, &r).await)
-        .await?,
-    ),
-    Command::Pin { message, undo } => Data::Action(pins::pin(api, &message, undo).await?),
+    Command::Server { server } => Data::Value(server_detail(api, &server_ref(&server)?).await?),
+    Command::Roles { server } => Data::Value(roles(api, &server_ref(&server)?).await?),
+    Command::Emojis { server } => Data::Value(emojis(api, &server_ref(&server)?).await?),
+    Command::Pins { chat, page } => {
+      let chat = api.ctx.collection_ref(&chat)?;
+      let pinned = page.collect_dated(async |r| pins::list(api, &chat, &r).await);
+      Data::Posts(pinned.await?)
+    }
+    Command::Pin { message, undo } => {
+      Data::Action(pins::pin(api, &api.ctx.post_ref(&message)?, undo).await?)
+    }
     Command::Invite { code } => Data::Value(invite(api, &code).await?),
-    Command::Invites { server } => Data::Value(invites(api, &server_id(&server)?).await?),
+    Command::Invites { server } => Data::Value(invites(api, &server_ref(&server)?).await?),
     Command::Friends { all } => Data::Users(users::relationships(api, all).await?),
   })
 }
