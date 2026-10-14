@@ -8,12 +8,21 @@ use crate::chats;
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Departments (all, or those under one)
-  Departments { parent: Option<String> },
+  Departments {
+    /// Parent department: `party:ID` or its id
+    parent: Option<String>,
+  },
   /// Details of an app group chat (chat:CHATID)
-  Chat { chat: String },
+  Chat {
+    /// App group chat: `chat:CHATID` or #N
+    chat: String,
+  },
   /// Create an app group chat with these users (at least two)
+  #[command(after_long_help = EX_CREATE_CHAT)]
   CreateChat {
+    /// Name of the chat
     name: String,
+    /// Members' user ids
     #[arg(required = true, num_args = 2..)]
     users: Vec<String>,
     /// Owner (default: a random member)
@@ -21,6 +30,13 @@ pub enum Command {
     owner: Option<String>,
   },
 }
+
+const EX_CREATE_CHAT: &str = "\
+Examples:
+  atp wecom create-chat \"Release\" zhangsan lisi wangwu --owner zhangsan
+  atp wecom send chat:CHATID \"Build 42 is out\"
+
+More: atp guide wecom create-chat";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {

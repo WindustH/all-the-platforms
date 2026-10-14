@@ -8,7 +8,10 @@ use crate::chats;
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Details of a scene group (场景群) by openConversationId
-  Group { chat: String },
+  Group {
+    /// The group's openConversationId (`cid…`)
+    chat: String,
+  },
 }
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {

@@ -18,7 +18,9 @@ pub enum Command {
   },
   /// Show "typing…" to someone (or stop it with --stop)
   Typing {
+    /// Chat: the person's id (`…@im.wechat`) or #N
     chat: String,
+    /// Stop showing it
     #[arg(long)]
     stop: bool,
   },

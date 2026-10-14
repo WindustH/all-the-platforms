@@ -18,7 +18,10 @@ pub enum DraftCommand {
     page: PageArgs,
   },
   /// One draft with its text
-  Draft { id: String },
+  Draft {
+    /// Draft: a backend number, an API `media_id`, or #N
+    id: String,
+  },
   /// How many drafts there are (API)
   DraftCount,
   /// Save a draft with every option (`post` saves one with defaults)
@@ -36,6 +39,7 @@ pub enum DraftCommand {
     /// Cover image (default: the first image)
     #[arg(long, value_name = "PATH")]
     cover: Option<PathBuf>,
+    /// The article's author
     #[arg(long)]
     author: Option<String>,
     /// Summary (at most 120 characters; derived from the body when left out)
@@ -53,17 +57,21 @@ pub enum DraftCommand {
   },
   /// Delete a draft
   DraftDelete {
+    /// Draft: a backend number, an API `media_id`, or #N
     id: String,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },
   /// Publish a draft (发表); --notify sends it to followers (群发)
   #[command(after_long_help = EX_PUBLISH)]
   Publish {
+    /// Draft: a backend number, an API `media_id`, or #N
     draft: String,
     /// Push it to followers as a mass send (群发) instead of only publishing
     #[arg(long)]
     notify: bool,
+    /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
   },

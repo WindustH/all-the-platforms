@@ -23,7 +23,9 @@ use crate::api::Api;
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
   /// Articles of an album (合集), from its link or `BIZ/ALBUM_ID`
+  #[command(after_long_help = EX_ALBUM)]
   Album {
+    /// Album: an `mp/appmsgalbum?__biz=…&album_id=…` link, `BIZ/ALBUM_ID` or #N
     album: String,
     #[command(flatten)]
     page: PageArgs,
@@ -39,6 +41,13 @@ pub enum Command {
   #[command(flatten)]
   Tool(ToolCommand),
 }
+
+const EX_ALBUM: &str = "\
+Examples:
+  atp mp album 'https://mp.weixin.qq.com/mp/appmsgalbum?__biz=MzI5MjQyOTEyNg==&album_id=1234567890'
+  atp mp album MzI5MjQyOTEyNg==/1234567890 -n 50
+
+No login needed. More: atp guide mp album";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   match command {
