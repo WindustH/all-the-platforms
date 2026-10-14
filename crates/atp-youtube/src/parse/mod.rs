@@ -12,7 +12,7 @@ mod post;
 mod video;
 mod watch;
 
-use atp_core::text::parse_count;
+use atp_core::text::{date_only, parse_count};
 use atp_core::{Extra, User, Value, ValueExt};
 use jiff::{SignedDuration, Timestamp};
 
@@ -50,7 +50,10 @@ pub fn count(text: &str) -> Option<u64> {
 }
 
 /// `3 days ago`, `Streamed 2 weeks ago`, `1 year ago (edited)`, `4y ago`,
-/// `3mo ago` → an approximate time (months as 30 days, years as 365).
+/// `3mo ago` → an approximate time (months as 30 days, years as 365),
+/// no more precise than its unit: seconds, minutes and hours are cut to
+/// that unit; days and longer give the local date alone
+/// ([`date_only`]), so no made-up clock time is shown.
 pub fn ago(text: &str) -> Option<Timestamp> {
   let words: Vec<&str> = text.split_whitespace().collect();
   let i = words.iter().position(|w| w.starts_with("ago"))?;
@@ -63,34 +66,39 @@ pub fn ago(text: &str) -> Option<Timestamp> {
     (*words.get(i.checked_sub(2)?)?, *before)
   };
   let n: i64 = n.parse().ok()?;
-  let secs = match unit.trim_end_matches('s') {
+  let unit = match unit.trim_end_matches('s') {
     "second" | "sec" => 1,
     "minute" | "min" | "m" => 60,
     "hour" | "hr" | "h" => 3_600,
-    "day" | "d" => 86_400,
-    "week" | "wk" | "w" => 7 * 86_400,
-    "month" | "mo" => 30 * 86_400,
-    "year" | "yr" | "y" => 365 * 86_400,
+    "day" | "d" => DAY,
+    "week" | "wk" | "w" => 7 * DAY,
+    "month" | "mo" => 30 * DAY,
+    "year" | "yr" | "y" => 365 * DAY,
     _ => return None,
   };
-  Timestamp::now()
-    .checked_sub(SignedDuration::from_secs(n * secs))
-    .ok()
+  let then = Timestamp::now()
+    .checked_sub(SignedDuration::from_secs(n * unit))
+    .ok()?;
+  if unit < DAY {
+    let secs = then.as_second();
+    return Timestamp::from_second(secs - secs.rem_euclid(unit)).ok();
+  }
+  date_only(then.to_zoned(jiff::tz::TimeZone::system()).date())
 }
 
+const DAY: i64 = 86_400;
+
 /// A date inside a text: `Oct 12, 2021`, `Joined Apr 7, 2017`, `Last updated
-/// on Dec 11, 2021`, `Premiered Oct 12, 2021` (as UTC midnight).
+/// on Dec 11, 2021`, `Premiered Oct 12, 2021` (a [`date_only`] time).
 pub fn date(text: &str) -> Option<Timestamp> {
   let words: Vec<&str> = text.split_whitespace().collect();
   words.windows(3).find_map(|w| {
     let s = format!("{} {} {}", w[0], w[1], w[2]);
-    jiff::fmt::strtime::parse("%b %d, %Y", &s)
+    let date = jiff::fmt::strtime::parse("%b %d, %Y", &s)
       .ok()?
       .to_date()
-      .ok()?
-      .to_zoned(jiff::tz::TimeZone::UTC)
-      .ok()
-      .map(|z| z.timestamp())
+      .ok()?;
+    date_only(date)
   })
 }
 

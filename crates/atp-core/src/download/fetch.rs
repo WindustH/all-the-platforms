@@ -11,7 +11,7 @@ use crate::ctx::Ctx;
 use crate::error::{Error, Result};
 use crate::http::Fetched;
 use crate::model::Media;
-use crate::output::progress;
+use crate::output::{progress, set_total};
 
 /// Bytes per ranged request: large files come as a series of these, each with
 /// its own timeout and retries (some CDNs also throttle or refuse unranged
@@ -86,7 +86,7 @@ pub(super) async fn fetch_by_param(
   path: &Path,
   bar: &ProgressBar,
 ) -> Result<u64> {
-  bar.set_length(size);
+  set_total(bar, size);
   let url = src.url;
   let sep = if url.contains('?') { '&' } else { '?' };
   let mut file = tokio::fs::File::create(path).await?;
@@ -162,7 +162,7 @@ pub(super) async fn ranged(
   let Some(total) = first.range_total() else {
     return Ok(done);
   };
-  bar.set_length(total);
+  set_total(bar, total);
   while done < total {
     let to = (done + CHUNK).min(total) - 1;
     let got = get(done, to).await?;

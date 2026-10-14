@@ -146,8 +146,25 @@ pub fn parse_time(s: &str) -> Option<Timestamp> {
   })
 }
 
-/// Local, compact rendering for tables: `09-28 14:03`, or `2024-09-28` for older years.
+/// A day without a time of day, for platforms that give only a date
+/// (`Oct 12, 2021`) or an age in days and longer (`3 weeks ago`). It is
+/// kept as midnight UTC of that date, which [`fmt_time`] shows as the date
+/// alone, so no made-up clock time appears.
+pub fn date_only(date: jiff::civil::Date) -> Option<Timestamp> {
+  date.to_zoned(TimeZone::UTC).ok().map(|z| z.timestamp())
+}
+
+/// Whether `ts` is a [`date_only`] time: midnight UTC exactly.
+pub fn is_date_only(ts: Timestamp) -> bool {
+  ts.as_second().rem_euclid(86_400) == 0 && ts.subsec_nanosecond() == 0
+}
+
+/// Local, compact rendering for tables: `09-28 14:03`, or `2024-09-28` for
+/// older years and for [`date_only`] times.
 pub fn fmt_time(ts: Timestamp) -> String {
+  if is_date_only(ts) {
+    return ts.to_zoned(TimeZone::UTC).strftime("%Y-%m-%d").to_string();
+  }
   let local = ts.to_zoned(TimeZone::system());
   let now = Timestamp::now().to_zoned(TimeZone::system());
   if local.year() == now.year() {

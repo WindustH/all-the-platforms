@@ -37,7 +37,14 @@ pub struct GlobalArgs {
   #[arg(short, long, global = true)]
   pub verbose: bool,
   /// Fail on captchas and risk checks instead of opening them in a browser
-  #[arg(long, global = true, env = "ATP_NO_VERIFY")]
+  /// (ATP_NO_VERIFY takes 1/0, true/false, yes/no, on/off)
+  #[arg(
+    long,
+    global = true,
+    env = "ATP_NO_VERIFY",
+    value_parser = clap::builder::BoolishValueParser::new(),
+    action = clap::ArgAction::SetTrue
+  )]
   pub no_verify: bool,
 }
 

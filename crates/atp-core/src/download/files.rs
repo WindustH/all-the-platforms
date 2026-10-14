@@ -12,7 +12,7 @@ use crate::ctx::Ctx;
 use crate::error::{Error, ErrorCode, Result};
 use crate::http::Fetched;
 use crate::model::{Downloaded, FileEntry, MediaKind, Page};
-use crate::output::{note, progress};
+use crate::output::{note, progress, set_total};
 use crate::paging::collect;
 use crate::platform::PageReq;
 
@@ -137,7 +137,9 @@ async fn save(
     handle.set_len(0).await?;
   }
   let bar = progress(&file.name);
-  bar.set_length(file.size.unwrap_or(0));
+  if let Some(size) = file.size {
+    set_total(&bar, size);
+  }
   bar.set_position(from);
   let result = match file.size {
     Some(size) if size == from => Ok(from),

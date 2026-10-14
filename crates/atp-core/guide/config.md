@@ -16,6 +16,9 @@ These work anywhere on the command line:
 | `--no-verify` | `ATP_NO_VERIFY=1` | fail on captchas instead of opening them in a browser |
 | | `ATP_BROWSER` | the browser for human checks: a path or a command (`chromium`) |
 
+Yes / no variables such as `ATP_NO_VERIFY` take `1` / `0`, `true` /
+`false`, `yes` / `no` or `on` / `off`.
+
 `ATP_LOG` takes a tracing filter, e.g. `ATP_LOG=media=trace` also logs
 the names (never the values) of cookies responses set.
 

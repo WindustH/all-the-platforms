@@ -11,6 +11,10 @@ Default: `table` on a terminal, `yaml` when stdout is piped.
 Tables for lists, cards for single items, trees for comments. Progress and
 hints go to stderr, so they never mix with data.
 
+Times a platform gives only as a date, or as an age of a day or more
+(`3 weeks ago`), are dates: they show without a clock time and are kept
+as midnight UTC of that date in structured output.
+
 ## json / yaml: the envelope
 
     ok: true
