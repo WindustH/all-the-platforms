@@ -18,7 +18,8 @@ one of them.
   `matrix`, `kook`, `vocechat`, `line`, `satori`.
 - Shopping: `taobao`, `xianyu`, `jd`, `pdd`, `dewu`.
 - Maps, local life and travel: `amap`, `meituan`, `dianping`, `ctrip`.
-- Cloud drives: `quark`, `baidupan`. Music: `ncm` (NetEase Cloud Music).
+- Cloud drives: `quark`, `baidupan`. Music: `ncm` (NetEase Cloud Music),
+  `qqmusic` (QQ Music).
 
 Chat apps share `chats`, `messages`, `send`, `members`, `react`, `edit` and
 `listen` (see `atp guide interact`).

@@ -1,5 +1,6 @@
 //! Albums and artists: one with its tracks, and collecting it (收藏).
 
+use atp_core::music::with_tracks;
 use atp_core::{Action, Error, Post, Result, ValueExt};
 
 use crate::api::Api;
@@ -14,7 +15,7 @@ pub async fn read(api: &Api, id: u64) -> Result<Post> {
   let mut album =
     parse::album(v.at("album")).ok_or_else(|| Error::not_found(format!("no album {id}")))?;
   let tracks: Vec<Post> = v.list("songs").iter().filter_map(parse::song).collect();
-  parse::with_tracks(&mut album, "Tracks", &tracks);
+  with_tracks(&mut album, "Tracks", &tracks);
   album.raw = Some(v);
   Ok(album)
 }
@@ -26,7 +27,7 @@ pub async fn artist(api: &Api, id: u64) -> Result<Post> {
     parse::artist(v.at("artist")).ok_or_else(|| Error::not_found(format!("no artist {id}")))?;
   let mut top: Vec<Post> = v.list("hotSongs").iter().filter_map(parse::song).collect();
   top.truncate(ARTIST_TOP);
-  parse::with_tracks(&mut artist, "Top songs", &top);
+  with_tracks(&mut artist, "Top songs", &top);
   artist.raw = Some(v);
   Ok(artist)
 }

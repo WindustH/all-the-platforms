@@ -51,5 +51,6 @@ fn main() -> ExitCode {
   .platform::<atp_quark::Quark>()
   .platform::<atp_baidupan::Baidupan>()
   .platform::<atp_netease::Netease>()
+  .platform::<atp_qqmusic::QqMusic>()
   .run()
 }

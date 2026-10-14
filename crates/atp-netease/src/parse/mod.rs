@@ -7,7 +7,7 @@
 
 mod music;
 
-pub use music::{album, artist, episode, playlist, podcast, song, with_tracks};
+pub use music::{album, artist, episode, playlist, podcast, song};
 
 use atp_core::text::from_millis;
 use atp_core::{Comment, FileEntry, User, Value, ValueExt, json};

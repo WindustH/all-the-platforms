@@ -1,6 +1,7 @@
 //! Podcasts (播客 / 电台): a show with its latest episodes, one episode,
 //! and subscribing to a show. Episode audio is never fetched.
 
+use atp_core::music::with_tracks;
 use atp_core::{Action, Error, Post, Result, ValueExt};
 
 use crate::api::Api;
@@ -35,7 +36,7 @@ pub async fn show(api: &Api, id: u64) -> Result<Post> {
     .iter()
     .filter_map(parse::episode)
     .collect();
-  parse::with_tracks(&mut show, "Latest episodes", &episodes);
+  with_tracks(&mut show, "Latest episodes", &episodes);
   show.raw = Some(v);
   Ok(show)
 }

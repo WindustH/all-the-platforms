@@ -69,6 +69,7 @@ atp-ctrip = { path = "crates/atp-ctrip" }
 atp-quark = { path = "crates/atp-quark" }
 atp-baidupan = { path = "crates/atp-baidupan" }
 atp-netease = { path = "crates/atp-netease" }
+atp-qqmusic = { path = "crates/atp-qqmusic" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -138,6 +139,7 @@ atp-ctrip.workspace = true
 atp-quark.workspace = true
 atp-baidupan.workspace = true
 atp-netease.workspace = true
+atp-qqmusic.workspace = true
 
 [profile.release]
 lto = "thin"

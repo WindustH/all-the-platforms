@@ -1,6 +1,5 @@
 //! Songs, albums, playlists, artists and podcasts as posts.
 
-use atp_core::text::fmt_duration;
 use atp_core::{Media, Post, User, Value, ValueExt, json};
 
 use super::{https, time, user};
@@ -247,54 +246,4 @@ pub fn podcast(v: &Value) -> Option<Post> {
     p.extra.insert("category".into(), json!(category));
   }
   Some(p)
-}
-
-/// Numbered lines for a post's text: `1. Title — Artists (3:45)`.
-pub fn track_list(heading: &str, tracks: &[Post]) -> String {
-  let mut out = format!("{heading}:");
-  for (i, t) in tracks.iter().enumerate() {
-    out.push_str(&format!(
-      "\n{:>3}. {}",
-      i + 1,
-      t.title.as_deref().unwrap_or("?")
-    ));
-    if let Some(a) = &t.author {
-      out.push_str(&format!(" — {}", a.name));
-    }
-    if let Some(secs) = t.extra.get("duration").and_then(Value::as_f64) {
-      out.push_str(&format!(" ({})", fmt_duration(secs)));
-    }
-  }
-  out
-}
-
-/// The tracks for `extra.tracks`: id, title, artists, duration and link.
-pub fn tracks_extra(tracks: &[Post]) -> Value {
-  Value::Array(
-    tracks
-      .iter()
-      .map(|t| {
-        json!({
-          "id": t.id,
-          "title": t.title,
-          "artists": t.author.as_ref().map(|a| a.name.clone()),
-          "duration": t.extra.get("duration"),
-          "url": t.url,
-        })
-      })
-      .collect(),
-  )
-}
-
-/// Add a track list to a post's text and `extra.tracks`.
-pub fn with_tracks(post: &mut Post, heading: &str, tracks: &[Post]) {
-  if tracks.is_empty() {
-    return;
-  }
-  let list = track_list(heading, tracks);
-  post.text = Some(match post.text.take().filter(|t| !t.trim().is_empty()) {
-    Some(text) => format!("{}\n\n{list}", text.trim_end()),
-    None => list,
-  });
-  post.extra.insert("tracks".into(), tracks_extra(tracks));
 }

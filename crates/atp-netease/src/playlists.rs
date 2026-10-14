@@ -2,6 +2,7 @@
 //! collecting someone's, and your own: create, add, remove, delete.
 
 use atp_core::cli::confirm;
+use atp_core::music::with_tracks;
 use atp_core::{Action, Error, Page, PageReq, Post, Result, Value, ValueExt, json};
 
 use crate::api::Api;
@@ -51,7 +52,7 @@ pub async fn read(api: &Api, id: u64) -> Result<Post> {
   } else {
     "Tracks".to_owned()
   };
-  parse::with_tracks(&mut playlist, &heading, &tracks);
+  with_tracks(&mut playlist, &heading, &tracks);
   playlist.raw = Some(v);
   Ok(playlist)
 }

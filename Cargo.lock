@@ -401,6 +401,7 @@ dependencies = [
  "atp-onebot",
  "atp-pinduoduo",
  "atp-qq",
+ "atp-qqmusic",
  "atp-quark",
  "atp-reddit",
  "atp-rocketchat",
@@ -877,6 +878,20 @@ dependencies = [
  "rand 0.9.5",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "atp-qqmusic"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde_json",
+ "sha1 0.10.7",
 ]
 
 [[package]]

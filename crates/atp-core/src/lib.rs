@@ -22,6 +22,7 @@ pub mod json;
 pub mod live;
 mod mcp;
 pub mod model;
+pub mod music;
 pub mod oauth;
 pub mod output;
 pub mod paging;

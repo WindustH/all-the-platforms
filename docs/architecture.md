@@ -41,6 +41,7 @@ line in `src/main.rs`.
 | `output` | human tables/cards, the `{ok, schema_version, platform, fetched_at, data}` envelope, and flat JSON Lines / CSV rows |
 | `json` | `ValueExt`: dotted-path getters tolerant of upstream quirks (`v.str("a.b.0")`, `v.count("stat.like")`) |
 | `text` | counts (`1.2万`), durations, truncation, HTML to text, timestamps |
+| `music` | what music platforms share: `Lyrics` (LRC with its translation, as plain text or LRC) and track lists inside a post (`with_tracks`) |
 | `browser` | import cookies from local browsers (`browser` feature, on by default) |
 | `credentials` | environment variables, `login --token` fields, credentials saved in the session |
 | `token` | `AccessToken`: expiring access tokens cached in memory and in the private cache |
