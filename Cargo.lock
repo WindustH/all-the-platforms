@@ -100,6 +100,7 @@ dependencies = [
  "atp-rocketchat",
  "atp-satori",
  "atp-slack",
+ "atp-taobao",
  "atp-telegram",
  "atp-tieba",
  "atp-tiktok",
@@ -111,6 +112,7 @@ dependencies = [
  "atp-weibo",
  "atp-whatsapp",
  "atp-xhs",
+ "atp-xianyu",
  "atp-youtube",
  "atp-zhihu",
 ]
@@ -410,6 +412,20 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "atp-alibaba"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "base64 0.22.1",
+ "jiff",
+ "md-5",
+ "rand 0.9.5",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "atp-bilibili"
@@ -769,6 +785,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "atp-taobao"
+version = "0.1.0"
+dependencies = [
+ "atp-alibaba",
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "regex",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "atp-telegram"
 version = "0.1.0"
 dependencies = [
@@ -949,6 +978,21 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "atp-xianyu"
+version = "0.1.0"
+dependencies = [
+ "atp-alibaba",
+ "atp-core",
+ "base64 0.22.1",
+ "clap",
+ "jiff",
+ "regex",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

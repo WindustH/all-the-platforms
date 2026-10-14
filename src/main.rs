@@ -39,5 +39,7 @@ fn main() -> ExitCode {
   .platform::<atp_whatsapp::WhatsApp>()
   .platform::<atp_kuaishou::Kuaishou>()
   .platform::<atp_toutiao::Toutiao>()
+  .platform::<atp_xianyu::Xianyu>()
+  .platform::<atp_taobao::Taobao>()
   .run()
 }
