@@ -67,6 +67,7 @@ atp-dianping = { path = "crates/atp-dianping" }
 atp-dewu = { path = "crates/atp-dewu" }
 atp-ctrip = { path = "crates/atp-ctrip" }
 atp-quark = { path = "crates/atp-quark" }
+atp-baidupan = { path = "crates/atp-baidupan" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -134,6 +135,7 @@ atp-dianping.workspace = true
 atp-dewu.workspace = true
 atp-ctrip.workspace = true
 atp-quark.workspace = true
+atp-baidupan.workspace = true
 
 [profile.release]
 lto = "thin"

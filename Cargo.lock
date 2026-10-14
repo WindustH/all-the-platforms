@@ -80,6 +80,7 @@ name = "all-the-platforms"
 version = "0.1.0"
 dependencies = [
  "atp-amap",
+ "atp-baidupan",
  "atp-bilibili",
  "atp-core",
  "atp-ctrip",
@@ -444,6 +445,20 @@ dependencies = [
  "md-5",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "atp-baidupan"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "jiff",
+ "rand 0.9.5",
+ "regex",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

@@ -49,5 +49,6 @@ fn main() -> ExitCode {
   .platform::<atp_dewu::Dewu>()
   .platform::<atp_ctrip::Ctrip>()
   .platform::<atp_quark::Quark>()
+  .platform::<atp_baidupan::Baidupan>()
   .run()
 }

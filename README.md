@@ -95,6 +95,7 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 | Maps / travel | Amap 高德地图 | `amap` | places, geocoding, routes, weather, traffic | key |
 | | Ctrip 携程 | `ctrip` | sights, hotels, reviews with sub-scores, rankings, trains and transfers, flight fares, travel notes | browser |
 | Drives | Quark Drive 夸克网盘 | `quark` | files and folders, resumable downloads, instant uploads, shares, saving shared files | QR, browser |
+| | Baidu Netdisk 百度网盘 | `baidupan` | files and folders, shares, saving shared files, offline downloads; resumable downloads and instant uploads through your own open-platform app | QR, browser, app key |
 | Chat | WeChat 微信 (ClawBot) | `wechat` | receive and answer messages | QR |
 | | Telegram | `telegram` | chats, channels, groups, bots, channel stats | QR, phone, bot |
 | | Discord | `discord` | servers, channels, DMs, search | QR, token |
