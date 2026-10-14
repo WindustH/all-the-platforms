@@ -52,6 +52,7 @@ atp-meta = { path = "crates/atp-meta" }
 atp-facebook = { path = "crates/atp-facebook" }
 atp-instagram = { path = "crates/atp-instagram" }
 atp-whatsapp = { path = "crates/atp-whatsapp" }
+atp-kuaishou = { path = "crates/atp-kuaishou" }
 
 aes = "0.8"
 base64 = "0.22"
@@ -107,6 +108,7 @@ atp-line.workspace = true
 atp-facebook.workspace = true
 atp-instagram.workspace = true
 atp-whatsapp.workspace = true
+atp-kuaishou.workspace = true
 
 [profile.release]
 lto = "thin"

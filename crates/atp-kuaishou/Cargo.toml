@@ -1,0 +1,24 @@
+[package]
+name = "atp-kuaishou"
+description = "Kuaishou support for all-the-platforms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+aes.workspace = true
+base64.workspace = true
+cbc.workspace = true
+clap.workspace = true
+flate2 = "1"
+futures-util = "0.3"
+jiff.workspace = true
+md-5.workspace = true
+rand.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+atp-core.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true

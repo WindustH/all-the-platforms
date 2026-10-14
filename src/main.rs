@@ -37,5 +37,6 @@ fn main() -> ExitCode {
   .platform::<atp_facebook::Facebook>()
   .platform::<atp_instagram::Instagram>()
   .platform::<atp_whatsapp::WhatsApp>()
+  .platform::<atp_kuaishou::Kuaishou>()
   .run()
 }
