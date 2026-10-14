@@ -79,6 +79,7 @@ dependencies = [
 name = "all-the-platforms"
 version = "0.1.0"
 dependencies = [
+ "atp-amap",
  "atp-bilibili",
  "atp-core",
  "atp-dingtalk",
@@ -425,6 +426,17 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "atp-amap"
+version = "0.1.0"
+dependencies = [
+ "atp-core",
+ "clap",
+ "md-5",
+ "tokio",
+ "url",
 ]
 
 [[package]]
