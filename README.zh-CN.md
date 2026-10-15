@@ -134,7 +134,12 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 
 ## 快速开始
 
-从 [Releases](https://github.com/WindustH/atp/releases) 下载 Linux、macOS 或
+```sh
+yay -S all-the-platforms-bin           # Arch Linux（AUR），也可选 all-the-platforms / -git
+brew install windusth/tap/atp          # macOS（Apple 芯片）和 Linux
+```
+
+也可以从 [Releases](https://github.com/WindustH/atp/releases) 下载 Linux、macOS 或
 Windows 版本，或从源码构建（需要 Rust 1.88+，以及构建 TLS 库所需的 `cmake` 和 `clang`，
 Windows 上还需要 NASM；`ffmpeg` 可选，用于合并视频和音频）：
 

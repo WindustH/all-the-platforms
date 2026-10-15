@@ -143,7 +143,12 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
 
 ## Quick start
 
-Download a build for Linux, macOS or Windows from the
+```sh
+yay -S all-the-platforms-bin           # Arch Linux (AUR); or all-the-platforms / -git
+brew install windusth/tap/atp          # macOS (Apple silicon) and Linux
+```
+
+Or download a build for Linux, macOS or Windows from the
 [releases](https://github.com/WindustH/atp/releases), or build
 from source (Rust 1.88+, plus `cmake` and `clang` for the TLS library, and
 NASM on Windows; `ffmpeg` is optional and used for merging video and audio):
