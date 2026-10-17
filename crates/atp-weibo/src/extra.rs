@@ -1,11 +1,13 @@
-//! Weibo-only commands: reposts with text, posts under a hashtag, favorite
-//! folders and feed groups.
+//! Weibo-only commands: reposts with text, posts under a hashtag, the
+//! posts of a follow group, your following filtered, special follows and
+//! remarks.
 
 use atp_core::cli::{PageArgs, read_text};
-use atp_core::{Collection, Data, Page, PageReq, Post, Result, ValueExt};
+use atp_core::{Data, Page, PageReq, Post, Result};
 
 use crate::api::Api;
-use crate::{feeds, posts, search, users};
+use crate::follows::{self, Filter};
+use crate::{feeds, posts, relations, search};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -27,17 +29,47 @@ pub enum Command {
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Your favorite folders (ids for `favorites --folder`)
-  Folders,
-  /// Your feed groups (ids for `group`)
-  Groups,
-  /// Latest posts of one of your feed groups
+  /// Latest posts of one of your follow groups
   #[command(after_long_help = EX_GROUP)]
   Group {
-    /// Group id from `groups`, or #N after it
+    /// Group id from `follow-groups`, or #N after it
     gid: String,
     #[command(flatten)]
     page: PageArgs,
+  },
+  /// Your following, by when you followed them or gone quiet
+  #[command(after_long_help = EX_FOLLOWING_FILTER)]
+  FollowingFilter {
+    /// Followed within the last 7 days, 30 days or half a year
+    #[arg(long, value_enum, required_unless_present = "inactive")]
+    within: Option<Filter>,
+    /// Posted nothing in the last 30 days
+    #[arg(long, conflicts_with = "within")]
+    inactive: bool,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Your special follows (特别关注)
+  SpecialFollows {
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Mark users as special follows (特别关注), or unmark them with --undo
+  #[command(after_long_help = EX_SPECIAL)]
+  Special {
+    /// Users: ids, `@names`, links, or #N from the last user list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
+    /// Unmark them
+    #[arg(long)]
+    undo: bool,
+  },
+  /// Set the remark (备注) you see instead of a user's name
+  Remark {
+    /// User: id, `@name`, link or #N
+    user: String,
+    /// The remark; empty clears it
+    text: String,
   },
 }
 
@@ -50,10 +82,26 @@ More: atp guide weibo repost";
 
 const EX_GROUP: &str = "\
 Examples:
-  atp weibo groups
+  atp weibo follow-groups
   atp weibo group '#2'
 
-More: atp guide weibo groups";
+More: atp guide weibo group";
+
+const EX_FOLLOWING_FILTER: &str = "\
+Examples:
+  atp weibo following-filter --within 7d
+  atp weibo following-filter --inactive -n 200
+  atp weibo unfollow '#3' '#5' '#8'
+
+More: atp guide weibo following-filter";
+
+const EX_SPECIAL: &str = "\
+Examples:
+  atp weibo special 1749127163 '@央视新闻'
+  atp weibo special-follows
+  atp weibo special '#2' --undo
+
+More: atp guide weibo special";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   let ctx = &api.ctx;
@@ -71,8 +119,6 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
         .collect_dated(async |r| search::topic(api, &name, &r).await)
         .await?,
     ),
-    Command::Folders => Data::Collections(users::folders(api).await?),
-    Command::Groups => Data::Collections(groups(api).await?),
     Command::Group { gid, page } => {
       let gid = ctx.collection_ref(&gid)?;
       Data::Posts(
@@ -81,40 +127,34 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
           .await?,
       )
     }
+    Command::FollowingFilter {
+      within,
+      inactive,
+      page,
+    } => Data::Users(
+      page
+        .collect(async |r| follows::filtered(api, within, inactive, &r).await)
+        .await?,
+    ),
+    Command::SpecialFollows { page } => Data::Users(
+      page
+        .collect(async |r| follows::special(api, &r).await)
+        .await?,
+    ),
+    Command::Special { users, undo } => {
+      let users = users
+        .iter()
+        .map(|u| ctx.user_ref(u))
+        .collect::<Result<Vec<_>>>()?;
+      Data::actions(relations::special(api, &users, undo).await?)
+    }
+    Command::Remark { user, text } => {
+      Data::Action(relations::remark(api, &ctx.user_ref(&user)?, text.trim()).await?)
+    }
   })
 }
 
-async fn groups(api: &Api) -> Result<Page<Collection>> {
-  api.require_login()?;
-  let v = api
-    .get(
-      "/ajax/feed/allGroups",
-      &[("is_new_segment", "1"), ("fetch_hot", "1")],
-    )
-    .await?;
-  let mut items = Vec::new();
-  for section in v.list("groups") {
-    for g in section.list("group") {
-      let Some(id) = g.first_str(&["gid", "idstr"]) else {
-        continue;
-      };
-      let mut col = Collection {
-        id,
-        kind: "group".into(),
-        name: g.str("title").unwrap_or_default(),
-        description: section.str("title"),
-        raw: Some(g.clone()),
-        ..Collection::default()
-      };
-      if let Some(n) = g.count("member_count") {
-        col.items = Some(n);
-      }
-      items.push(col);
-    }
-  }
-  Ok(Page::last(items))
-}
-
+/// The latest posts of a follow group (`groupstimeline`).
 async fn group(api: &Api, gid: &str, page: &PageReq) -> Result<Page<Post>> {
   api.require_login()?;
   let max_id = page.cursor.clone().unwrap_or_default();

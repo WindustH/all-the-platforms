@@ -3,13 +3,18 @@
 //! - [`api`]: weibo.com / m.weibo.cn transport, visitor cookies, error mapping.
 //! - [`refs`]: post (mid / bid) and user references; [`parse`]: JSON → models.
 //! - Endpoints by subject: [`search`], [`feeds`], [`posts`] (reading and
-//!   writing), [`interactions`], [`users`], [`notifications`], [`insights`],
-//!   [`login`]; platform-only commands in [`extra`].
+//!   writing), [`interactions`], [`users`], [`follows`] (your own following),
+//!   [`relations`], [`groups`] (follow groups), [`folders`] (favorite
+//!   tags), [`notifications`], [`insights`], [`login`]; platform-only
+//!   commands in [`extra`].
 
 mod api;
 mod edits;
 mod extra;
 mod feeds;
+mod folders;
+mod follows;
+mod groups;
 mod insights;
 mod interactions;
 mod login;
@@ -17,6 +22,7 @@ mod notifications;
 mod parse;
 mod posts;
 mod refs;
+mod relations;
 mod search;
 mod users;
 
@@ -27,9 +33,9 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, Insights, Notification,
-  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply,
-  Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, FolderSpec,
+  FollowQuery, Insights, Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post,
+  QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
 use api::Api;
@@ -80,6 +86,18 @@ impl Platform for Weibo {
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
+      Cap::FollowingSearch,
+      Cap::RemoveFollower,
+      Cap::Block,
+      Cap::Blocked,
+      Cap::FollowGroups,
+      Cap::FollowGroupEdit,
+      Cap::FollowGroupMembers,
+      Cap::FolderEdit,
+      Cap::FolderDelete,
+      Cap::FolderAdd,
+      Cap::FolderRemove,
+      Cap::FolderMove,
     ],
     choices: Choices {
       search_sort: &["general", "latest", "hot"],
@@ -96,6 +114,8 @@ impl Platform for Weibo {
     guest: "search, hot, read, comments, likers, user, user-posts, followers",
     guide: include_str!("../GUIDE.md"),
   };
+
+  const FOLLOWING_SORT: &'static [&'static str] = follows::SORTS;
 
   type Extra = Command;
 
@@ -184,10 +204,19 @@ impl Platform for Weibo {
     users::following(&self.api, user, page).await
   }
 
-  /// Favorite folders; only the logged-in account's are visible.
+  async fn following_with(
+    &self,
+    user: &str,
+    query: &FollowQuery,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    follows::following(&self.api, user, query, page).await
+  }
+
+  /// Favorite folders (tags); only the logged-in account's are visible.
   async fn collections(&self, user: Option<&str>, _page: &PageReq) -> Result<Page<Collection>> {
     own_only(&self.api, user, "collections").await?;
-    users::folders(&self.api).await
+    folders::list(&self.api).await
   }
 
   async fn favorites(
@@ -220,6 +249,16 @@ impl Platform for Weibo {
     interactions::favorite(&self.api, post, folder, undo).await
   }
 
+  /// With `--folder`, the favorites list is read once for all the posts.
+  async fn favorite_posts(
+    &self,
+    posts: &[String],
+    folder: Option<&str>,
+    undo: bool,
+  ) -> Result<Vec<Action>> {
+    interactions::favorite_posts(&self.api, posts, folder, undo).await
+  }
+
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
     interactions::comment(&self.api, post, reply).await
   }
@@ -230,6 +269,84 @@ impl Platform for Weibo {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     interactions::follow(&self.api, user, undo).await
+  }
+
+  /// Unfollowing several goes 20 per call (`destroyBatch`).
+  async fn follow_users(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    relations::follow_users(&self.api, users, undo).await
+  }
+
+  async fn remove_followers(&self, users: &[String]) -> Result<Vec<Action>> {
+    relations::remove_followers(&self.api, users).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    relations::block(&self.api, users, undo).await
+  }
+
+  async fn blocked(&self, page: &PageReq) -> Result<Page<User>> {
+    relations::blocked(&self.api, page).await
+  }
+
+  async fn follow_groups(&self, _page: &PageReq) -> Result<Page<Collection>> {
+    groups::list(&self.api).await
+  }
+
+  async fn follow_group(
+    &self,
+    group: &str,
+    _sort: Option<&str>,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    groups::members(&self.api, group, page).await
+  }
+
+  async fn follow_group_create(&self, name: &str) -> Result<Action> {
+    groups::create(&self.api, name).await
+  }
+
+  async fn follow_group_rename(&self, group: &str, name: &str) -> Result<Action> {
+    groups::rename(&self.api, group, name).await
+  }
+
+  async fn follow_group_delete(&self, group: &str) -> Result<Action> {
+    groups::delete(&self.api, group).await
+  }
+
+  async fn follow_group_add(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    groups::add(&self.api, group, users).await
+  }
+
+  async fn follow_group_remove(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    groups::remove(&self.api, group, users).await
+  }
+
+  /// Renames a tag; tags have no description, visibility or cover.
+  async fn folder_edit(&self, folder: &str, change: &FolderSpec) -> Result<Action> {
+    folders::edit(&self.api, folder, change).await
+  }
+
+  async fn folder_delete(&self, folders: &[String]) -> Result<Vec<Action>> {
+    folders::delete(&self.api, folders).await
+  }
+
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    folders::add(&self.api, folder, posts, "folder-add").await
+  }
+
+  async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    folders::remove(&self.api, folder, posts).await
+  }
+
+  /// Natively: one change of each favorite's tags.
+  async fn folder_move(
+    &self,
+    from: &str,
+    to: &str,
+    posts: &[String],
+    copy: bool,
+  ) -> Result<Vec<Action>> {
+    folders::shift(&self.api, from, to, posts, copy).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {

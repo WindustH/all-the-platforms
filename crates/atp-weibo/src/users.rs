@@ -1,13 +1,13 @@
 //! Accounts: the logged-in one, profiles, their posts and relations, and the
-//! logged-in account's favorites (with their folders) and likes.
+//! logged-in account's favorites and likes.
 //!
 //! Lists that weibo.com shows only to logged-in accounts (a user's posts,
 //! followers, following) fall back to m.weibo.cn's containers otherwise.
 
-use atp_core::{Collection, Error, Page, PageReq, Post, Result, User, Value, ValueExt};
+use atp_core::{Error, Page, PageReq, Post, Result, User, Value, ValueExt};
 
 use crate::api::Api;
-use crate::parse;
+use crate::parse::{self, Own};
 use crate::refs::{self, UserRef};
 
 /// The logged-in account's id (saved after the first lookup).
@@ -178,7 +178,17 @@ async fn relations(api: &Api, arg: &str, fans: bool, page: &PageReq) -> Result<P
     ]);
   }
   let v = api.get("/ajax/friendships/friends", &query).await?;
-  let items: Vec<User> = v.list("users").iter().filter_map(parse::user).collect();
+  // Your own lists carry what Weibo tells about each relation.
+  let mine = own_uid(api).await.ok().is_some_and(|me| me == uid);
+  let own = mine.then_some(if fans { Own::Followers } else { Own::Following });
+  let items: Vec<User> = v
+    .list("users")
+    .iter()
+    .filter_map(|u| match own {
+      Some(own) => parse::relation(u, own),
+      None => parse::user(u),
+    })
+    .collect();
   let more = !items.is_empty() && v.i64("next_cursor").is_none_or(|n| n != 0);
   Ok(Page::new(
     items,
@@ -187,32 +197,6 @@ async fn relations(api: &Api, arg: &str, fans: bool, page: &PageReq) -> Result<P
 }
 
 // ── favorites and likes ───────────────────────────────────────────────
-
-/// Favorite folders (收藏 tags) of the logged-in account.
-pub async fn folders(api: &Api) -> Result<Page<Collection>> {
-  api.require_login()?;
-  let v = api.get("/ajax/favorites/tags", &[("page", "1")]).await?;
-  let tags = if v.list("data.tags").is_empty() {
-    v.list("tags")
-  } else {
-    v.list("data.tags")
-  };
-  let items = tags
-    .iter()
-    .filter_map(|t| {
-      Some(Collection {
-        id: t.first_str(&["id", "tag_id"])?,
-        kind: "folder".into(),
-        name: t.first_str(&["tag", "name"]).unwrap_or_default(),
-        items: t.count("count"),
-        raw: Some(t.clone()),
-        ..Collection::default()
-      })
-    })
-    .filter(|f| f.id != "0")
-    .collect();
-  Ok(Page::last(items))
-}
 
 pub async fn favorites(api: &Api, folder: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
   let uid = own_uid(api).await?;
@@ -245,14 +229,20 @@ pub async fn likes(api: &Api, arg: Option<&str>, page: &PageReq) -> Result<Page<
   Ok(numbered_posts(&v, page.number_or(1)))
 }
 
-/// A numbered page of posts in `data`, `data.list` or `data.statuses`;
-/// entries may wrap the post in `status`.
+/// A numbered page of posts in `data`, `data.status`, `data.list` or
+/// `data.statuses`; entries may wrap the post in `status`.
 fn numbered_posts(v: &Value, no: u64) -> Page<Post> {
-  let rows = ["data.list", "data.statuses", "data.data", "data"]
-    .iter()
-    .map(|k| v.list(k))
-    .find(|l| !l.is_empty())
-    .unwrap_or_default();
+  let rows = [
+    "data.status",
+    "data.list",
+    "data.statuses",
+    "data.data",
+    "data",
+  ]
+  .iter()
+  .map(|k| v.list(k))
+  .find(|l| !l.is_empty())
+  .unwrap_or_default();
   let items: Vec<Post> = rows
     .iter()
     .filter_map(|r| {

@@ -1,11 +1,12 @@
 //! Interactions as weibo.com sends them: comments and replies, likes,
 //! favorites and follows.
 
+use atp_core::bulk;
 use atp_core::{Action, Error, Reply, Result, ValueExt, json};
 
 use crate::api::Api;
 use crate::refs::{self, post_url};
-use crate::users;
+use crate::{folders, users};
 
 pub async fn comment(api: &Api, arg: &str, reply: &Reply) -> Result<Action> {
   api.require_login()?;
@@ -71,12 +72,18 @@ pub async fn like(api: &Api, arg: &str, undo: bool) -> Result<Action> {
   Ok(Action::done(if undo { "unlike" } else { "like" }, &mid))
 }
 
+/// Favorite a post; with `folder`, also put it under that tag, as the tag
+/// dialog follows a new favorite.
 pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
   api.require_login()?;
-  if folder.is_some() {
-    return Err(Error::unsupported("favorite --folder").with_hint(
-      "Weibo files favorites into folders (tags) on weibo.com; `favorites --folder` reads them",
-    ));
+  if let Some(folder) = folder {
+    if undo {
+      return Err(untag_hint());
+    }
+    return folders::add(api, folder, &[arg.to_owned()], "favorite")
+      .await?
+      .pop()
+      .ok_or_else(|| Error::upstream("nothing was favorited"));
   }
   let mid = refs::mid(arg)?;
   let path = if undo {
@@ -90,6 +97,33 @@ pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) ->
     if undo { "unfavorite" } else { "favorite" },
     &mid,
   ))
+}
+
+/// Several posts; with `folder`, the favorites list is read once for all
+/// of them to find their tags.
+pub async fn favorite_posts(
+  api: &Api,
+  posts: &[String],
+  folder: Option<&str>,
+  undo: bool,
+) -> Result<Vec<Action>> {
+  match (folder, undo) {
+    (Some(folder), false) => folders::add(api, folder, posts, "favorite").await,
+    (Some(_), true) => Err(untag_hint()),
+    (None, _) => {
+      let action = if undo { "unfavorite" } else { "favorite" };
+      bulk::each(action, posts, async |post| {
+        favorite(api, post, None, undo).await
+      })
+      .await
+    }
+  }
+}
+
+fn untag_hint() -> Error {
+  Error::input(
+    "unfavorite drops a favorite with all its tags; `folder-remove TAG POST` takes it off one tag",
+  )
 }
 
 pub async fn follow(api: &Api, arg: &str, undo: bool) -> Result<Action> {

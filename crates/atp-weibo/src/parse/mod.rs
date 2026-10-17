@@ -8,6 +8,7 @@ mod comments;
 mod hot;
 mod media;
 mod notifications;
+mod relations;
 
 use atp_core::text::parse_time;
 use atp_core::{
@@ -20,6 +21,7 @@ pub use self::comments::comment;
 pub use self::hot::{topic, trend};
 use self::media::media;
 pub use self::notifications::notification;
+pub use self::relations::{Own, blocked, group, relation, tag, tag_names};
 use crate::refs::{mid_to_bid, post_url, user_url};
 
 /// A user object of either API; `None` without an id.
@@ -112,7 +114,8 @@ pub fn post(v: &Value) -> Option<Post> {
 }
 
 /// What a post carries beyond the shared fields: label, base62 id, client,
-/// region, pinned / truncated / edited flags and your like and favorite.
+/// region, pinned / truncated / edited flags, your like and favorite, and
+/// on your favorites the tags (folders) each is under.
 fn post_extra(v: &Value, bid: Option<String>) -> Extra {
   let mut extra = Extra::new();
   if let Some(title) = v.str("title.text").filter(|t| !t.is_empty()) {
@@ -148,6 +151,10 @@ fn post_extra(v: &Value, bid: Option<String>) -> Extra {
   }
   if let Some(fav) = v.bool("favorited") {
     extra.insert("favorited".into(), fav.into());
+  }
+  let folders = tag_names(v);
+  if !folders.is_empty() {
+    extra.insert("folders".into(), folders.into());
   }
   extra
 }
