@@ -1,6 +1,7 @@
 //! Writes with the logged-in session, as the web client sends them: signed
 //! POSTs with the parameters in the query and the `tt-csrf-token` header.
 
+use atp_core::bulk;
 use atp_core::{Action, Error, Reply, Result, ValueExt};
 
 use crate::api::Api;
@@ -93,6 +94,26 @@ pub async fn follow(api: &Api, arg: &str, undo: bool) -> Result<Action> {
   ];
   api.post("/api/commit/follow/user/", &params).await?;
   Ok(Action::done(if undo { "unfollow" } else { "follow" }, arg.trim()).with_id(id))
+}
+
+/// Block users (`block_type` 1), or unblock them with `undo` (0), one call
+/// each, as the profile menu does (`/api/user/block/` with the secUid and
+/// `source` 3).
+pub async fn block(api: &Api, inputs: &[String], undo: bool) -> Result<Vec<Action>> {
+  api.require_login()?;
+  let name = if undo { "unblock" } else { "block" };
+  bulk::each(name, inputs, async |input| {
+    let (sec, id) = users::ids(api, Some(input)).await?;
+    api.write_pause().await;
+    let params = [
+      ("sec_user_id", sec),
+      ("block_type", flag(undo)),
+      ("source", "3".into()),
+    ];
+    api.post("/api/user/block/", &params).await?;
+    Ok(Action::done(name, input.trim()).with_id(id))
+  })
+  .await
 }
 
 pub async fn delete(api: &Api, arg: &str) -> Result<Action> {

@@ -115,7 +115,28 @@ folders.
 
 ### favorite, unfavorite
 
-Saves to (or removes from) your saved videos; `--folder` is not supported.
+Saves to (or removes from) your saved videos; `--folder` is not supported
+(file a saved video with `folder-add`).
+
+### folder-add, folder-remove, folder-move
+
+Your favorites collections, as the collection page's "Add videos",
+"Remove" and "Move" do; FOLDER is a collection id, link or `#N` after
+`collections`. All video arguments are read first.
+
+- `folder-add COLLECTION VIDEO…` files saved videos into a collection and
+  `folder-remove` takes them out (they stay saved), 20 per call. Save a
+  video first with `favorite`.
+- `folder-move FROM TO VIDEO…` uses TikTok's own move, 20 per call;
+  `--copy` adds them to TO and leaves FROM as it is.
+- Creating, renaming and deleting collections is not offered: what those
+  calls send is not known here.
+
+### block, unblock
+
+`block USER…` / `unblock USER…` as the profile menu does, one call per
+user (each looked up for its secUid first). The list of blocked accounts
+is not read.
 
 ### comment, delete-comment
 

@@ -10,6 +10,7 @@
 mod ads;
 mod api;
 mod extra;
+mod folders;
 mod insights;
 mod live;
 mod login;
@@ -71,6 +72,10 @@ impl Platform for TikTok {
       Cap::Comment,
       Cap::DeleteComment,
       Cap::Follow,
+      Cap::Block,
+      Cap::FolderAdd,
+      Cap::FolderRemove,
+      Cap::FolderMove,
       Cap::Delete,
       Cap::Download,
       Cap::AccountInsights,
@@ -220,6 +225,32 @@ impl Platform for TikTok {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     write::follow(&self.api, user, undo).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    write::block(&self.api, users, undo).await
+  }
+
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    folders::file(&self.api, folder, posts, false).await
+  }
+
+  async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    folders::file(&self.api, folder, posts, true).await
+  }
+
+  /// TikTok's own move; `--copy` adds to TO only.
+  async fn folder_move(
+    &self,
+    from: &str,
+    to: &str,
+    posts: &[String],
+    copy: bool,
+  ) -> Result<Vec<Action>> {
+    if copy {
+      return atp_core::bulk::move_by_adding(self, from, to, posts, true).await;
+    }
+    folders::move_items(&self.api, from, to, posts).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
