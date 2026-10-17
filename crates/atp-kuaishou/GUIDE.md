@@ -28,8 +28,9 @@ tickets nor `passToken` gets `not_authenticated` there.
 
 Without a login the hot board, the recommended feed, `read`, `comments`
 and the live rooms answer; search, profiles and users' posts want a login.
-`followers`, `following`, `likes` and `favorites` show only your own
-lists; they, `listen`, the creator center and every write need a login.
+`followers`, `following`, `likes`, `favorites` and `history` show only
+your own lists; they, `listen`, the creator center and every write need a
+login.
 ATP keeps a visitor identity (`did` and the web fingerprint cookies) for a
 week, so runs without a login reuse it.
 
@@ -87,10 +88,12 @@ The recommended feed of the home page.
 the slider. `related POST` lists the posts Kuaishou recommends next to one
 (one batch).
 
-### followers, following, likes, favorites
+### followers, following, likes, favorites, history
 
 Your own only (the web shows these lists to their owner); another user is
-`unsupported`. `favorites` takes no `--folder`.
+`unsupported`. `favorites` takes no `--folder`. `history` lists the
+videos you watched (观看历史), newest first, as the profile's history tab
+does.
 
 ### rooms, live, gifts, replays
 
@@ -122,12 +125,13 @@ Lists your works of the past year with their review state
 
 The unread notification counts of the creator center.
 
-### like, unlike, comment, follow, unfollow
+### like, unlike, favorite, unfavorite, comment, follow, unfollow
 
-`like POST [--undo]`, `comment POST TEXT [--reply-to COMMENT]`,
-`follow USER [--undo]`. They use the web's own calls but are not verified
-against a live account yet; `like` and `comment` read the post first.
-`comment` takes no `--image`.
+`like POST [--undo]`, `favorite POST [--undo]` (收藏, the player's
+collect button; there are no folders), `comment POST TEXT [--reply-to
+COMMENT]`, `follow USER [--undo]`. They use the web's own calls but are
+not verified against a live account yet; `like`, `favorite` and
+`comment` read the post first. `comment` takes no `--image`.
 
 ### download
 
@@ -136,7 +140,7 @@ The highest-resolution video, or every image of an image set.
 
 ## Limits
 
-- No publishing, deleting or favoriting.
+- No publishing or deleting, and no clearing the watch history.
 - ATP speaks the Kuaishou web: the www, live and creator-center calls,
   each signed the way its web page signs it. The Kuaishou app's own API,
   where private messages live, is signed by the app itself with a

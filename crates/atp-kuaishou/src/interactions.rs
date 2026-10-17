@@ -1,6 +1,7 @@
-//! Likes, comments and follows: the mutations of the short-video and
-//! profile pages. They want the post's author and `expTag`, so a write
-//! reads the post first. Not tried against a live account yet.
+//! Likes, favorites, comments and follows: the mutations and REST calls
+//! of the short-video and profile pages. They want the post's author (and
+//! `expTag`), so a write reads the post first. Not tried against a live
+//! account yet.
 
 use std::time::Duration;
 
@@ -60,6 +61,29 @@ pub async fn like(api: &Api, arg: &str, undo: bool) -> Result<Action> {
     .await?;
   result(&data, "visionVideoLike")?;
   let action = if undo { "unlike" } else { "like" };
+  Ok(Action::done(action, refs::photo_url(&id)))
+}
+
+/// Collect (收藏) a video, or with `undo` drop it, as the player's collect
+/// button does: `/rest/v/photo/collect` with `collect` 1 or 2.
+pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
+  if folder.is_some() {
+    return Err(Error::unsupported(
+      "favorite --folder (Kuaishou has no folders)",
+    ));
+  }
+  let (id, author, _) = target(api, arg).await?;
+  api
+    .www("/rest/v/photo/collect")
+    .json(json!({
+      "photoId": id,
+      "userId": author,
+      "collect": if undo { 2 } else { 1 },
+    }))
+    .referer(&refs::photo_url(&id))
+    .send()
+    .await?;
+  let action = if undo { "unfavorite" } else { "favorite" };
   Ok(Action::done(action, refs::photo_url(&id)))
 }
 

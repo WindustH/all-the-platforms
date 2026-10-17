@@ -154,6 +154,19 @@ pub async fn favorites(
   Ok(posts_page(&v))
 }
 
+/// The videos you watched (观看历史), newest first, as the profile's
+/// history tab lists them.
+pub async fn history(api: &Api, page: &PageReq) -> Result<Page<Post>> {
+  let me = own(api, None, "history").await?;
+  let v = api
+    .www("/rest/v/profile/history/list")
+    .json(json!({ "pcursor": cursor(page), "page": "history" }))
+    .referer(&refs::profile_url(&me))
+    .send()
+    .await?;
+  Ok(posts_page(&v))
+}
+
 fn cursor(page: &PageReq) -> String {
   page.cursor.clone().unwrap_or_default()
 }

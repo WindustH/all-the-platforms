@@ -68,8 +68,10 @@ impl Platform for Kuaishou {
       Cap::Following,
       Cap::Favorites,
       Cap::Likes,
+      Cap::History,
       Cap::Unread,
       Cap::Like,
+      Cap::Favorite,
       Cap::Comment,
       Cap::Follow,
       Cap::Download,
@@ -178,12 +180,20 @@ impl Platform for Kuaishou {
     users::likes(&self.api, user, page).await
   }
 
+  async fn history(&self, page: &PageReq) -> Result<Page<Post>> {
+    users::history(&self.api, page).await
+  }
+
   async fn unread(&self) -> Result<BTreeMap<String, u64>> {
     notifications::unread(&self.api).await
   }
 
   async fn like(&self, post: &str, undo: bool) -> Result<Action> {
     interactions::like(&self.api, post, undo).await
+  }
+
+  async fn favorite(&self, post: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
+    interactions::favorite(&self.api, post, folder, undo).await
   }
 
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
