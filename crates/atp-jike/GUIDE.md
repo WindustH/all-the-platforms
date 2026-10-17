@@ -139,6 +139,28 @@ pictures and one topic (圈子). `post TEXT --quote POST` reposts `POST`
 with `TEXT` as your words (text only). Jike has no replies as posts:
 `--reply-to` is refused; use `comment`.
 
+### edit
+
+Changes one of your posts or reposts the way web.okjike.com's post menu
+does. It loads the post first, prints the change (each field as old →
+new) and asks (`-y` in scripts).
+
+- TEXT replaces the text. Pictures, the video and a link card stay as they
+  are; they cannot change here.
+- `--topic TOPIC` moves the post to another topic (圈子, one at most);
+  `--no-topics` takes it out of its topic.
+- `--visibility public|private` makes the post public or visible only to
+  you (仅自己可见); `friends` is refused.
+- Only what the post's menu offers changes: Jike marks which posts may be
+  edited and which may turn private or public again, and others fail
+  with `permission_denied`.
+
+```
+atp jike edit https://web.okjike.com/u/someone/post/64a1b2c3d4e5f60718293a4b '改过的文字'
+atp jike edit '#1' --topic topic:5523b3e5e4b0c4a8a3a9b1d2
+atp jike edit '#1' --visibility private
+```
+
 ### delete, delete-comment
 
 `delete POST` removes your post or repost; `delete-comment POST COMMENT`
@@ -155,7 +177,8 @@ ATP does not perform it.
 
 - Stories (日记), private messages, live rooms and the 动态 shortcuts are
   not covered.
-- No video uploads, link cards or location on new posts; no editing posts.
+- No video uploads, link cards or location on new posts; `edit` changes
+  the text, topic and visibility, not the pictures.
 - Notifications cannot be filtered by kind or marked read.
 - Search returns what Jike's web search returns, in its order; there are
   no filters.

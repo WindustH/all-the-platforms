@@ -9,6 +9,7 @@
 
 mod api;
 mod comments;
+mod edits;
 mod extra;
 mod feeds;
 mod login;
@@ -27,9 +28,9 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Media, Notification, Page,
-  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
-  User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, Media, Notification,
+  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply,
+  Result, User,
 };
 
 use crate::api::Api;
@@ -74,6 +75,9 @@ impl Platform for Jike {
       Cap::Follow,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
+      Cap::EditTopics,
+      Cap::EditVisibility,
       Cap::Download,
     ],
     choices: Choices {
@@ -228,6 +232,11 @@ impl Platform for Jike {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     posts::delete(&self.api, post).await
+  }
+
+  /// The text, the topic and who can see the post.
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    edits::edit(&self.api, post, edit).await
   }
 
   async fn media(&self, post: &str, _audio_only: bool) -> Result<(Post, Vec<Media>)> {
