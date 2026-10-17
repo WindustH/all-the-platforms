@@ -1,11 +1,12 @@
 //! Mastodon for all-the-platforms (any instance; mastodon.social by
 //! default), through its REST API ([`api`]): statuses, timelines and
-//! trends ([`posts`]), accounts and notifications ([`users`]), search
-//! ([`search`]), and logging in with a token or the instance's OAuth
+//! trends ([`posts`]), editing statuses ([`edits`]), accounts and
+//! notifications ([`users`]), search ([`search`]), and logging in with a token or the instance's OAuth
 //! ([`login`]). Trends, statuses, accounts and hashtags are readable
 //! without an account where the instance allows it.
 
 mod api;
+mod edits;
 mod extra;
 mod login;
 mod parse;
@@ -20,7 +21,7 @@ pub use extra::Command;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Notification, Page, PageReq,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Notification, Page, PageReq,
   Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
@@ -65,6 +66,7 @@ impl Platform for Mastodon {
       Cap::Follow,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
       Cap::Download,
     ],
     choices: Choices {
@@ -205,6 +207,10 @@ impl Platform for Mastodon {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     posts::delete(&self.api, post).await
+  }
+
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    edits::edit(&self.api, post, edit).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

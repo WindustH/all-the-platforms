@@ -142,6 +142,29 @@ says.
 
 `--type mention|status|reblog|follow|follow_request|favourite|poll|update|quote`.
 
+### edit
+
+`edit STATUS TEXT` replaces the text of one of your statuses (Mastodon
+3.5 and later; older instances are refused before anything is sent). It
+loads the status first, prints the change (the text as old → new, with
+the content warning, media and poll it keeps) and asks (`-y` in
+scripts).
+
+- Only the text changes. The content warning, the sensitive mark, the
+  language, the media in their order and the poll go along as they are,
+  since Mastodon removes what an edit leaves out.
+- A poll keeps its options, so its votes stay; it closes when it would
+  have, or five minutes after the edit when less time is left (Mastodon's
+  shortest poll). Statuses whose poll has closed are refused: the edit
+  would open it again.
+- Who can see a status cannot change. Everyone can see a status's edit
+  history, and followers' servers get the new version.
+
+```
+atp mastodon edit 113245678901234567 'Fixed the link: https://example.com'
+cat fixed.txt | atp mastodon edit '#1' - -y
+```
+
 ### delete, delete-comment
 
 Deletes one of your statuses.
@@ -153,6 +176,6 @@ sign-ups are open, monthly active users, contact and rules.
 
 ## Limits
 
-No editing, polls, lists, filters, scheduled statuses or direct-message
-conversations yet (a `compose --visibility direct` status reaches the
-accounts it mentions). Trends are what the instance itself counts.
+Edits change a status's text only. No polls, lists, filters, scheduled
+statuses or direct-message conversations yet (a `compose --visibility
+direct` status reaches the accounts it mentions). Trends are what the instance itself counts.
