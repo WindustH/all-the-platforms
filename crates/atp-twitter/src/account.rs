@@ -9,8 +9,8 @@ use atp_core::{Action, Error, FolderSpec, Page, PageReq, Post, Result, User, Val
 
 use crate::api::{Api, REST};
 use crate::graphql::{
-  BLOCKED, CREATE_SCHEDULED, DELETE_SCHEDULED, FOLDER_ADD, FOLDER_CREATE, FOLDER_DELETE,
-  FOLDER_REMOVE, FOLDER_RENAME, MUTED, Op, PIN_TWEET, SCHEDULED, UNPIN_TWEET,
+  BLOCKED, BOOKMARKS_CLEAR, CREATE_SCHEDULED, DELETE_SCHEDULED, FOLDER_ADD, FOLDER_CREATE,
+  FOLDER_DELETE, FOLDER_REMOVE, FOLDER_RENAME, MUTED, Op, PIN_TWEET, SCHEDULED, UNPIN_TWEET,
 };
 use crate::refs::{self, user_url};
 use crate::timeline::{self, vars, with};
@@ -209,6 +209,19 @@ pub async fn delete_folder(api: &Api, folder: &str) -> Result<Action> {
     .mutate(&FOLDER_DELETE, json!({ "bookmark_collection_id": folder }))
     .await?;
   Ok(Action::done("folder-delete", folder))
+}
+
+/// Delete every bookmark (`BookmarksAllDelete`, "Clear all bookmarks"),
+/// which answers `Done`.
+pub async fn clear_bookmarks(api: &Api) -> Result<Action> {
+  let data = api.mutate(&BOOKMARKS_CLEAR, json!({})).await?;
+  match data.str("data.bookmark_all_delete").as_deref() {
+    Some("Done") => Ok(Action::done("bookmarks-clear", "bookmarks")),
+    other => Err(Error::upstream(format!(
+      "X did not delete the bookmarks ({})",
+      other.unwrap_or("no answer")
+    ))),
+  }
 }
 
 /// Unread notifications and direct messages.

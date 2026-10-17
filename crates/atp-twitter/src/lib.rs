@@ -3,8 +3,9 @@
 //! Talks to the web client's GraphQL API with the session cookies
 //! (`auth_token`, `ct0`), or with a guest token when logged out (profiles,
 //! single tweets and user timelines). Collections are the user's
-//! lists; bookmark folders have their own `folders` command. Analytics come
-//! from the web client's analytics pages (`insights`).
+//! lists, which are also the follow groups; bookmark folders have their own
+//! `folders` command. Analytics come from the web client's analytics pages
+//! (`insights`).
 
 mod account;
 mod api;
@@ -20,6 +21,7 @@ mod notifications;
 mod parse;
 mod posts;
 mod refs;
+mod relations;
 mod sign;
 mod spaces;
 mod tabs;
@@ -97,8 +99,12 @@ impl Platform for Twitter {
       Cap::Members,
       Cap::React,
       Cap::Listen,
+      Cap::RemoveFollower,
       Cap::Block,
       Cap::Blocked,
+      Cap::FollowGroups,
+      Cap::FollowGroupEdit,
+      Cap::FollowGroupMembers,
       Cap::FolderCreate,
       Cap::FolderEdit,
       Cap::FolderDelete,
@@ -266,12 +272,50 @@ impl Platform for Twitter {
     edits::edit(&self.api, post, edit).await
   }
 
+  async fn remove_followers(&self, users: &[String]) -> Result<Vec<Action>> {
+    relations::remove_followers(&self.api, users).await
+  }
+
   async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
     account::block_all(&self.api, users, undo).await
   }
 
   async fn blocked(&self, page: &PageReq) -> Result<Page<User>> {
     account::blocked(&self.api, false, page).await
+  }
+
+  /// Your lists.
+  async fn follow_groups(&self, page: &PageReq) -> Result<Page<Collection>> {
+    lists::groups(&self.api, page).await
+  }
+
+  async fn follow_group(
+    &self,
+    group: &str,
+    _sort: Option<&str>,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    lists::people(&self.api, group, false, page).await
+  }
+
+  async fn follow_group_create(&self, name: &str) -> Result<Action> {
+    lists::create(&self.api, name).await
+  }
+
+  async fn follow_group_rename(&self, group: &str, name: &str) -> Result<Action> {
+    lists::rename(&self.api, group, name).await
+  }
+
+  async fn follow_group_delete(&self, group: &str) -> Result<Action> {
+    lists::delete(&self.api, group).await
+  }
+
+  async fn follow_group_add(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    lists::members(&self.api, group, users, false).await
+  }
+
+  async fn follow_group_remove(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    lists::members(&self.api, group, users, true).await
   }
 
   async fn folder_create(&self, folder: &FolderSpec) -> Result<Action> {

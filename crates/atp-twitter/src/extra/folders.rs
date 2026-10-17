@@ -1,11 +1,11 @@
-//! Bookmark folders. Creating, renaming and deleting them and filing
-//! bookmarks are the shared `folder-*` commands.
+//! Bookmark folders, and deleting every bookmark. Creating, renaming and
+//! deleting folders and filing bookmarks are the shared `folder-*` commands.
 
-use atp_core::cli::PageArgs;
+use atp_core::cli::{PageArgs, confirm};
 use atp_core::{Data, Result};
 
 use crate::api::Api;
-use crate::users;
+use crate::{account, users};
 
 const EX_FOLDERS: &str = "\
 Examples:
@@ -25,6 +25,12 @@ pub enum FolderCommand {
     #[command(flatten)]
     page: PageArgs,
   },
+  /// Delete all your bookmarks, in every folder
+  BookmarksClear {
+    /// Skip the confirmation question (needed in scripts)
+    #[arg(short, long)]
+    yes: bool,
+  },
 }
 
 pub(super) async fn run(api: &Api, command: FolderCommand) -> Result<Data> {
@@ -34,5 +40,9 @@ pub(super) async fn run(api: &Api, command: FolderCommand) -> Result<Data> {
         .collect(async |r| users::folders(api, &r).await)
         .await?,
     ),
+    FolderCommand::BookmarksClear { yes } => {
+      confirm(yes, "delete all your bookmarks")?;
+      Data::Action(account::clear_bookmarks(api).await?)
+    }
   })
 }

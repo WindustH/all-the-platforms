@@ -32,7 +32,8 @@ it.
 - Tweets: the numeric id or a status link (`x.com/<user>/status/<id>`,
   `twitter.com/…`, with or without `https://`, `/photo/1` suffixes too).
 - Users: `NASA`, `@NASA`, `https://x.com/NASA`, or the numeric id.
-- Lists: the id or an `x.com/i/lists/<id>` link.
+- Lists: the id or an `x.com/i/lists/<id>` link; `#N` after
+  `collections` or `follow-groups`.
 - Communities: the id or an `x.com/i/communities/<id>` link; Spaces: the id
   or an `x.com/i/spaces/<id>` link.
 - Direct messages: `CONVERSATION/MESSAGE` (from `messages`); a chat is a
@@ -108,6 +109,12 @@ of the `folder-*` commands and `--folder` take their ids or `#N` after
 - `folder-move FROM TO POST… [--copy]` files them into TO, then takes
   them out of FROM.
 
+### bookmarks-clear
+
+`bookmarks-clear [-y]` deletes every bookmark, folders included, as
+"Clear all bookmarks" does. It asks first (`-y` in scripts) and cannot be
+undone.
+
 ### notifications, unread
 
 `notifications -t all|verified|mentions`. `unread` counts unread
@@ -173,20 +180,42 @@ you mute.
 `block USER…` / `unblock USER…` one call per user; `blocked` lists the
 accounts you block.
 
+### remove-follower
+
+`remove-follower USER… [-y]` asks first, then removes each follower with
+the web app's `RemoveFollower`, one call per user, without blocking them.
+
+### follow-requests, accept-follower, deny-follower
+
+For a protected account: `follow-requests` lists the accounts asking to
+follow you (100 ids per page, looked up 20 at a time), `accept-follower
+USER…` lets them follow you and `deny-follower USER…` declines, one call
+per user.
+
 ### list, list-info, list-members, list-memberships
 
 `list LIST` reads the latest tweets of a list, `list-info` its details,
 `list-members [--followers]` its members (or followers),
 `list-memberships [USER]` the lists a user (you, by default) is in.
 
-### list-create, list-update, list-delete, list-add, list-follow
+### follow-groups, follow-group, follow-group-create, follow-group-rename, follow-group-delete, follow-group-add, follow-group-remove
 
-Your lists:
+Your lists are the follow groups. A list may hold people you do not
+follow, and they stay followed or not as they were.
 
-- `list-create NAME [-d TEXT] [--private]`;
-- `list-update LIST [--name] [-d] [--private true|false]`;
-- `list-delete LIST [-y]` (asks first; `-y` in scripts);
-- `list-add LIST USER [--undo]`, `list-follow LIST [--undo]`.
+- `follow-groups` lists the lists you own (as `collections` does, with
+  kind `group`); `follow-group LIST` lists the members.
+- `follow-group-create NAME` makes a private list;
+  `follow-group-rename LIST NAME` renames one, `follow-group-delete LIST
+  [-y]` asks first, then deletes it.
+- `follow-group-add LIST USER…` / `follow-group-remove LIST USER…` put
+  people in or take them out, one call per user.
+
+### list-update, list-follow
+
+`list-update LIST [--name] [-d TEXT] [--private true|false]` changes a
+list's name, description or privacy (a new list is private);
+`list-follow LIST [--undo]` follows someone's list.
 
 ### community, community-posts, community-members, communities, join
 

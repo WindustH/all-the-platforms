@@ -19,10 +19,12 @@ use crate::sign::Material;
 const APP_PAGE: &str = "https://x.com/i/jf/";
 const SCRIPTS: &str = "https://abs.twimg.com/responsive-web/client-web";
 /// Lazy chunks (named in the page's webpack chunk map) holding operations we
-/// use: `Favoriters` / `Retweeters`, and the Relay queries of the analytics pages.
+/// use: `Favoriters` / `Retweeters`, the Relay queries of the analytics pages
+/// and `BookmarksAllDelete`.
 const LAZY_CHUNKS: &[&str] = &[
   "shared~bundle.QuoteTweetActivity~bundle.TweetActivity",
   "bundle.AccountAnalytics",
+  "shared~bundle.BookmarkFolders~bundle.Bookmarks",
 ];
 const PLACEHOLDER: &str = "https://raw.githubusercontent.com/fa0311/twitter-openapi/refs/heads/main/src/config/placeholder.json";
 

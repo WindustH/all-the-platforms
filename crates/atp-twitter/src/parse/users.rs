@@ -1,8 +1,8 @@
 //! Users: the GraphQL user result and the v1.1 user objects of direct
-//! messages.
+//! messages and lookups.
 
 use atp_core::text::parse_time;
-use atp_core::{User, UserStats, Value, ValueExt};
+use atp_core::{User, UserStats, Value, ValueExt, json};
 
 use crate::refs::user_url;
 
@@ -40,6 +40,16 @@ pub fn user(v: &Value) -> Option<User> {
     ..User::default()
   };
   extras(v, &mut user);
+  Some(user)
+}
+
+/// A v1.1 user object (`users/lookup`), read as the `legacy` part of a
+/// user result.
+pub fn rest_user(v: &Value) -> Option<User> {
+  let id = v.str("id_str")?;
+  let mut user = user(&json!({ "rest_id": id, "legacy": v }))?;
+  user.verified |= v.bool("ext_is_blue_verified").unwrap_or(false);
+  user.raw = Some(v.clone());
   Some(user)
 }
 

@@ -15,4 +15,4 @@ pub use self::messages::{chat, message, participant};
 pub use self::notifications::notification;
 pub use self::posts::{post, tweet};
 pub use self::trends::{space, trend};
-pub use self::users::user;
+pub use self::users::{rest_user, user};

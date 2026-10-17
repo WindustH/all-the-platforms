@@ -1,5 +1,5 @@
-//! Your account: mutes, the pinned tweet, scheduled posts. Blocks are the
-//! shared `block` / `unblock` / `blocked`.
+//! Your account: mutes, follow requests, the pinned tweet, scheduled posts.
+//! Blocks are the shared `block` / `unblock` / `blocked`.
 
 use std::path::PathBuf;
 
@@ -7,7 +7,7 @@ use atp_core::cli::PageArgs;
 use atp_core::{Data, Error, Result};
 
 use crate::api::Api;
-use crate::{account, uploads};
+use crate::{account, relations, uploads};
 
 const EX_SCHEDULE: &str = "\
 Examples:
@@ -16,6 +16,14 @@ Examples:
   atp x scheduled                      # ids for unschedule
 
 More: atp guide x schedule";
+
+const EX_FOLLOW_REQUESTS: &str = "\
+Examples:
+  atp x follow-requests
+  atp x accept-follower '#1' '#2'
+  atp x deny-follower someone
+
+More: atp guide x follow-requests";
 
 #[derive(Debug, clap::Subcommand)]
 pub enum AccountCommand {
@@ -31,6 +39,24 @@ pub enum AccountCommand {
   Muted {
     #[command(flatten)]
     page: PageArgs,
+  },
+  /// Accounts asking to follow your protected account
+  #[command(after_long_help = EX_FOLLOW_REQUESTS)]
+  FollowRequests {
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Accept follow requests: let the users follow you
+  AcceptFollower {
+    /// Users: handles, @handles, links, ids, or #N from the last user list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
+  },
+  /// Decline follow requests
+  DenyFollower {
+    /// Users: handles, @handles, links, ids, or #N from the last user list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
   },
   /// Pin a tweet to your profile (or unpin it with --undo)
   Pin {
@@ -72,6 +98,19 @@ pub(super) async fn run(api: &Api, command: AccountCommand) -> Result<Data> {
         .collect(async |r| account::blocked(api, true, &r).await)
         .await?,
     ),
+    AccountCommand::FollowRequests { page } => Data::Users(
+      page
+        .collect(async |r| relations::requests(api, &r).await)
+        .await?,
+    ),
+    AccountCommand::AcceptFollower { users } => {
+      let users = user_refs(api, &users)?;
+      Data::actions(relations::answer(api, &users, true).await?)
+    }
+    AccountCommand::DenyFollower { users } => {
+      let users = user_refs(api, &users)?;
+      Data::actions(relations::answer(api, &users, false).await?)
+    }
     AccountCommand::Pin { post, undo } => {
       Data::Action(account::pin(api, &ctx.post_ref(&post)?, undo).await?)
     }
@@ -84,6 +123,11 @@ pub(super) async fn run(api: &Api, command: AccountCommand) -> Result<Data> {
     }
     AccountCommand::Unschedule { id } => Data::Action(account::unschedule(api, &id).await?),
   })
+}
+
+/// User arguments with `#N` resolved.
+fn user_refs(api: &Api, users: &[String]) -> Result<Vec<String>> {
+  users.iter().map(|u| api.ctx.user_ref(u)).collect()
 }
 
 /// A time to schedule at: `+30m` / `+2h` / `+1d`, a local `YYYY-MM-DD HH:MM`,

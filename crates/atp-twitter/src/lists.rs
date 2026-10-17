@@ -1,6 +1,9 @@
 //! Lists: one list, its members and followers, the lists a user is on, and
-//! managing your own (create, edit, delete, add / remove members, follow).
+//! managing your own, which are the follow groups of the shared
+//! `follow-group-*` commands (create, rename, edit, delete, add / remove
+//! members), and following lists.
 
+use atp_core::bulk;
 use atp_core::{Action, Collection, Error, Page, PageReq, Result, User, ValueExt, json};
 
 use crate::api::Api;
@@ -68,23 +71,25 @@ pub async fn memberships(api: &Api, arg: Option<&str>, req: &PageReq) -> Result<
   .await
 }
 
-pub async fn create(
-  api: &Api,
-  name: &str,
-  description: Option<&str>,
-  private: bool,
-) -> Result<Action> {
-  let variables = json!({
-    "name": name,
-    "description": description.unwrap_or_default(),
-    "isPrivate": private,
-  });
+/// Your lists as follow groups (Collections of kind `group`).
+pub async fn groups(api: &Api, req: &PageReq) -> Result<Page<Collection>> {
+  let mut page = users::lists(api, None, req).await?;
+  for list in &mut page.items {
+    list.kind = "group".into();
+  }
+  Ok(page)
+}
+
+/// A new private list (`follow-group-create`); `list-update` describes it
+/// or makes it public.
+pub async fn create(api: &Api, name: &str) -> Result<Action> {
+  let variables = json!({ "name": name, "description": "", "isPrivate": true });
   let data = api.mutate(&CREATE_LIST, variables).await?;
   let id = data
     .str("data.list.id_str")
     .ok_or_else(|| Error::upstream("X did not create the list"))?;
   Ok(
-    Action::done("create-list", name)
+    Action::done("follow-group-create", name)
       .with_id(&id)
       .with_url(list_url(&id)),
   )
@@ -112,29 +117,43 @@ pub async fn update(
   Ok(Action::done("update-list", &id).with_url(list_url(&id)))
 }
 
+/// `follow-group-rename`: a new name, the rest as it was.
+pub async fn rename(api: &Api, arg: &str, name: &str) -> Result<Action> {
+  let updated = update(api, arg, Some(name), None, None).await?;
+  Ok(Action {
+    action: "follow-group-rename".into(),
+    message: Some(name.to_owned()),
+    ..updated
+  })
+}
+
 pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
   let id = refs::list_id(arg)?;
   api.mutate(&DELETE_LIST, json!({ "listId": id })).await?;
-  Ok(Action::done("delete-list", id))
+  Ok(Action::done("follow-group-delete", id))
 }
 
-/// Add a user to a list, or remove them with `undo`.
-pub async fn member(api: &Api, list: &str, user: &str, undo: bool) -> Result<Action> {
+/// Add users to a list, or remove them with `undo`, one call each.
+pub async fn members(api: &Api, list: &str, inputs: &[String], undo: bool) -> Result<Vec<Action>> {
   let id = refs::list_id(list)?;
-  let user_id = users::user_id(api, user).await?;
-  let (op, name) = if undo {
-    (&LIST_REMOVE, "list-remove")
+  let name = if undo {
+    "follow-group-remove"
   } else {
-    (&LIST_ADD, "list-add")
+    "follow-group-add"
   };
-  api
-    .mutate(op, json!({ "listId": id, "userId": user_id }))
-    .await?;
-  Ok(
-    Action::done(name, &user_id)
-      .with_url(list_url(&id))
-      .with_message(format!("list {id}")),
-  )
+  let op = if undo { &LIST_REMOVE } else { &LIST_ADD };
+  bulk::each(name, inputs, async |user| {
+    let user_id = users::user_id(api, user).await?;
+    api
+      .mutate(op, json!({ "listId": id, "userId": user_id }))
+      .await?;
+    Ok(
+      Action::done(name, &user_id)
+        .with_url(list_url(&id))
+        .with_message(format!("list {id}")),
+    )
+  })
+  .await
 }
 
 /// Follow (subscribe to) a list, or unfollow it with `undo`.

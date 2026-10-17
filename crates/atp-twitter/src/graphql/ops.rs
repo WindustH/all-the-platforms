@@ -151,6 +151,9 @@ pub const FOLDER_REMOVE: Op = Op::post(
 pub const FOLDER_CREATE: Op = Op::post("createBookmarkFolder", "6Xxqpq8TM_CREYiuof_h5w", NONE);
 pub const FOLDER_RENAME: Op = Op::post("EditBookmarkFolder", "a6kPp1cS1Dgbsjhapz1PNw", NONE);
 pub const FOLDER_DELETE: Op = Op::post("DeleteBookmarkFolder", "2UTTsO-6zs93XqlEUZPsSg", NONE);
+// Lazy chunk `shared~bundle.BookmarkFolders~bundle.Bookmarks` ("Clear all bookmarks").
+pub const BOOKMARKS_CLEAR: Op = Op::post("BookmarksAllDelete", "skiACZKC1GDYli-M8RzEPQ", NONE);
+pub const REMOVE_FOLLOWER: Op = Op::post("RemoveFollower", "QpNfg0kpPRfjROQ_9eOLXA", NONE);
 // Direct messages (ids from twikit; refreshed from the live client when they rotate).
 pub const DM_REACT: Op = Op::post(
   "useDMReactionMutationAddMutation",
