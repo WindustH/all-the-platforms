@@ -7,6 +7,7 @@
 //!   [`login`]; platform-only commands in [`extra`].
 
 mod api;
+mod edits;
 mod extra;
 mod feeds;
 mod insights;
@@ -26,9 +27,9 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Notification, Page,
-  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
-  User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, Insights, Notification,
+  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply,
+  Result, User,
 };
 
 use api::Api;
@@ -74,6 +75,8 @@ impl Platform for Weibo {
       Cap::Follow,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
+      Cap::EditVisibility,
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
@@ -235,6 +238,11 @@ impl Platform for Weibo {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     posts::delete(&self.api, post).await
+  }
+
+  /// The text (members only) and who can see the post.
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    edits::edit(&self.api, post, edit).await
   }
 
   /// Weibo's data center has no usable web API; see [`insights`].

@@ -105,6 +105,32 @@ supported, use `comment`.
 `repost POST [TEXT] [--comment]` reposts (转发), optionally with your text;
 `--comment` also posts the text as a comment on the original.
 
+### edit
+
+Changes one of your posts the way weibo.com's post menu does. It loads the
+post first, prints the change (each field as old → new) and asks (`-y` in
+scripts).
+
+- TEXT replaces the text; topics and mentions are written in it
+  (`#topic#`, `@name`). The pictures stay as they are. Editing the text
+  is for Weibo members (VIP and up), who get a number of edits a day; the
+  summary shows the edits left, and without any the edit fails with
+  `permission_denied`.
+- Weibo edits posts with text and pictures only, published after
+  2017-10-01, not promoted or part of an activity; it refuses others with
+  its reason. Posts with a video, mixed media or live photos, and posts
+  shown to a group or to paying fans, are refused before asking.
+- `--visibility public|friends|private` changes who can see the post
+  (friends is the friends circle, 好友圈); it needs no membership. A
+  pinned post must be unpinned first.
+- Edits and visibility changes share a limit per post (100 in all), and
+  everyone can see a post's edit history.
+
+```
+atp weibo edit https://weibo.com/1234567890/Pxyz12345 '改过的文字 #话题#'
+atp weibo edit 5012345678901234 --visibility private
+```
+
 ### delete
 
 Deletes one of your own posts.
