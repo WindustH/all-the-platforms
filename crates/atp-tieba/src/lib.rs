@@ -72,6 +72,7 @@ impl Platform for Tieba {
       Cap::CommentImages,
       Cap::DeleteComment,
       Cap::Follow,
+      Cap::RemoveFollower,
       Cap::Publish,
       Cap::Delete,
       Cap::Download,
@@ -213,6 +214,10 @@ impl Platform for Tieba {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     interactions::follow(&self.api, user, undo).await
+  }
+
+  async fn remove_followers(&self, users: &[String]) -> Result<Vec<Action>> {
+    interactions::remove_followers(&self.api, users).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {

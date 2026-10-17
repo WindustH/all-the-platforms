@@ -1,7 +1,8 @@
 //! Interactions as the logged-in account: agree (点赞), save (收藏), reply,
-//! delete a reply, follow a user. Each pauses briefly first and sends the
-//! account's `tbs`.
+//! delete a reply, follow a user, remove a follower. Each pauses briefly
+//! first and sends the account's `tbs`.
 
+use atp_core::bulk;
 use atp_core::{Action, Reply, Result, ValueExt, json};
 
 use crate::api::{Api, Params, WRITE, check_vcode};
@@ -175,4 +176,19 @@ pub async fn follow(api: &Api, arg: &str, undo: bool) -> Result<Action> {
   Ok(
     Action::done(if undo { "unfollow" } else { "follow" }, &portrait).with_url(user_url(&portrait)),
   )
+}
+
+/// Make users stop following you (移除粉丝): the client's `removeFans`
+/// with their numeric uid, one call each.
+pub async fn remove_followers(api: &Api, inputs: &[String]) -> Result<Vec<Action>> {
+  api.require_login()?;
+  bulk::each("remove-follower", inputs, async |input| {
+    let uid = users::uid(api, input).await?;
+    let tbs = api.tbs().await?;
+    api.write_pause().await;
+    let params: Params = vec![("fans_uid", uid.clone()), ("tbs", tbs)];
+    api.call("/c/c/user/removeFans", params).await?;
+    Ok(Action::done("remove-follower", uid))
+  })
+  .await
 }

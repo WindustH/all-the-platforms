@@ -137,6 +137,12 @@ name the floor in THREAD (`THREAD/FLOOR`) and the reply as COMMENT.
 `follow USER` follows a user; `follow-forum FORUM [--undo]` and
 `unfollow-forum FORUM` join and leave forums.
 
+### remove-follower
+
+`remove-follower USER… [-y]` (移除粉丝) asks first, then sends the
+client's `removeFans` with each user's numeric id, one call per user.
+Blocking (拉黑) goes through the app's protobuf API and is not offered.
+
 ### sign
 
 `sign FORUM…` signs in (签到); `sign --all` signs every followed forum.
