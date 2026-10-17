@@ -39,9 +39,9 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Edit, Error, Insights, Media, Message,
-  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result,
-  User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Edit, Error, FolderSpec, Insights, Media,
+  Message, Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply,
+  Result, User,
 };
 
 use crate::api::Api;
@@ -93,6 +93,14 @@ impl Platform for YouTube {
       Cap::PostInsights,
       Cap::Send,
       Cap::Listen,
+      Cap::FolderCreate,
+      Cap::FolderEdit,
+      Cap::FolderDescription,
+      Cap::FolderPrivacy,
+      Cap::FolderDelete,
+      Cap::FolderAdd,
+      Cap::FolderRemove,
+      Cap::FolderMove,
     ],
     choices: Choices {
       search_sort: search::SORTS,
@@ -246,6 +254,27 @@ impl Platform for YouTube {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     channels::follow(&self.api, user, undo).await
+  }
+
+  /// A new playlist (private).
+  async fn folder_create(&self, folder: &FolderSpec) -> Result<Action> {
+    playlists::create(&self.api, folder).await
+  }
+
+  async fn folder_edit(&self, folder: &str, change: &FolderSpec) -> Result<Action> {
+    playlists::edit(&self.api, folder, change).await
+  }
+
+  async fn folder_delete(&self, folders: &[String]) -> Result<Vec<Action>> {
+    playlists::delete(&self.api, folders).await
+  }
+
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    playlists::file(&self.api, folder, posts, false).await
+  }
+
+  async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    playlists::file(&self.api, folder, posts, true).await
   }
 
   async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {

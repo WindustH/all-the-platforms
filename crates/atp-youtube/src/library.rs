@@ -137,6 +137,20 @@ pub async fn forget(api: &Api, arg: &str, pages: usize) -> Result<Action> {
   )))
 }
 
+/// Clear the whole watch history, or with `search` the search history, as
+/// the history page's buttons do (`history/clear_watch_history`,
+/// `history/clear_search_history`; the requests carry nothing but the
+/// client context).
+pub async fn clear(api: &Api, search: bool) -> Result<Action> {
+  let (path, what) = if search {
+    ("history/clear_search_history", "search")
+  } else {
+    ("history/clear_watch_history", "watch")
+  };
+  api.write(path, json!({})).await?;
+  Ok(Action::done("history-clear", what))
+}
+
 fn failed(v: &Value) -> bool {
   v.str("status").is_some_and(|s| s != "STATUS_SUCCEEDED")
 }

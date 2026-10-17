@@ -1,8 +1,10 @@
-//! YouTube-only commands: transcripts and caption tracks, playlists (and
-//! managing them), a channel's other tabs and search, feeds with exact
+//! YouTube-only commands: transcripts and caption tracks, playlists (their
+//! order, privacy and saving them; creating and filling them are the shared
+//! `folder-*` commands), a channel's other tabs and search, feeds with exact
 //! times, related videos, hashtags, search suggestions, live chat, YouTube
-//! Music, ratings of videos and comments, the bell, history removal, the
-//! account's channels and the one-time OAuth grant for analytics.
+//! Music, ratings of videos and comments, the bell, clearing and removing
+//! history, the account's channels and the one-time OAuth grant for
+//! analytics.
 
 mod channel;
 mod manage;
@@ -163,57 +165,28 @@ pub enum Command {
     #[arg(value_parser = clap::builder::PossibleValuesParser::new(channels::BELL))]
     level: String,
   },
-  /// Create a playlist, optionally with videos
-  #[command(after_long_help = EX_PLAYLIST_CREATE)]
-  PlaylistCreate {
-    /// Title of the playlist
-    title: String,
-    /// Videos to add: ids, links or #N
-    videos: Vec<String>,
-    /// Description of the playlist
-    #[arg(long)]
-    description: Option<String>,
-    /// Who can see the playlist
-    #[arg(long, default_value = "private", value_parser = clap::builder::PossibleValuesParser::new(playlists::PRIVACY))]
-    privacy: String,
-  },
-  /// Delete one of your playlists
-  PlaylistDelete {
-    /// Your playlist: id, link or #N
+  /// Move a video within one of your playlists: after another one, or to the top
+  #[command(after_long_help = EX_PLAYLIST_MOVE)]
+  PlaylistMove {
+    /// Your playlist: id, link or #N after `collections`
     playlist: String,
-    /// Skip the confirmation question (needed in scripts)
-    #[arg(short, long)]
-    yes: bool,
+    /// Video to move: id, link or #N
+    video: String,
+    /// Put it right after this video of the playlist (id, link or #N)
+    #[arg(long, value_name = "VIDEO", conflicts_with = "top")]
+    after: Option<String>,
+    /// Put it first
+    #[arg(long, required_unless_present = "after")]
+    top: bool,
   },
-  /// Add videos to one of your playlists
-  #[command(after_long_help = EX_PLAYLIST_ADD)]
-  PlaylistAdd {
-    /// Your playlist: id, link or #N
+  /// Make one of your playlists private, unlisted or public
+  #[command(after_long_help = EX_PLAYLIST_PRIVACY)]
+  PlaylistPrivacy {
+    /// Your playlist: id, link or #N after `collections`
     playlist: String,
-    /// Videos to add: ids, links or #N
-    videos: Vec<String>,
-  },
-  /// Remove videos from one of your playlists
-  PlaylistRemove {
-    /// Your playlist: id, link or #N
-    playlist: String,
-    /// Videos to remove: ids, links or #N
-    videos: Vec<String>,
-  },
-  /// Rename a playlist, change its description or privacy
-  #[command(after_long_help = EX_PLAYLIST_EDIT)]
-  PlaylistEdit {
-    /// Your playlist: id, link or #N
-    playlist: String,
-    /// New title
-    #[arg(long)]
-    title: Option<String>,
-    /// New description
-    #[arg(long)]
-    description: Option<String>,
-    /// New privacy
-    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(playlists::PRIVACY))]
-    privacy: Option<String>,
+    /// Who can see it
+    #[arg(value_parser = clap::builder::PossibleValuesParser::new(playlists::PRIVACY))]
+    level: String,
   },
   /// Save someone's playlist to your library (or remove it with --undo)
   PlaylistSave {
@@ -222,6 +195,16 @@ pub enum Command {
     /// Remove it from your library instead
     #[arg(long)]
     undo: bool,
+  },
+  /// Clear your whole watch history, or your search history
+  #[command(after_long_help = EX_HISTORY_CLEAR)]
+  HistoryClear {
+    /// Which history to clear
+    #[arg(value_parser = clap::builder::PossibleValuesParser::new(["watch", "search"]))]
+    which: String,
+    /// Skip the confirmation question (needed in scripts)
+    #[arg(short, long)]
+    yes: bool,
   },
   /// Remove a video from your watch history
   HistoryRemove {
@@ -271,22 +254,28 @@ Examples:
   atp yt bell @NASA all
   atp yt bell @NASA none";
 
-const EX_PLAYLIST_CREATE: &str = "\
-Examples:
-  atp yt playlist-create \"Watch on Sunday\"
-  atp yt playlist-create Talks dQw4w9WgXcQ '#2' '#3' --privacy unlisted
-
-More: atp guide yt playlist-create";
-
-const EX_PLAYLIST_ADD: &str = "\
+const EX_PLAYLIST_MOVE: &str = "\
 Examples:
   atp yt collections                   # your playlists, numbered
-  atp yt playlist-add '#1' dQw4w9WgXcQ https://youtu.be/jNQXAC9IVRw";
+  atp yt favorites --folder '#2' -n 100
+  atp yt playlist-move '#2' '#7' --after '#3'
+  atp yt playlist-move PLBCF2DAC6FFB574DE dQw4w9WgXcQ --top
 
-const EX_PLAYLIST_EDIT: &str = "\
+More: atp guide yt playlist-move";
+
+const EX_PLAYLIST_PRIVACY: &str = "\
 Examples:
-  atp yt playlist-edit '#1' --title \"Road trip\" --privacy public
-  atp yt playlist-edit PLBCF2DAC6FFB574DE --privacy private";
+  atp yt playlist-privacy '#1' unlisted
+  atp yt playlist-privacy PLBCF2DAC6FFB574DE public
+
+`folder-edit --private` / `--public` do the same without unlisted.";
+
+const EX_HISTORY_CLEAR: &str = "\
+Examples:
+  atp yt history-clear watch
+  atp yt history-clear search -y
+
+It cannot be undone. More: atp guide yt history-clear";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   use Command as C;
@@ -316,31 +305,17 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       undo,
     } => manage::rate_comment(api, &video, &comment, dislike, undo).await,
     C::Bell { user, level } => manage::bell(api, &user, &level).await,
-    C::PlaylistCreate {
-      title,
-      videos,
-      description,
-      privacy,
-    } => manage::create_playlist(api, &title, &videos, description.as_deref(), &privacy).await,
-    C::PlaylistDelete { playlist, yes } => manage::delete_playlist(api, &playlist, yes).await,
-    C::PlaylistAdd { playlist, videos } => manage::add_to_playlist(api, &playlist, &videos).await,
-    C::PlaylistRemove { playlist, videos } => {
-      manage::remove_from_playlist(api, &playlist, &videos).await
-    }
-    C::PlaylistEdit {
+    C::PlaylistMove {
       playlist,
-      title,
-      description,
-      privacy,
-    } => {
-      let changes = manage::PlaylistChanges {
-        title: title.as_deref(),
-        description: description.as_deref(),
-        privacy: privacy.as_deref(),
-      };
-      manage::edit_playlist(api, &playlist, &changes).await
+      video,
+      after,
+      top: _,
+    } => manage::move_in_playlist(api, &playlist, &video, after.as_deref()).await,
+    C::PlaylistPrivacy { playlist, level } => {
+      manage::playlist_privacy(api, &playlist, &level).await
     }
     C::PlaylistSave { playlist, undo } => manage::save_playlist(api, &playlist, undo).await,
+    C::HistoryClear { which, yes } => manage::clear_history(api, which == "search", yes).await,
     C::HistoryRemove { video, pages } => manage::forget(api, &video, pages).await,
   }
 }

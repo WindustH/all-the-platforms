@@ -14,7 +14,7 @@ posts, comments, channels and their tabs, playlists, transcripts, live
 chats and YouTube Music, and download. The home and subscription feeds,
 subscriptions, Watch later, liked videos, your playlists, history,
 notifications, `accounts` and every write (likes, comments, subscriptions,
-the bell, playlists, live chat messages) need a login.
+the bell, playlists, history, live chat messages) need a login.
 
 Requests go out as the first Google account of the session (`authuser`
 0). `accounts` lists the channels it can switch to (its own and brand
@@ -223,19 +223,49 @@ YouTube Music: `music search QUERY [-t KIND]` (`songs`, `videos`,
 an album `MPREb…`, artist `UC…` or playlist, with plays),
 `music lyrics VIDEO`.
 
-### playlist-create, playlist-add, playlist-remove, playlist-edit, playlist-delete
+### folder-create, folder-edit, folder-delete
 
-Your own playlists:
+Your playlists are the favorites folders; PLAYLIST is an id, a link with
+`list=` or `#N` after `collections`.
 
-- `playlist-create TITLE [VIDEO…] [--privacy] [--description]`, private
-  by default;
-- `playlist-add PLAYLIST VIDEO…`, `playlist-remove PLAYLIST VIDEO…`;
-- `playlist-edit PLAYLIST [--title] [--description] [--privacy]`;
-- `playlist-delete PLAYLIST [-y]` (asks first; `-y` in scripts).
+- `folder-create NAME [--desc TEXT]` makes a private playlist
+  (`--private` changes nothing) and gives its id and link. Fill it with
+  `folder-add`; show it with `folder-edit --public` or
+  `playlist-privacy`.
+- `folder-edit PLAYLIST` changes `--name`, `--desc` and `--private` /
+  `--public` in one call; `playlist-privacy` also makes a playlist
+  unlisted. Covers cannot be set.
+- `folder-delete PLAYLIST… [-y]` asks first, then deletes them one call
+  each.
+
+### folder-add, folder-remove, folder-move
+
+- `folder-add PLAYLIST VIDEO…` adds videos to the end of a playlist, 50
+  per call, the way `favorite --folder` adds one; `folder-remove` takes
+  them out by video id. `WL` is Watch later.
+- `folder-move FROM TO VIDEO… [--copy]` adds the videos to TO, then takes
+  them out of FROM (YouTube has no move between playlists).
+
+### playlist-move
+
+`playlist-move PLAYLIST VIDEO --after OTHER` puts a video right after
+another one of the same playlist, `--top` first, as dragging it on the
+playlist page does. The playlist is read first, page by page, to find
+both entries; a video in it twice moves its first entry.
+
+### playlist-privacy
+
+`playlist-privacy PLAYLIST private|unlisted|public`.
 
 ### playlist-save
 
 Saves someone's playlist to your library; `--undo` removes it.
+
+### history-clear
+
+`history-clear watch` empties your whole watch history, `history-clear
+search` your search history, as the buttons of the history page do. It
+asks first (`-y` in scripts) and cannot be undone.
 
 ### history-remove
 

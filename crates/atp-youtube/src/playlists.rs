@@ -1,14 +1,20 @@
-//! Managing the account's playlists, with the endpoints YouTube.js
-//! `PlaylistManager` calls: `playlist/create`, `playlist/delete`,
-//! `browse/edit_playlist` (videos, title, description, privacy) and
-//! `like/like` / `like/removelike` on a playlist (saving it to the library).
+//! Managing the account's playlists, the favorites folders of the shared
+//! `folder-*` commands, with the endpoints YouTube.js `PlaylistManager`
+//! calls: `playlist/create`, `playlist/delete`, `browse/edit_playlist`
+//! (videos, their order, title, description, privacy) and `like/like` /
+//! `like/removelike` on a playlist (saving it to the library).
 
-use atp_core::{Action, Error, Result, Value, ValueExt, json};
+use atp_core::bulk;
+use atp_core::{Action, Error, FolderSpec, PageReq, Result, Value, ValueExt, json};
 
 use crate::api::Api;
-use crate::refs;
+use crate::{parse, refs};
 
 pub const PRIVACY: &[&str] = &["private", "unlisted", "public"];
+
+/// Videos sent in one `browse/edit_playlist` call by `folder-add` and
+/// `folder-remove`; how many YouTube takes at once is not known.
+const BATCH: usize = 50;
 
 fn privacy(name: &str) -> Result<&'static str> {
   match name {
@@ -23,45 +29,43 @@ fn videos(args: &[String]) -> Result<Vec<String>> {
   args.iter().map(|v| refs::video(v)).collect()
 }
 
-pub async fn create(
-  api: &Api,
-  title: &str,
-  description: Option<&str>,
-  privacy_name: &str,
-  video_args: &[String],
-) -> Result<Action> {
+/// A new playlist, private as before (`--private` changes nothing): the
+/// result carries its id and link.
+pub async fn create(api: &Api, folder: &FolderSpec) -> Result<Action> {
+  let title = folder.name.as_deref().unwrap_or_default();
   let mut body = json!({
     "title": title,
-    "privacyStatus": privacy(privacy_name)?,
-    "videoIds": videos(video_args)?,
+    "privacyStatus": "PRIVATE",
+    "videoIds": [],
   });
-  if let Some(d) = description {
-    body["description"] = d.into();
+  if let Some(d) = &folder.description {
+    body["description"] = d.as_str().into();
   }
   let v = api.write("playlist/create", body).await?;
   let id = v
     .str("playlistId")
     .ok_or_else(|| Error::upstream("YouTube created no playlist"))?;
   Ok(
-    Action::done("playlist_create", title)
+    Action::done("folder-create", title)
       .with_url(refs::playlist_url(&id))
       .with_id(id),
   )
 }
 
-pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
-  let id = refs::playlist(arg)?;
-  api
-    .write("playlist/delete", json!({ "playlistId": id }))
-    .await?;
-  Ok(Action::done("playlist_delete", &id))
+/// Delete playlists, one call each.
+pub async fn delete(api: &Api, folders: &[String]) -> Result<Vec<Action>> {
+  bulk::each("folder-delete", folders, async |folder| {
+    let id = refs::playlist(folder)?;
+    api
+      .write("playlist/delete", json!({ "playlistId": id }))
+      .await?;
+    Ok(Action::done("folder-delete", &id))
+  })
+  .await
 }
 
 /// Apply `browse/edit_playlist` actions and check the overall status.
-async fn edit(api: &Api, id: &str, actions: Vec<Value>, name: &str) -> Result<Action> {
-  if actions.is_empty() {
-    return Err(Error::input("nothing to change"));
-  }
+async fn apply(api: &Api, id: &str, actions: Vec<Value>) -> Result<()> {
   let body = json!({ "playlistId": id, "actions": actions });
   let v = api.write("browse/edit_playlist", body).await?;
   if v.str("status").is_some_and(|s| s != "STATUS_SUCCEEDED") {
@@ -70,48 +74,138 @@ async fn edit(api: &Api, id: &str, actions: Vec<Value>, name: &str) -> Result<Ac
       v.str("status").unwrap_or_default()
     )));
   }
-  Ok(Action::done(name, id).with_url(refs::playlist_url(id)))
+  Ok(())
 }
 
-pub async fn add(api: &Api, arg: &str, video_args: &[String]) -> Result<Action> {
-  let id = refs::playlist(arg)?;
-  let actions = videos(video_args)?
-    .into_iter()
-    .map(|v| json!({ "action": "ACTION_ADD_VIDEO", "addedVideoId": v }))
-    .collect();
-  edit(api, &id, actions, "playlist_add").await
+/// Add videos to a playlist (`undo`: take them out by video id), 50 per
+/// call; an Action per video.
+pub async fn file(api: &Api, folder: &str, posts: &[String], undo: bool) -> Result<Vec<Action>> {
+  let id = refs::playlist(folder)?;
+  let ids = videos(posts)?;
+  let name = if undo { "folder-remove" } else { "folder-add" };
+  bulk::batches(name, &ids, BATCH, String::clone, async |chunk| {
+    let actions = chunk
+      .iter()
+      .map(|v| {
+        if undo {
+          json!({ "action": "ACTION_REMOVE_VIDEO_BY_VIDEO_ID", "removedVideoId": v })
+        } else {
+          json!({ "action": "ACTION_ADD_VIDEO", "addedVideoId": v })
+        }
+      })
+      .collect();
+    apply(api, &id, actions).await?;
+    Ok(
+      chunk
+        .iter()
+        .map(|v| {
+          Action::done(name, v)
+            .with_url(refs::video_url(v))
+            .with_message(format!("playlist {id}"))
+        })
+        .collect(),
+    )
+  })
+  .await
 }
 
-pub async fn remove(api: &Api, arg: &str, video_args: &[String]) -> Result<Action> {
-  let id = refs::playlist(arg)?;
-  let actions = videos(video_args)?
-    .into_iter()
-    .map(|v| json!({ "action": "ACTION_REMOVE_VIDEO_BY_VIDEO_ID", "removedVideoId": v }))
-    .collect();
-  edit(api, &id, actions, "playlist_remove").await
-}
-
-/// Title, description and privacy, whichever are given.
-pub async fn update(
-  api: &Api,
-  arg: &str,
-  title: Option<&str>,
-  description: Option<&str>,
-  privacy_name: Option<&str>,
-) -> Result<Action> {
-  let id = refs::playlist(arg)?;
+/// `folder-edit`: the title, description and privacy, whichever are given.
+pub async fn edit(api: &Api, folder: &str, change: &FolderSpec) -> Result<Action> {
+  let id = refs::playlist(folder)?;
   let mut actions = Vec::new();
-  if let Some(t) = title {
+  if let Some(t) = &change.name {
     actions.push(json!({ "action": "ACTION_SET_PLAYLIST_NAME", "playlistName": t }));
   }
-  if let Some(d) = description {
+  if let Some(d) = &change.description {
     actions.push(json!({ "action": "ACTION_SET_PLAYLIST_DESCRIPTION", "playlistDescription": d }));
   }
-  if let Some(p) = privacy_name {
-    actions
-      .push(json!({ "action": "ACTION_SET_PLAYLIST_PRIVACY", "playlistPrivacy": privacy(p)? }));
+  if let Some(private) = change.private {
+    let level = if private { "PRIVATE" } else { "PUBLIC" };
+    actions.push(json!({ "action": "ACTION_SET_PLAYLIST_PRIVACY", "playlistPrivacy": level }));
   }
-  edit(api, &id, actions, "playlist_edit").await
+  if actions.is_empty() {
+    return Err(Error::input("nothing to change"));
+  }
+  apply(api, &id, actions).await?;
+  Ok(Action::done("folder-edit", &id).with_url(refs::playlist_url(&id)))
+}
+
+/// Who can see a playlist: private, unlisted or public.
+pub async fn set_privacy(api: &Api, folder: &str, level: &str) -> Result<Action> {
+  let id = refs::playlist(folder)?;
+  let action =
+    json!({ "action": "ACTION_SET_PLAYLIST_PRIVACY", "playlistPrivacy": privacy(level)? });
+  apply(api, &id, vec![action]).await?;
+  Ok(
+    Action::done("playlist-privacy", &id)
+      .with_url(refs::playlist_url(&id))
+      .with_message(level.to_owned()),
+  )
+}
+
+/// Move a video of a playlist right after another one, or with `after`
+/// `None` to the top, as dragging it in the playlist page does
+/// (`ACTION_MOVE_VIDEO_AFTER` with the entries' `setVideoId`s, read from the
+/// playlist first).
+pub async fn reorder(api: &Api, folder: &str, post: &str, after: Option<&str>) -> Result<Action> {
+  let id = refs::playlist(folder)?;
+  let video = refs::video(post)?;
+  let after = after.map(refs::video).transpose()?;
+  if after.as_deref() == Some(video.as_str()) {
+    return Err(Error::input("a video cannot move after itself"));
+  }
+  let mut wanted = vec![video.clone()];
+  wanted.extend(after.clone());
+  let entries = entries(api, &id, &wanted).await?;
+  let entry = |v: &str| {
+    entries
+      .iter()
+      .find(|(video, _)| video == v)
+      .map(|(_, set)| set.clone())
+      .ok_or_else(|| Error::not_found(format!("{v} is not in playlist {id}")))
+  };
+  let mut action = json!({ "action": "ACTION_MOVE_VIDEO_AFTER", "setVideoId": entry(&video)? });
+  if let Some(a) = &after {
+    action["movedSetVideoIdPredecessor"] = entry(a)?.into();
+  }
+  apply(api, &id, vec![action]).await?;
+  let place = match &after {
+    Some(a) => format!("after {a}"),
+    None => "to the top".to_owned(),
+  };
+  Ok(
+    Action::done("playlist-move", &video)
+      .with_url(refs::playlist_url(&id))
+      .with_message(place),
+  )
+}
+
+/// `(video id, setVideoId)` of the playlist's entries, read page by page
+/// until every video of `wanted` turned up (the first entry of each) or the
+/// playlist ends.
+async fn entries(api: &Api, id: &str, wanted: &[String]) -> Result<Vec<(String, String)>> {
+  api.require_login()?;
+  let mut found: Vec<(String, String)> = Vec::new();
+  let mut req = PageReq::first(100);
+  loop {
+    let l = parse::listing(&api.browse(&format!("VL{id}"), None, &req).await?);
+    for post in &l.posts {
+      let set = post.extra.get("set_video_id").and_then(Value::as_str);
+      if let Some(set) = set
+        && wanted.contains(&post.id)
+        && !found.iter().any(|(v, _)| *v == post.id)
+      {
+        found.push((post.id.clone(), set.to_owned()));
+      }
+    }
+    if found.len() == wanted.len() {
+      return Ok(found);
+    }
+    match l.next {
+      Some(next) => req.cursor = Some(next),
+      None => return Ok(found),
+    }
+  }
 }
 
 /// Save someone's playlist to the library (or remove it with `undo`).

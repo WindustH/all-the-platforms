@@ -1,5 +1,6 @@
-//! Managing the account: dislikes, comment ratings, the bell, playlists,
-//! watch history, the account's channels and the one-time OAuth grant.
+//! Managing the account: dislikes, comment ratings, the bell, the order
+//! and privacy of playlists, saved playlists, watch and search history, the
+//! account's channels and the one-time OAuth grant.
 
 use atp_core::cli::confirm;
 use atp_core::{Action, Data, Page, Result, json};
@@ -47,60 +48,25 @@ pub async fn bell(api: &Api, user: &str, level: &str) -> Result<Data> {
   Ok(Data::Action(channels::bell(api, &user, level).await?))
 }
 
-pub async fn create_playlist(
-  api: &Api,
-  title: &str,
-  videos: &[String],
-  description: Option<&str>,
-  privacy: &str,
-) -> Result<Data> {
-  let videos = video_refs(api, videos)?;
-  let action = playlists::create(api, title, description, privacy, &videos).await?;
-  Ok(Data::Action(action))
-}
-
-pub async fn delete_playlist(api: &Api, playlist: &str, yes: bool) -> Result<Data> {
-  let playlist = api.ctx.collection_ref(playlist)?;
-  confirm(yes, &format!("delete playlist {playlist}"))?;
-  Ok(Data::Action(playlists::delete(api, &playlist).await?))
-}
-
-pub async fn add_to_playlist(api: &Api, playlist: &str, videos: &[String]) -> Result<Data> {
-  let videos = video_refs(api, videos)?;
-  let playlist = api.ctx.collection_ref(playlist)?;
-  Ok(Data::Action(playlists::add(api, &playlist, &videos).await?))
-}
-
-pub async fn remove_from_playlist(api: &Api, playlist: &str, videos: &[String]) -> Result<Data> {
-  let videos = video_refs(api, videos)?;
-  let playlist = api.ctx.collection_ref(playlist)?;
-  Ok(Data::Action(
-    playlists::remove(api, &playlist, &videos).await?,
-  ))
-}
-
-/// What `playlist-edit` changes; `None` keeps a field.
-pub struct PlaylistChanges<'a> {
-  pub title: Option<&'a str>,
-  pub description: Option<&'a str>,
-  pub privacy: Option<&'a str>,
-}
-
-pub async fn edit_playlist(
+/// Move a video within one of your playlists, after another or to the top.
+pub async fn move_in_playlist(
   api: &Api,
   playlist: &str,
-  changes: &PlaylistChanges<'_>,
+  video: &str,
+  after: Option<&str>,
 ) -> Result<Data> {
   let playlist = api.ctx.collection_ref(playlist)?;
-  let action = playlists::update(
-    api,
-    &playlist,
-    changes.title,
-    changes.description,
-    changes.privacy,
-  )
-  .await?;
+  let video = api.ctx.post_ref(video)?;
+  let after = after.map(|a| api.ctx.post_ref(a)).transpose()?;
+  let action = playlists::reorder(api, &playlist, &video, after.as_deref()).await?;
   Ok(Data::Action(action))
+}
+
+pub async fn playlist_privacy(api: &Api, playlist: &str, level: &str) -> Result<Data> {
+  let playlist = api.ctx.collection_ref(playlist)?;
+  Ok(Data::Action(
+    playlists::set_privacy(api, &playlist, level).await?,
+  ))
 }
 
 pub async fn save_playlist(api: &Api, playlist: &str, undo: bool) -> Result<Data> {
@@ -108,12 +74,14 @@ pub async fn save_playlist(api: &Api, playlist: &str, undo: bool) -> Result<Data
   Ok(Data::Action(playlists::save(api, &playlist, undo).await?))
 }
 
+/// Clear the watch history (`search`: the search history), after asking.
+pub async fn clear_history(api: &Api, search: bool, yes: bool) -> Result<Data> {
+  let what = if search { "search" } else { "watch" };
+  confirm(yes, &format!("clear your whole {what} history"))?;
+  Ok(Data::Action(library::clear(api, search).await?))
+}
+
 pub async fn forget(api: &Api, video: &str, pages: usize) -> Result<Data> {
   let video = api.ctx.post_ref(video)?;
   Ok(Data::Action(library::forget(api, &video, pages).await?))
-}
-
-/// Video arguments with `#N` resolved.
-fn video_refs(api: &Api, videos: &[String]) -> Result<Vec<String>> {
-  videos.iter().map(|v| api.ctx.post_ref(v)).collect()
 }
