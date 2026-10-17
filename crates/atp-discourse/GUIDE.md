@@ -153,6 +153,36 @@ With `--reply-to TOPIC` it replies in that topic instead.
 Replies in the topic; `--reply-to POST` (an id `comments` lists) answers
 that post; `-i` uploads images.
 
+### edit
+
+`edit POST [TEXT] [--title TITLE] [--topic '#tag' ...] [--topic
+CATEGORY] [--no-topics]` changes one of your posts: a topic id or link
+means its first post, `post:<id>` or a link with a post number another
+one. It loads the post first, prints the change (each field as old →
+new) and asks (`-y` in scripts).
+
+- TEXT replaces the post's Markdown. The text ATP loaded goes along, so
+  an edit made meanwhile fails with a conflict (`upstream_error`, HTTP
+  409) instead of being overwritten; look again and repeat the edit.
+- On a topic's first post, `--title` renames the topic, `--topic '#tag'`
+  (repeatable) replaces its tags and `--no-topics` removes them, and a
+  `--topic` without `#` moves it to that category (id, slug or link), as
+  with `post`. Other posts take only TEXT.
+- Forums limit how long a post stays editable: a day for new users and
+  30 days from trust level 2 by default (each forum sets its own), and
+  posts in locked or archived topics cannot change. When the forum says
+  the post cannot change, ATP stops before asking with
+  `permission_denied`; past the limit Discourse answers that the post is
+  too old to edit. Forums also set the shortest post and title they take.
+- Edits show in the post's edit history (Discourse folds small ones made
+  within minutes of the last into it).
+
+```
+atp discourse edit https://meta.discourse.org/t/some-topic/123456 'New text of the first post'
+atp discourse edit post:1789012 - -y < fixed.md
+atp discourse edit 123456 --title 'Better title' --topic '#rust' --topic '#cli'
+```
+
 ### delete, delete-comment
 
 Deletes one of your posts; deleting a topic's first post (or the topic)
@@ -170,6 +200,6 @@ and its admins and moderators.
 
 ## Limits
 
-No private messages, chat, polls, editing, or watching topics yet.
+No private messages, chat, polls, or watching topics yet.
 Notification filtering happens after each page arrives, so a filtered
 page may hold fewer items.

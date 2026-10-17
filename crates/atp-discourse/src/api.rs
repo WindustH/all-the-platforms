@@ -251,6 +251,8 @@ impl Api {
         Error::new(ErrorCode::RateLimited, text).with_hint(format!("wait {wait} s and retry"))
       }
       (404, _) | (_, "not_found") => Error::not_found(text),
+      (409, _) => Error::upstream(text)
+        .with_hint("it changed since ATP loaded it; look at it again and repeat the edit"),
       (400 | 422, _) | (_, "invalid_parameters") => Error::input(text),
       _ => Error::upstream(text),
     }

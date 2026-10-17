@@ -120,7 +120,7 @@ pub async fn publish(api: &Api, draft: &Draft) -> Result<Action> {
 }
 
 /// A category argument → its id (slugs are looked up).
-async fn category_id(api: &Api, arg: &str) -> Result<u64> {
+pub async fn category_id(api: &Api, arg: &str) -> Result<u64> {
   let slug = match refs::category(arg)? {
     CategoryRef::Id(id) => return Ok(id),
     CategoryRef::Slug(slug) => slug,

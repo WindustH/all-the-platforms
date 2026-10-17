@@ -2,10 +2,12 @@
 //! default, `DISCOURSE_URL` for another, such as linux.do), through its
 //! JSON API ([`api`]): topic lists, topics and their posts ([`topics`]),
 //! search ([`search`]), users, bookmarks and notifications ([`users`]),
-//! likes, bookmarks, replies and new topics ([`posts`]), and logging in
+//! likes, bookmarks, replies and new topics ([`posts`]), editing posts
+//! and topics ([`edits`]), and logging in
 //! with a User API Key or an admin's API key ([`login`]).
 
 mod api;
+mod edits;
 mod extra;
 mod login;
 mod parse;
@@ -22,7 +24,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Comment, Ctx, Data, Draft, Notification, Page, PageReq, Platform,
+  Action, Cap, Choices, Comment, Ctx, Data, Draft, Edit, Notification, Page, PageReq, Platform,
   PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
@@ -62,6 +64,9 @@ impl Platform for Discourse {
       Cap::DeleteComment,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
+      Cap::EditTitle,
+      Cap::EditTopics,
     ],
     choices: Choices {
       search_sort: search::SORTS,
@@ -186,6 +191,10 @@ impl Platform for Discourse {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     posts::delete(&self.api, post, false).await
+  }
+
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    edits::edit(&self.api, post, edit).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {
