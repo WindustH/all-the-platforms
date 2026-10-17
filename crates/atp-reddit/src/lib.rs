@@ -90,6 +90,7 @@ impl Platform for Reddit {
       Cap::AccountInsights,
       Cap::PostInsights,
       Cap::Block,
+      Cap::Blocked,
     ],
     choices: Choices {
       search_sort: posts::SEARCH_SORTS,
@@ -259,8 +260,17 @@ impl Platform for Reddit {
     subreddits::subscribe(&self.api, user, undo).await
   }
 
+  /// Several subreddits and profiles go 50 per `/api/subscribe` call.
+  async fn follow_users(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    subreddits::subscribe_all(&self.api, users, undo).await
+  }
+
   async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
     users::block_all(&self.api, users, undo).await
+  }
+
+  async fn blocked(&self, _page: &PageReq) -> Result<Page<User>> {
+    users::blocked(&self.api).await
   }
 
   fn follow_ref(&self, arg: &str) -> Result<String> {

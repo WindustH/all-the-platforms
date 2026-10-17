@@ -137,6 +137,11 @@ the vote.
 name) follows a user's profile. `#N` takes from whichever list came last:
 subreddits (`collections`, `search -t topic`) or users.
 
+Several subreddits and profiles go in one call (Reddit's `sr_name` is a
+comma list), 50 per call: all of them are read first, and a call Reddit
+refuses (one unknown subreddit among them, say) marks all of its targets
+failed.
+
 ### post
 
 `post "text" --title T --topic r/<sub>` (or `--topic u/<you>` for your
@@ -236,6 +241,27 @@ moderators and their permissions.
 `multis` lists your multireddits (logged in), `multis USER` a user's public
 ones; `multi u/USER/m/NAME` (or `#N` after `multis`) browses one.
 
+### multi-create, multi-update, multi-delete, multi-add, multi-remove
+
+Your multireddits (custom feeds); all need a login.
+
+- `multi-create NAME [SUBREDDIT…] [--desc TEXT] [--visibility
+  private|public|hidden]` makes one, private by default. Its link takes
+  NAME's ASCII letters and digits (`_` between words, 21 characters at
+  most, `Rust news` → `u/you/m/rust_news`); a NAME without two of them is
+  refused. The result carries the path (`/user/you/m/rust_news`).
+- `multi-update MULTI [--name] [--desc] [--visibility]`: Reddit's update
+  takes the whole multireddit, so ATP reads it from your `multis` and
+  sends the rest (its subreddits among them) back as it was. The link
+  keeps its name.
+- `multi-delete MULTI [-y]` asks first; the subreddits stay subscribed.
+- `multi-add MULTI SUBREDDIT…` / `multi-remove MULTI SUBREDDIT…`, one call
+  per subreddit. Profiles go in as `u/name`.
+- MULTI is `u/USER/m/NAME`, a link or `#N` after `multis`; a SUBREDDIT is
+  a name, `r/name`, a link or `#N` after a subreddit list (`collections`,
+  `search -t topic`). Both `#N` read the last collection list, so name
+  one of them in full when they come from different lists.
+
 ### flairs, flair
 
 `flairs SUB` lists post flairs (logged in); `flair POST [TEXT] --template
@@ -257,10 +283,11 @@ Your other lists, beside `favorites` (saved posts) and `likes`.
 
 `hide POST [--undo]` hides a post from your listings.
 
-### block, unblock
+### block, unblock, blocked
 
 `block USER…` / `unblock USER…` take users (`u/name`, names, profile
-links), one call each; the list of blocked users is not read.
+links), one call each. `blocked` lists the accounts you block
+(`/prefs/blocked`) in one page, with `extra.blocked_at`.
 
 ### user-comments, trophies, moderated
 

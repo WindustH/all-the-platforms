@@ -107,22 +107,33 @@ impl Api {
 
   /// POST a form to the classic API: a write (login, pause, CSRF, `api_type=json`).
   pub async fn post(&self, path: &str, form: Params<'_>) -> Result<Value> {
-    self.write(path, Body::Form(form)).await
+    self.write(Method::POST, path, Body::Form(form)).await
   }
 
   /// POST a JSON body (endpoints such as `/api/submit_gallery_post.json`).
   pub async fn post_json(&self, path: &str, body: Value) -> Result<Value> {
-    self.write(path, Body::Json(body)).await
+    self.write(Method::POST, path, Body::Json(body)).await
   }
 
-  async fn write(&self, path: &str, body: Body<'_>) -> Result<Value> {
+  /// PUT a form, as [`Api::post`] does (multireddits).
+  pub async fn put(&self, path: &str, form: Params<'_>) -> Result<Value> {
+    self.write(Method::PUT, path, Body::Form(form)).await
+  }
+
+  /// DELETE with a form, as [`Api::post`] does (multireddits).
+  pub async fn delete(&self, path: &str, form: Params<'_>) -> Result<Value> {
+    self.write(Method::DELETE, path, Body::Form(form)).await
+  }
+
+  async fn write(&self, method: Method, path: &str, body: Body<'_>) -> Result<Value> {
     self.require_login()?;
-    match self.send_write(path, &body, self.web_token().await).await {
+    let token = self.web_token().await;
+    match self.send_write(method.clone(), path, &body, token).await {
       // The classic cookie API wants a captcha for some writes (submissions);
       // its responses often hand out the `token_v2` bearer, so retry with it.
       // Nothing was created by the refused attempt.
       Err(e) if e.message.contains("BAD_CAPTCHA") => match self.web_token().await {
-        Some(token) => self.send_write(path, &body, Some(token)).await,
+        Some(token) => self.send_write(method, path, &body, Some(token)).await,
         None => Err(e),
       },
       other => other,
@@ -130,15 +141,21 @@ impl Api {
   }
 
   /// One write: with the web bearer when given, else with the active mode.
-  async fn send_write(&self, path: &str, body: &Body<'_>, token: Option<String>) -> Result<Value> {
+  async fn send_write(
+    &self,
+    method: Method,
+    path: &str,
+    body: &Body<'_>,
+    token: Option<String>,
+  ) -> Result<Value> {
     let (mut req, modhash) = match token {
-      Some(token) => (self.bearer(Method::POST, path, &token), None),
+      Some(token) => (self.bearer(method, path, &token), None),
       None => {
         let modhash = match self.oauth {
           Some(_) => None,
           None => Some(self.modhash().await?),
         };
-        (self.request(Method::POST, path).await?, modhash)
+        (self.request(method, path).await?, modhash)
       }
     };
     req = match body {

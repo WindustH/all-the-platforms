@@ -2,6 +2,7 @@
 //! and blocking.
 
 use atp_core::bulk;
+use atp_core::text::from_secs;
 use atp_core::{Action, Comment, Error, Page, PageReq, Query, Result, User, ValueExt};
 
 use crate::api::Api;
@@ -66,4 +67,24 @@ async fn block(api: &Api, arg: &str, undo: bool) -> Result<Action> {
     .post("/api/block_user", vec![("name", name.clone())])
     .await?;
   Ok(Action::done("block", format!("u/{name}")))
+}
+
+/// Accounts you block (`/prefs/blocked`), with since when in
+/// `extra.blocked_at`; Reddit gives them all at once.
+pub async fn blocked(api: &Api) -> Result<Page<User>> {
+  api.require_login()?;
+  let v = api.get("/prefs/blocked", &[]).await?;
+  let users = v
+    .list("data.children")
+    .iter()
+    .filter_map(|b| {
+      let name = b.str("name")?;
+      let mut user = parse::named(&name, b.str("id"));
+      if let Some(t) = b.i64("date").and_then(from_secs) {
+        user.extra.insert("blocked_at".into(), t.to_string().into());
+      }
+      Some(user)
+    })
+    .collect();
+  Ok(Page::last(users))
 }

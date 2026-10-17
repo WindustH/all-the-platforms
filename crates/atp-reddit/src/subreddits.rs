@@ -2,6 +2,7 @@
 //! (un)subscribing (also how Reddit follows a user's profile), and a
 //! subreddit's rules, moderators, wiki and post flairs.
 
+use atp_core::bulk;
 use atp_core::text::{from_secs, html_to_text};
 use atp_core::{
   Action, Collection, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt, json,
@@ -63,22 +64,61 @@ pub async fn about(api: &Api, arg: &str) -> Result<Collection> {
     .ok_or_else(|| Error::not_found(format!("no such subreddit: r/{name}")))
 }
 
-/// Subscribe to `r/name`, or follow `u/name` (its profile subreddit `u_name`).
-pub async fn subscribe(api: &Api, arg: &str, undo: bool) -> Result<Action> {
-  let (sr_name, url) = match refs::target(arg)? {
+/// Subreddits and profiles named in one `/api/subscribe` call; how many
+/// Reddit takes at once is not known.
+const SUBSCRIBE_BATCH: usize = 50;
+
+/// What `/api/subscribe` names a target by, and its link: `r/name` is the
+/// subreddit, `u/name` the profile subreddit `u_name`.
+fn sr_name(arg: &str) -> Result<(String, String)> {
+  Ok(match refs::target(arg)? {
     Target::Subreddit(name) => (name.clone(), sub_url(&name)),
     Target::User(name) => (format!("u_{name}"), user_url(&name)),
-  };
+  })
+}
+
+/// One `/api/subscribe` call for several subreddits (`sr_name` is a comma
+/// list).
+async fn send_subscribe(api: &Api, names: &[&str], undo: bool) -> Result<()> {
   let mut form = vec![
     ("action", if undo { "unsub" } else { "sub" }.into()),
-    ("sr_name", sr_name.clone()),
+    ("sr_name", names.join(",")),
   ];
   if !undo {
     form.push(("skip_initial_defaults", "true".into()));
   }
   api.post("/api/subscribe", form).await?;
+  Ok(())
+}
+
+/// Subscribe to `r/name`, or follow `u/name` (its profile subreddit `u_name`).
+pub async fn subscribe(api: &Api, arg: &str, undo: bool) -> Result<Action> {
+  let (sr_name, url) = sr_name(arg)?;
+  send_subscribe(api, &[&sr_name], undo).await?;
   let name = if undo { "unfollow" } else { "follow" };
   Ok(Action::done(name, sr_name).with_url(url))
+}
+
+/// `follow` / `unfollow` of several subreddits and profiles, 50 per call;
+/// all of them are read before anything is sent.
+pub async fn subscribe_all(api: &Api, args: &[String], undo: bool) -> Result<Vec<Action>> {
+  let targets = args
+    .iter()
+    .map(|a| sr_name(a))
+    .collect::<Result<Vec<_>>>()?;
+  let name = if undo { "unfollow" } else { "follow" };
+  let target = |(sr, _): &(String, String)| sr.clone();
+  bulk::batches(name, &targets, SUBSCRIBE_BATCH, target, async |chunk| {
+    let names: Vec<&str> = chunk.iter().map(|(sr, _)| sr.as_str()).collect();
+    send_subscribe(api, &names, undo).await?;
+    Ok(
+      chunk
+        .iter()
+        .map(|(sr, url)| Action::done(name, sr).with_url(url))
+        .collect(),
+    )
+  })
+  .await
 }
 
 /// Subreddit rules in order, then Reddit's site-wide reasons.

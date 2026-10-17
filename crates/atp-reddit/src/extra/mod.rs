@@ -1,7 +1,7 @@
 //! Reddit-only commands: browsing one subreddit, a multireddit or a domain,
-//! community details (rules, moderators, wiki, flairs), your other lists,
-//! downvotes, a user's comments, trophies, post flags and flair, moderator
-//! actions, blocking and the inbox's read state.
+//! managing your multireddits, community details (rules, moderators, wiki,
+//! flairs), your other lists, downvotes, a user's comments, trophies, post
+//! flags and flair, moderator actions and the inbox's read state.
 
 mod activity;
 mod browse;
