@@ -26,7 +26,7 @@ pub use self::args::{GlobalArgs, PageArgs};
 pub use self::chat::ChatCommand;
 pub use self::command::CommonCommand;
 use self::command::{Outcome, Run};
-pub use self::input::{check_files, check_images, confirm, read_text};
+pub use self::input::{Change, check_files, check_images, confirm, read_text};
 pub use self::library::LibraryCommand;
 pub use self::media::{DownloadArgs, MediaCommand};
 pub use self::read::{ReadCommand, SearchArgs, SearchKind};

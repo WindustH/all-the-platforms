@@ -7,7 +7,7 @@
 
 use std::time::Duration;
 
-use atp_core::cli::confirm;
+use atp_core::cli::Change;
 use atp_core::output::note;
 use atp_core::{Action, Edit, Error, ErrorCode, Result, Value, ValueExt};
 
@@ -230,48 +230,31 @@ async fn editable(creator: &Creator<'_>, id: &str) -> Result<String> {
 
 /// Show the change and ask (or take `--yes`).
 fn ask(work: &Work, edit: &Edit, title: &str, editor: &Editor, edits: Option<&str>) -> Result<()> {
-  let line = |label: &str, old: String, new: String| {
-    let value = if old == new {
-      format!("{new} (unchanged)")
-    } else {
-      format!("{old} → {new}")
-    };
-    format!("  {label:<11} {value}")
-  };
-  let shown = |s: &str| {
-    if s.is_empty() {
-      "(none)".to_owned()
-    } else {
-      atp_core::text::truncate(s, 60)
-    }
-  };
   let hashtags = |e: &Editor| {
     let names: Vec<String> = e.tags().iter().map(|t| format!("#{}", t.name)).collect();
-    shown(&names.join(" "))
+    names.join(" ")
   };
   let visibility = edit
     .visibility
     .as_deref()
     .map_or(work.visibility, visibility_code);
-  let mut lines = vec![
-    format!("Douyin {} {}:", work.name(), work.id),
-    line("title", shown(&work.title), shown(title)),
-    line("text", shown(&work.editor.body()), shown(&editor.body())),
-    line("hashtags", hashtags(&work.editor), hashtags(editor)),
-    line(
+  let mut change = Change::new(format!("Douyin {} {}:", work.name(), work.id));
+  change
+    .field("title", &work.title, title)
+    .field("text", &work.editor.body(), &editor.body())
+    .field("hashtags", &hashtags(&work.editor), &hashtags(editor))
+    .field(
       "visibility",
-      visibility_name(work.visibility).into(),
-      visibility_name(visibility).into(),
-    ),
-  ];
+      visibility_name(work.visibility),
+      visibility_name(visibility),
+    );
   if let Some(path) = &edit.cover {
-    lines.push(format!("  {:<11} {}", "cover", path.display()));
+    change.row("cover", &path.display().to_string());
   }
   if let Some(edits) = edits.filter(|e| !e.is_empty()) {
-    lines.push(format!("  {:<11} {edits}", "edits"));
+    change.row("edits", edits);
   }
-  note(&lines.join("\n"));
-  confirm(edit.yes, "change this work on Douyin")
+  change.confirm(edit.yes, "change this work on Douyin")
 }
 
 /// A video's covers as the edit page fills them in: `Cover` (or `cover`),

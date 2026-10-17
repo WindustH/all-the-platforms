@@ -24,6 +24,55 @@ pub fn confirm(yes: bool, what: &str) -> Result<()> {
   }
 }
 
+/// What an `edit` changes, shown before it goes out: a title line, then
+/// one row per field, `old → new` or the value with `(unchanged)`. Every
+/// platform's edit prints it the same way, then asks with [`confirm`].
+#[derive(Debug, Clone)]
+pub struct Change {
+  lines: Vec<String>,
+}
+
+impl Change {
+  /// A summary headed `title` (`Douyin video 7697611474302225714:`).
+  pub fn new(title: impl Into<String>) -> Self {
+    Self {
+      lines: vec![title.into()],
+    }
+  }
+
+  /// A field that may change. Values show on one line, cut to a short
+  /// width; an empty one reads `(none)`.
+  pub fn field(&mut self, label: &str, old: &str, new: &str) -> &mut Self {
+    let value = if old == new {
+      format!("{} (unchanged)", shown(new))
+    } else {
+      format!("{} → {}", shown(old), shown(new))
+    };
+    self.row(label, &value)
+  }
+
+  /// A row with a value as it is: a file to upload, the edits left.
+  pub fn row(&mut self, label: &str, value: &str) -> &mut Self {
+    self.lines.push(format!("  {label:<11} {value}"));
+    self
+  }
+
+  /// Print the summary, then ask `what?` (or take `--yes`).
+  pub fn confirm(&self, yes: bool, what: &str) -> Result<()> {
+    crate::output::note(&self.lines.join("\n"));
+    confirm(yes, what)
+  }
+}
+
+fn shown(value: &str) -> String {
+  let line = crate::text::one_line(value);
+  if line.is_empty() {
+    "(none)".to_owned()
+  } else {
+    crate::text::truncate(&line, 60)
+  }
+}
+
 /// A text argument, or standard input for `-`.
 pub fn read_text(text: Option<String>) -> Result<String> {
   match text.as_deref() {
