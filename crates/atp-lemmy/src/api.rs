@@ -67,6 +67,16 @@ impl Api {
 
   /// A change: logged in, after a short pause, as `POST` with a JSON body.
   pub async fn write(&self, endpoint: &str, body: Value) -> Result<Value> {
+    self.change(Method::POST, endpoint, body).await
+  }
+
+  /// A change Lemmy routes as `PUT` (editing a post, saving one), like
+  /// [`write`](Self::write) otherwise.
+  pub async fn put(&self, endpoint: &str, body: Value) -> Result<Value> {
+    self.change(Method::PUT, endpoint, body).await
+  }
+
+  async fn change(&self, method: Method, endpoint: &str, body: Value) -> Result<Value> {
     self.require()?;
     self
       .ctx
@@ -75,7 +85,7 @@ impl Api {
       .await;
     let url = format!("{}/api/v3/{endpoint}", self.base());
     self
-      .call(Method::POST, url, Vec::new(), Some(body), self.token())
+      .call(method, url, Vec::new(), Some(body), self.token())
       .await
   }
 

@@ -250,7 +250,7 @@ async fn own_post(api: &Api, arg: &str) -> Result<u64> {
 pub async fn save(api: &Api, arg: &str, undo: bool) -> Result<Action> {
   let id = own_post(api, arg).await?;
   api
-    .write("post/save", json!({"post_id": id, "save": !undo}))
+    .put("post/save", json!({"post_id": id, "save": !undo}))
     .await?;
   Ok(Action::done(if undo { "unsave" } else { "save" }, arg))
 }
