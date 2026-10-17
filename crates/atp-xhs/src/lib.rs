@@ -3,9 +3,10 @@
 //! - [`api`]: signed transport and error mapping; [`sign`]: x-s / x-s-common / XYW.
 //! - [`refs`]: note and user references; [`parse`]: JSON → models; [`pages`]: note pages.
 //! - Endpoints by subject: [`search`], [`feeds`], [`notes`] (reading, publishing),
-//!   [`uploads`], [`users`], [`notifications`], [`interactions`], [`history`],
-//!   [`boards`], [`messages`] (private messages), [`events`] (activity
-//!   center), [`insights`], [`login`]; platform-only commands in [`extra`].
+//!   [`uploads`], [`users`], [`relations`] (following and followers),
+//!   [`notifications`], [`interactions`], [`history`], [`boards`],
+//!   [`messages`] (private messages), [`events`] (activity center),
+//!   [`insights`], [`login`]; platform-only commands in [`extra`].
 //! - [`gateway`]: the push connection private messages and live rooms use;
 //!   [`live`]: `listen`.
 
@@ -26,6 +27,7 @@ mod notifications;
 mod pages;
 mod parse;
 mod refs;
+mod relations;
 mod search;
 mod sign;
 mod uploads;
@@ -40,9 +42,9 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, FolderSpec, Insights, Message,
-  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket,
-  Query, Reply, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, FolderSpec, FollowQuery, Insights,
+  Message, Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus,
+  QrTicket, Query, Reply, Result, User,
 };
 
 use api::Api;
@@ -73,6 +75,7 @@ impl Platform for Xhs {
       Cap::Replies,
       Cap::User,
       Cap::UserPosts,
+      Cap::Followers,
       Cap::Following,
       Cap::Collections,
       Cap::Favorites,
@@ -94,6 +97,8 @@ impl Platform for Xhs {
       Cap::Messages,
       Cap::Send,
       Cap::Listen,
+      Cap::FollowingSearch,
+      Cap::FollowingMutual,
       Cap::FolderCreate,
       Cap::FolderEdit,
       Cap::FolderDescription,
@@ -117,6 +122,8 @@ impl Platform for Xhs {
     guest: "read, download",
     guide: include_str!("../GUIDE.md"),
   };
+
+  const FOLLOWING_SORT: &'static [&'static str] = relations::SORTS;
 
   type Extra = Command;
 
@@ -194,8 +201,21 @@ impl Platform for Xhs {
     users::user_posts(&self.api, user, page).await
   }
 
+  async fn followers(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
+    relations::followers(&self.api, user, page).await
+  }
+
   async fn following(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    users::following(&self.api, user, page).await
+    relations::following(&self.api, user, &FollowQuery::default(), page).await
+  }
+
+  async fn following_with(
+    &self,
+    user: &str,
+    query: &FollowQuery,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    relations::following(&self.api, user, query, page).await
   }
 
   async fn collections(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
@@ -248,6 +268,10 @@ impl Platform for Xhs {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     interactions::follow(&self.api, user, undo).await
+  }
+
+  async fn follow_users(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    relations::follow_users(&self.api, users, undo).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {

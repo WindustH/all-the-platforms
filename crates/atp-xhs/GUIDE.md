@@ -37,8 +37,9 @@ in again.
 ### Risk control
 
 Xiaohongshu is quick to flag automation. Requests are spaced at least a
-second apart; likes, collects, comments, follows and private messages
-wait another 0.8-2 s, and publishing 1-2.5 s.
+second apart; likes, collects, comments, follows, board changes and
+private messages wait another 0.8-2 s, and publishing 1-2.5 s. Space
+bulk work out further with `--interval`.
 
 A captcha (`verification_required`, HTTP 461 / 471) means stop: ATP first
 waits 5 s (doubling with each captcha in a row, up to 30 s), then on a
@@ -127,8 +128,42 @@ whether `folder-add` collects one you have not collected is not known.
 
 ### following
 
-Lists the accounts you follow. Xiaohongshu shows other accounts' follow
-lists only as counts, and nobody's followers.
+`following` lists the accounts you follow from the message page's list of
+them, with `extra.mutual` (you follow each other). On your own list, as
+the profile's relation panel (关注) offers it:
+
+- `--sort recent|oldest|smart`: latest follow first, earliest first, or
+  Xiaohongshu's own mix (综合排序). Rows carry `extra.mutual` and
+  `extra.remark` (the name you gave them).
+- `--search WORDS` finds the accounts you follow by name through the
+  panel's search box (搜索已关注的人).
+- `--mutual` lists your mutual follows (互相关注), from the message page's
+  list as its share dialog reads it.
+
+`--sort`, `--search` and `--mutual` go one at a time. `following USER`
+lists whom someone else follows, latest first, as their relation panel
+does; people can hide the list (关注列表不可见) and Xiaohongshu may show
+only part of it.
+
+### followers
+
+`followers [USER]` lists who follows an account, latest first, as the
+relation panel's 粉丝 tab does: yours (rows carry `extra.mutual`) or,
+where they show it, someone else's.
+
+### invalid-follows
+
+`invalid-follows` lists the accounts you follow that the relation panel's
+batch manager (批量管理) files under its `invalid` tab, latest follow
+first: by its name, accounts that were closed or banned (what the tab is
+called on the page comes from the server and is not known). Unfollow
+them with `unfollow '#1' '#2' …`.
+
+### follow, unfollow
+
+One by one, except that `unfollow` with several users takes them back 50
+per call (`followings/batch/unfollow`, as the batch manager does; it
+warns that this cannot be undone).
 
 ### history, history-count, history-delete, history-clear
 
@@ -241,3 +276,17 @@ Xiaohongshu rejects a signature, commands fail with `signature_error`.
 
 `likers` and `reposts` do not exist on Xiaohongshu; who liked your notes
 shows in `notifications --type likes`.
+
+The relation panel (`following --sort` and `--search`, others'
+`following`, `followers`, `invalid-follows`), the batch unfollow and the
+board writes are built from the web app's page bundles and have not been
+run against a live account yet. The web shows the relation panel only to
+accounts in an experiment (`enable_web_follow_list`); whether its calls
+answer other accounts is not known. Some reads are said to want the
+creator center's signature (XYW) since about March 2026; ATP signs these
+calls as the main site does, and whether that is enough is not known.
+
+The web has no follow groups, remarks to set, way to remove a follower,
+or blocking: it sends people to the app to unblock, its message client
+holds block calls nothing on the page uses, and there is no list of
+blocked accounts. ATP offers none of them.

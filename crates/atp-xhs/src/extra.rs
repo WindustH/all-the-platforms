@@ -6,7 +6,9 @@ use atp_core::cli::{PageArgs, check_images, confirm, read_text};
 use atp_core::{Action, Data, Draft, Result};
 
 use crate::api::Api;
-use crate::{events, feeds, history, insights, interactions, notes, notifications, search, users};
+use crate::{
+  events, feeds, history, insights, interactions, notes, notifications, relations, search, users,
+};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -78,6 +80,13 @@ pub enum Command {
     /// Search the liked notes instead
     #[arg(long)]
     likes: bool,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Accounts you follow that the follow list's batch manager calls invalid
+  /// (likely closed or banned ones)
+  #[command(after_long_help = EX_INVALID_FOLLOWS)]
+  InvalidFollows {
     #[command(flatten)]
     page: PageArgs,
   },
@@ -160,6 +169,11 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
         .collect_dated(async |r| users::search_saved(api, &keyword, likes, &r).await)
         .await?,
     ),
+    Command::InvalidFollows { page } => Data::Users(
+      page
+        .collect(async |r| relations::invalid(api, &r).await)
+        .await?,
+    ),
     Command::LikeComment {
       note,
       comment,
@@ -217,6 +231,13 @@ Examples:
   atp xhs events --kept          # the ones you kept
 
 More: atp guide xhs events";
+
+const EX_INVALID_FOLLOWS: &str = "\
+Examples:
+  atp xhs invalid-follows -n 100
+  atp xhs unfollow '#1' '#2' '#3'     # 50 per call
+
+More: atp guide xhs invalid-follows";
 
 const EX_JOIN: &str = "\
 Examples:

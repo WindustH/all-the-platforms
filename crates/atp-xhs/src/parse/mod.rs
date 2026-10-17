@@ -1,6 +1,10 @@
 //! Upstream JSON → core models. Web API payloads are snake_case; the note of
 //! a server-rendered page is converted with [`snake_keys`] first, so one
-//! parser serves both.
+//! parser serves both. Rows of relation lists are in [`relations`].
+
+mod relations;
+
+pub use relations::{contact, relation_user};
 
 use std::sync::LazyLock;
 

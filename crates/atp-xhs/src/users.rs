@@ -1,15 +1,13 @@
-//! Accounts: the logged-in user, profiles, their note lists, the accounts
-//! you follow, and searching your own collected or liked notes.
+//! Accounts: the logged-in user, profiles, their note lists, and searching
+//! your own collected or liked notes.
 
 use atp_core::{Error, Page, PageReq, Post, Result, User, Value, ValueExt};
 
 use crate::api::Api;
-use crate::refs::{self, SOURCE_FEED, user_url};
+use crate::refs::{self, SOURCE_FEED};
 use crate::{parse, sign};
 
 pub const ME: &str = "/api/sns/web/v2/user/me";
-/// The message page's contact picker: everyone the logged-in account follows.
-const FOLLOWING: &str = "/api/im/web/users/following/all";
 /// Search inside the collected / liked tabs of your own profile.
 const SAVED_SEARCH: &str = "/api/sns/v1/note/user/page/search/web";
 
@@ -21,6 +19,15 @@ pub async fn whoami(api: &Api) -> Result<User> {
     return Err(Error::auth("not logged in (guest session)").with_hint("run `atp xhs login`"));
   }
   Ok(parse::profile(&me, None))
+}
+
+/// The logged-in account's id, looked up once per command.
+pub async fn my_id(api: &Api) -> Result<String> {
+  if let Some(id) = api.me.get() {
+    return Ok(id.clone());
+  }
+  let id = whoami(api).await?.id;
+  Ok(api.me.get_or_init(|| id).clone())
 }
 
 pub async fn user(api: &Api, arg: &str) -> Result<User> {
@@ -73,45 +80,6 @@ async fn saved(api: &Api, path: &str, user: Option<&str>, page: &PageReq) -> Res
     ("num", num.as_str()),
   ];
   Ok(note_page(api, &api.get(path, &params).await?))
-}
-
-/// Accounts the logged-in user follows. Xiaohongshu shows other accounts'
-/// follow lists only as counts.
-pub async fn following(api: &Api, user: &str, req: &PageReq) -> Result<Page<User>> {
-  api.require_login()?;
-  let me = whoami(api).await?.id;
-  let target = refs::user_ref(api, user).await?;
-  if target != me {
-    return Err(Error::unsupported(
-      "following of other accounts (Xiaohongshu shows only the count)",
-    ));
-  }
-  let page = req.number_or(1);
-  let (page_s, size) = (page.to_string(), req.size_within(200).to_string());
-  let data = api
-    .get(
-      FOLLOWING,
-      &[("page", page_s.as_str()), ("size", size.as_str())],
-    )
-    .await?;
-  let rows = data.list("follow_user_d_t_o_list");
-  let items: Vec<User> = rows
-    .iter()
-    .filter_map(|u| {
-      let id = u.str("user_id")?;
-      Some(User {
-        url: Some(user_url(&id)),
-        name: u.str("nick_name").unwrap_or_default(),
-        avatar: u.str("avatar"),
-        verified: u.i64("verify_type").is_some_and(|t| t > 0),
-        followed: Some(true),
-        id,
-        ..User::default()
-      })
-    })
-    .collect();
-  let next = (!items.is_empty()).then(|| (page + 1).to_string());
-  Ok(Page::new(items, next))
 }
 
 /// Your collected (or with `likes`, liked) notes that match `keyword`.

@@ -2,7 +2,7 @@
 //! signing, device / guest cookies and the `{success, code, msg, data}`
 //! envelope mapped onto `atp_core::Error`.
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::time::Duration;
 
 use atp_core::http::{Method, Req, Resp, status_error};
@@ -34,6 +34,8 @@ enum Body<'a> {
 
 pub struct Api {
   pub ctx: Ctx,
+  /// The logged-in account's id, once looked up (`users::my_id`).
+  pub me: OnceCell<String>,
   session: RefCell<SignSession>,
   /// Consecutive captcha responses, for the cooldown.
   verify_count: Cell<u32>,
@@ -43,6 +45,7 @@ impl Api {
   pub fn new(ctx: Ctx) -> Self {
     Self {
       ctx,
+      me: OnceCell::new(),
       session: RefCell::new(SignSession::new(sign::now_ms())),
       verify_count: Cell::new(0),
     }
