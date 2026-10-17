@@ -134,6 +134,13 @@ of blocked users is not read.
 
 Users only; `follow-question QUESTION [--undo]` follows a question.
 
+### follow-topic, follow-column, follow-folder
+
+`follow-topic TOPIC`, `follow-column COLUMN` (subscribe, 订阅) and
+`follow-folder FOLDER` (someone's favorites folder) follow them, `--undo`
+unfollows, as their pages do. `user-following -t topics|columns|folders`
+lists what you follow; topics, columns and folders also take their links.
+
 ### post
 
 Publishes a pin (想法) with an optional `--title` and images. Pins take no
@@ -242,6 +249,12 @@ reads Zhihu Daily (知乎日报), no login needed.
   `favorite --folder` does; questions cannot be saved.
 - `folder-move FROM TO POST… [--copy]` saves them into TO, then takes
   them out of FROM.
+
+### post-folders
+
+`post-folders POST` lists your favorites folders as the save dialog does,
+each with `extra.saved`: whether it holds the post (an answer, article,
+pin or video).
 
 ## Limits
 

@@ -22,6 +22,28 @@ pub async fn folders(api: &Api, user: Option<&str>, page: &PageReq) -> Result<Pa
   ))
 }
 
+/// Your folders, each with whether it holds a post (`extra.saved`), as
+/// the save dialog lists them (`collections/contents/{type}/{id}`).
+pub async fn holding(api: &Api, target: &Target, page: &PageReq) -> Result<Page<Collection>> {
+  if matches!(target, Target::Question(_)) {
+    return Err(Error::input("questions are not saved into folders"));
+  }
+  let path = format!("collections/contents/{}/{}", target.kind(), target.id());
+  let v = api.list(&path, None, page).await?;
+  let folders = v
+    .list("data")
+    .iter()
+    .map(|f| {
+      let mut folder = parse::folder(f);
+      if let Some(saved) = f.bool("is_favorited") {
+        folder.extra.insert("saved".into(), saved.into());
+      }
+      folder
+    })
+    .collect();
+  Ok(Page::new(folders, api::next_param(&v, "offset")))
+}
+
 /// The first folder of a user (the default one for the logged-in account).
 pub async fn first_folder(api: &Api, user: Option<&str>) -> Result<String> {
   let first = folders(

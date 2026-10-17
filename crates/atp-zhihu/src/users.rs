@@ -2,6 +2,7 @@
 //! following or blocking them.
 
 use atp_core::bulk;
+use atp_core::http::Method;
 use atp_core::{Action, Error, Page, PageReq, Post, Result, User, ValueExt};
 
 use crate::api::{Api, V4};
@@ -107,7 +108,8 @@ pub(crate) async fn owner(api: &Api, user: Option<&str>) -> Result<String> {
   }
 }
 
-/// Follow a user (`members`) or a question (`questions`).
+/// Follow a user (`members`), a question (`questions`) or a topic
+/// (`topics`).
 pub async fn follow(api: &Api, resource: &str, id: &str, undo: bool) -> Result<Action> {
   api.prepare_write().await?;
   let url = format!("{V4}/{resource}/{id}/followers");
@@ -118,6 +120,33 @@ pub async fn follow(api: &Api, resource: &str, id: &str, undo: bool) -> Result<A
   };
   api.call(req).await?;
   Ok(Action::done(if undo { "unfollow" } else { "follow" }, id))
+}
+
+/// Follow (subscribe to) a column, as its page does: `PUT
+/// columns/{id}/follow` or `unfollow`.
+pub async fn follow_column(api: &Api, id: &str, undo: bool) -> Result<Action> {
+  api.prepare_write().await?;
+  let verb = if undo { "unfollow" } else { "follow" };
+  let url = format!("{V4}/columns/{id}/{verb}");
+  api.call(api.request(Method::PUT, &url)).await?;
+  Ok(Action::done(verb, id).with_url(format!("https://zhuanlan.zhihu.com/{id}")))
+}
+
+/// Follow someone's favorites folder; unfollowing names you in the path
+/// (`collections/{id}/followers/{your id}`), as the folder page does.
+pub async fn follow_folder(api: &Api, id: &str, undo: bool) -> Result<Action> {
+  let url = format!("{V4}/collections/{id}/followers");
+  let req = if undo {
+    let me = whoami(api).await?.id;
+    api.prepare_write().await?;
+    api.delete(&format!("{url}/{me}"))
+  } else {
+    api.prepare_write().await?;
+    api.post(&url)
+  };
+  api.call(req).await?;
+  let verb = if undo { "unfollow" } else { "follow" };
+  Ok(Action::done(verb, id).with_url(format!("https://www.zhihu.com/collection/{id}")))
 }
 
 /// Block a user (屏蔽 / 拉黑), or unblock.

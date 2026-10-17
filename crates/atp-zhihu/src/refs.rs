@@ -212,18 +212,26 @@ pub fn column_id(arg: &str) -> Result<String> {
 
 /// A topic id, bare or from `https://www.zhihu.com/topic/<id>`.
 pub fn topic_id(arg: &str) -> Result<String> {
+  numeric_after(arg, "/topic/").ok_or_else(|| Error::input(format!("not a Zhihu topic: `{arg}`")))
+}
+
+/// A favorites folder id, bare or from `https://www.zhihu.com/collection/<id>`.
+pub fn folder_id(arg: &str) -> Result<String> {
+  numeric_after(arg, "/collection/")
+    .ok_or_else(|| Error::input(format!("not a Zhihu favorites folder: `{arg}`")))
+}
+
+/// The digits after `marker` in a link, or the whole argument when it is
+/// digits alone.
+fn numeric_after(arg: &str, marker: &str) -> Option<String> {
   let id = arg
     .trim()
     .trim_end_matches('/')
-    .rsplit("/topic/")
+    .rsplit(marker)
     .next()
     .unwrap_or_default()
     .split(['/', '?', '#'])
     .next()
     .unwrap_or_default();
-  if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) {
-    Ok(id.to_owned())
-  } else {
-    Err(Error::input(format!("not a Zhihu topic: `{arg}`")))
-  }
+  is_id(id).then(|| id.to_owned())
 }
