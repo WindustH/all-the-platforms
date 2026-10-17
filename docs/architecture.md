@@ -6,6 +6,7 @@ knows as little as possible about the others.
 
 ```
 src/main.rs                 registry: lists the platforms, nothing else
+src/lib.rs                  the library: atp-core plus each platform crate behind its feature
 crates/atp-core          platform-agnostic kernel
 crates/atp-<platform>    one crate per platform (atp-zhihu, atp-telegram ...)
 crates/atp-meta          Graph API pieces shared by atp-facebook, atp-instagram and atp-threads
@@ -16,8 +17,17 @@ Naming, layout and size rules are in [conventions.md](conventions.md).
 
 Dependencies only point downwards: the binary depends on every crate,
 platform crates depend on `atp-core` only, and `atp-core` knows no
-platform. Adding a platform means adding a crate and one `.platform::<P>()`
-line in `src/main.rs`.
+platform. Adding a platform means adding a crate, one `.platform::<P>()`
+line in `src/main.rs`, and its feature (`name = ["dep:atp-name"]`, listed
+in `all`) with its re-export in `src/lib.rs`.
+
+The `atp` package is also a library. Its default feature `cli` builds the
+binary with every platform; `default-features = false` plus platform
+features (`zhihu`, `douyin` ...) gives just those crates, re-exported as
+modules next to everything of `atp-core`. `atp_core::open` builds a
+platform outside the CLI: the saved session (or cookies given in code),
+the same HTTP client and pacing, and `save_session` to keep a refreshed
+one. Each platform crate re-exports its `Command` enum for `run_extra`.
 
 ## atp-core
 
@@ -28,6 +38,7 @@ line in `src/main.rs`.
 | `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `FileEntry` (drives), `Page<T>`, `Action`, `AuthStatus`, `Insights`, `Transcript`, and `Data` (everything a command can print), one file per type |
 | `cli` | the shared commands, one module per area (`account`, `read`, `library`, `write`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options; questions on the terminal (`prompt`) |
 | `app` | top-level program, multi-call (`bili` symlink) |
+| `open` | platforms in Rust code: `open`, `Open` (cookies, proxy, timeout), `save_session` |
 | `platforms` | `atp platforms`: one row per platform grouped by kind, `atp platforms <id>` in detail, the same data as JSON |
 | `account` | `login` (QR / token / browser / cookie string), `logout`, `status` |
 | `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, proxy; `request` (building, sending, retries, streaming), `response` |

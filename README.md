@@ -49,6 +49,8 @@ $ atp tg listen -f jsonl          # every new Telegram message, as it arrives
   stable fields and error codes; piped output switches to YAML by itself.
   Posts, messages, users and comments share one shape across platforms.
   `atp mcp` serves every platform to AI agents over MCP.
+- **A Rust library too.** Build your own tools on any platform: pick it as a
+  crate feature and call the same operations as typed methods.
 - **Ready for analysis.** Creator analytics (`insights`: trends, traffic
   sources, audience), who liked and reposted a post, complete comment
   threads, chat exports, `--since` / `--until`, and CSV or JSON Lines output
@@ -217,6 +219,21 @@ From an AI agent, over MCP:
 
 ```sh
 claude mcp add atp -- atp mcp              # or: atp mcp --read-only
+```
+
+From Rust, as a library: each platform is a feature, and every command is a
+typed method with the same sessions and signing.
+
+```toml
+[dependencies]
+atp = { git = "https://github.com/WindustH/atp", default-features = false, features = ["zhihu"] }
+```
+
+```rust
+use atp::{PageReq, Platform, zhihu::Zhihu};
+
+let zhihu: Zhihu = atp::open()?;                 // the session `atp zhihu login` saved
+let hot = zhihu.hot(None, &PageReq::first(10)).await?;
 ```
 
 ## Documentation

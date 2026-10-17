@@ -5,9 +5,18 @@ edition = "2024"
 license = "MIT"
 description = "ATP (all-the-platforms): one command for all the platforms — social, video, music, podcasts, feeds, chat, shopping, travel and drives"
 
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 name = "atp"
 path = "src/main.rs"
+doc = false
+required-features = ["cli"]
+
+[[example]]
+name = "zhihu_hot"
+required-features = ["zhihu"]
 
 [workspace]
 members = [".", "crates/*"]
@@ -109,79 +118,221 @@ tracing = "0.1"
 url = "2"
 
 [features]
-default = ["browser"]
+# The `atp` command: every platform, and logins from local browsers.
+default = ["cli"]
+cli = ["all", "browser"]
 # Let `login --browser` read cookies from local browsers.
 browser = ["atp-core/browser"]
+# Every platform, for the library; or pick them one by one below.
+all = [
+  "zhihu",
+  "xhs",
+  "twitter",
+  "bilibili",
+  "reddit",
+  "youtube",
+  "mp",
+  "telegram",
+  "weibo",
+  "douyin",
+  "discord",
+  "tieba",
+  "tiktok",
+  "wechat",
+  "feishu",
+  "dingtalk",
+  "wecom",
+  "slack",
+  "mattermost",
+  "rocketchat",
+  "onebot",
+  "kook",
+  "satori",
+  "qq",
+  "misskey",
+  "matrix",
+  "vocechat",
+  "line",
+  "facebook",
+  "instagram",
+  "whatsapp",
+  "kuaishou",
+  "toutiao",
+  "xianyu",
+  "taobao",
+  "amap",
+  "googlemaps",
+  "baidumap",
+  "tencentmap",
+  "jd",
+  "pinduoduo",
+  "meituan",
+  "dianping",
+  "dewu",
+  "ctrip",
+  "quark",
+  "baidupan",
+  "netease",
+  "qqmusic",
+  "spotify",
+  "stackexchange",
+  "hackernews",
+  "lobsters",
+  "v2ex",
+  "bangumi",
+  "podcast",
+  "lemmy",
+  "rss",
+  "threads",
+  "mastodon",
+  "bluesky",
+  "discourse",
+  "douban",
+  "weread",
+  "juejin",
+  "xiaoyuzhou",
+  "jike",
+]
+zhihu = ["dep:atp-zhihu"]
+xhs = ["dep:atp-xhs"]
+twitter = ["dep:atp-twitter"]
+bilibili = ["dep:atp-bilibili"]
+reddit = ["dep:atp-reddit"]
+youtube = ["dep:atp-youtube"]
+mp = ["dep:atp-mp"]
+telegram = ["dep:atp-telegram"]
+weibo = ["dep:atp-weibo"]
+douyin = ["dep:atp-douyin"]
+discord = ["dep:atp-discord"]
+tieba = ["dep:atp-tieba"]
+tiktok = ["dep:atp-tiktok"]
+wechat = ["dep:atp-wechat"]
+feishu = ["dep:atp-feishu"]
+dingtalk = ["dep:atp-dingtalk"]
+wecom = ["dep:atp-wecom"]
+slack = ["dep:atp-slack"]
+mattermost = ["dep:atp-mattermost"]
+rocketchat = ["dep:atp-rocketchat"]
+onebot = ["dep:atp-onebot"]
+kook = ["dep:atp-kook"]
+satori = ["dep:atp-satori"]
+qq = ["dep:atp-qq"]
+misskey = ["dep:atp-misskey"]
+matrix = ["dep:atp-matrix"]
+vocechat = ["dep:atp-vocechat"]
+line = ["dep:atp-line"]
+facebook = ["dep:atp-facebook"]
+instagram = ["dep:atp-instagram"]
+whatsapp = ["dep:atp-whatsapp"]
+kuaishou = ["dep:atp-kuaishou"]
+toutiao = ["dep:atp-toutiao"]
+xianyu = ["dep:atp-xianyu"]
+taobao = ["dep:atp-taobao"]
+amap = ["dep:atp-amap"]
+googlemaps = ["dep:atp-googlemaps"]
+baidumap = ["dep:atp-baidumap"]
+tencentmap = ["dep:atp-tencentmap"]
+jd = ["dep:atp-jd"]
+pinduoduo = ["dep:atp-pinduoduo"]
+meituan = ["dep:atp-meituan"]
+dianping = ["dep:atp-dianping"]
+dewu = ["dep:atp-dewu"]
+ctrip = ["dep:atp-ctrip"]
+quark = ["dep:atp-quark"]
+baidupan = ["dep:atp-baidupan"]
+netease = ["dep:atp-netease"]
+qqmusic = ["dep:atp-qqmusic"]
+spotify = ["dep:atp-spotify"]
+stackexchange = ["dep:atp-stackexchange"]
+hackernews = ["dep:atp-hackernews"]
+lobsters = ["dep:atp-lobsters"]
+v2ex = ["dep:atp-v2ex"]
+bangumi = ["dep:atp-bangumi"]
+podcast = ["dep:atp-podcast"]
+lemmy = ["dep:atp-lemmy"]
+rss = ["dep:atp-rss"]
+threads = ["dep:atp-threads"]
+mastodon = ["dep:atp-mastodon"]
+bluesky = ["dep:atp-bluesky"]
+discourse = ["dep:atp-discourse"]
+douban = ["dep:atp-douban"]
+weread = ["dep:atp-weread"]
+juejin = ["dep:atp-juejin"]
+xiaoyuzhou = ["dep:atp-xiaoyuzhou"]
+jike = ["dep:atp-jike"]
 
 [dependencies]
 atp-core.workspace = true
-atp-zhihu.workspace = true
-atp-xhs.workspace = true
-atp-twitter.workspace = true
-atp-bilibili.workspace = true
-atp-reddit.workspace = true
-atp-youtube.workspace = true
-atp-mp.workspace = true
-atp-telegram.workspace = true
-atp-weibo.workspace = true
-atp-douyin.workspace = true
-atp-discord.workspace = true
-atp-tieba.workspace = true
-atp-tiktok.workspace = true
-atp-wechat.workspace = true
-atp-feishu.workspace = true
-atp-dingtalk.workspace = true
-atp-wecom.workspace = true
-atp-slack.workspace = true
-atp-mattermost.workspace = true
-atp-rocketchat.workspace = true
-atp-onebot.workspace = true
-atp-kook.workspace = true
-atp-satori.workspace = true
-atp-qq.workspace = true
-atp-misskey.workspace = true
-atp-matrix.workspace = true
-atp-vocechat.workspace = true
-atp-line.workspace = true
-atp-facebook.workspace = true
-atp-instagram.workspace = true
-atp-whatsapp.workspace = true
-atp-kuaishou.workspace = true
-atp-toutiao.workspace = true
-atp-xianyu.workspace = true
-atp-taobao.workspace = true
-atp-amap.workspace = true
-atp-googlemaps.workspace = true
-atp-baidumap.workspace = true
-atp-tencentmap.workspace = true
-atp-jd.workspace = true
-atp-pinduoduo.workspace = true
-atp-meituan.workspace = true
-atp-dianping.workspace = true
-atp-dewu.workspace = true
-atp-ctrip.workspace = true
-atp-quark.workspace = true
-atp-baidupan.workspace = true
-atp-netease.workspace = true
-atp-qqmusic.workspace = true
-atp-spotify.workspace = true
-atp-stackexchange.workspace = true
-atp-hackernews.workspace = true
-atp-lobsters.workspace = true
-atp-v2ex.workspace = true
-atp-bangumi.workspace = true
-atp-podcast.workspace = true
-atp-lemmy.workspace = true
-atp-rss.workspace = true
-atp-threads.workspace = true
-atp-mastodon.workspace = true
-atp-bluesky.workspace = true
-atp-discourse.workspace = true
-atp-douban.workspace = true
-atp-weread.workspace = true
-atp-juejin.workspace = true
-atp-xiaoyuzhou.workspace = true
-atp-jike.workspace = true
+atp-zhihu = { workspace = true, optional = true }
+atp-xhs = { workspace = true, optional = true }
+atp-twitter = { workspace = true, optional = true }
+atp-bilibili = { workspace = true, optional = true }
+atp-reddit = { workspace = true, optional = true }
+atp-youtube = { workspace = true, optional = true }
+atp-mp = { workspace = true, optional = true }
+atp-telegram = { workspace = true, optional = true }
+atp-weibo = { workspace = true, optional = true }
+atp-douyin = { workspace = true, optional = true }
+atp-discord = { workspace = true, optional = true }
+atp-tieba = { workspace = true, optional = true }
+atp-tiktok = { workspace = true, optional = true }
+atp-wechat = { workspace = true, optional = true }
+atp-feishu = { workspace = true, optional = true }
+atp-dingtalk = { workspace = true, optional = true }
+atp-wecom = { workspace = true, optional = true }
+atp-slack = { workspace = true, optional = true }
+atp-mattermost = { workspace = true, optional = true }
+atp-rocketchat = { workspace = true, optional = true }
+atp-onebot = { workspace = true, optional = true }
+atp-kook = { workspace = true, optional = true }
+atp-satori = { workspace = true, optional = true }
+atp-qq = { workspace = true, optional = true }
+atp-misskey = { workspace = true, optional = true }
+atp-matrix = { workspace = true, optional = true }
+atp-vocechat = { workspace = true, optional = true }
+atp-line = { workspace = true, optional = true }
+atp-facebook = { workspace = true, optional = true }
+atp-instagram = { workspace = true, optional = true }
+atp-whatsapp = { workspace = true, optional = true }
+atp-kuaishou = { workspace = true, optional = true }
+atp-toutiao = { workspace = true, optional = true }
+atp-xianyu = { workspace = true, optional = true }
+atp-taobao = { workspace = true, optional = true }
+atp-amap = { workspace = true, optional = true }
+atp-googlemaps = { workspace = true, optional = true }
+atp-baidumap = { workspace = true, optional = true }
+atp-tencentmap = { workspace = true, optional = true }
+atp-jd = { workspace = true, optional = true }
+atp-pinduoduo = { workspace = true, optional = true }
+atp-meituan = { workspace = true, optional = true }
+atp-dianping = { workspace = true, optional = true }
+atp-dewu = { workspace = true, optional = true }
+atp-ctrip = { workspace = true, optional = true }
+atp-quark = { workspace = true, optional = true }
+atp-baidupan = { workspace = true, optional = true }
+atp-netease = { workspace = true, optional = true }
+atp-qqmusic = { workspace = true, optional = true }
+atp-spotify = { workspace = true, optional = true }
+atp-stackexchange = { workspace = true, optional = true }
+atp-hackernews = { workspace = true, optional = true }
+atp-lobsters = { workspace = true, optional = true }
+atp-v2ex = { workspace = true, optional = true }
+atp-bangumi = { workspace = true, optional = true }
+atp-podcast = { workspace = true, optional = true }
+atp-lemmy = { workspace = true, optional = true }
+atp-rss = { workspace = true, optional = true }
+atp-threads = { workspace = true, optional = true }
+atp-mastodon = { workspace = true, optional = true }
+atp-bluesky = { workspace = true, optional = true }
+atp-discourse = { workspace = true, optional = true }
+atp-douban = { workspace = true, optional = true }
+atp-weread = { workspace = true, optional = true }
+atp-juejin = { workspace = true, optional = true }
+atp-xiaoyuzhou = { workspace = true, optional = true }
+atp-jike = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio.workspace = true
 
 [profile.release]
 lto = "thin"

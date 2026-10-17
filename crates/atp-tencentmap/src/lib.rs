@@ -21,6 +21,9 @@ mod sign;
 mod users;
 mod weather;
 
+/// The commands only this platform has, for [`Platform::run_extra`](atp_core::Platform::run_extra).
+pub use extra::Command;
+
 use std::time::Duration;
 
 use atp_core::geo::System;
@@ -59,7 +62,7 @@ impl Platform for TencentMap {
 
   const COORD: Option<System> = Some(System::Gcj02);
 
-  type Extra = extra::Command;
+  type Extra = Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self { api: Api::new(ctx) })

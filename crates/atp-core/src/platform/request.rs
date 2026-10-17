@@ -14,6 +14,19 @@ pub struct PageReq {
 }
 
 impl PageReq {
+  /// The first page, asking for about `size` items.
+  pub fn first(size: usize) -> Self {
+    Self { cursor: None, size }
+  }
+
+  /// The page at `cursor` (a page's `next_cursor`).
+  pub fn at(cursor: impl Into<String>, size: usize) -> Self {
+    Self {
+      cursor: Some(cursor.into()),
+      size,
+    }
+  }
+
   /// Upstream page size: the wanted count clamped to `[1, max]`.
   pub fn size_within(&self, max: usize) -> usize {
     self.size.clamp(1, max)

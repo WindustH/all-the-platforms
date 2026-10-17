@@ -20,6 +20,9 @@ mod topics;
 mod uploads;
 mod users;
 
+/// The commands only this platform has, for [`Platform::run_extra`](atp_core::Platform::run_extra).
+pub use extra::Command;
+
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -85,7 +88,7 @@ impl Platform for Jike {
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = extra::Command;
+  type Extra = Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self { api: Api::new(ctx) })

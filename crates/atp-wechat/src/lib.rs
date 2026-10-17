@@ -22,6 +22,9 @@ mod parse;
 mod refs;
 mod uploads;
 
+/// The commands only this platform has, for [`Platform::run_extra`](atp_core::Platform::run_extra).
+pub use extra::Command;
+
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -65,7 +68,7 @@ impl Platform for Wechat {
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = extra::Command;
+  type Extra = Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self {

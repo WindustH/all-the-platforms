@@ -21,6 +21,9 @@ mod traffic;
 mod users;
 mod weather;
 
+/// The commands only this platform has, for [`Platform::run_extra`](atp_core::Platform::run_extra).
+pub use extra::Command;
+
 use std::time::Duration;
 
 use atp_core::geo::System;
@@ -59,7 +62,7 @@ impl Platform for BaiduMap {
 
   const COORD: Option<System> = Some(System::Bd09);
 
-  type Extra = extra::Command;
+  type Extra = Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self { api: Api::new(ctx) })

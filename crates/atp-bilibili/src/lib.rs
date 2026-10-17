@@ -34,6 +34,9 @@ mod sign;
 mod users;
 mod videos;
 
+/// The commands only this platform has, for [`Platform::run_extra`](atp_core::Platform::run_extra).
+pub use extra::Command;
+
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -136,7 +139,7 @@ impl Platform for Bilibili {
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = extra::Command;
+  type Extra = Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self { api: Api::new(ctx) })

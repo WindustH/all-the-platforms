@@ -24,6 +24,9 @@ mod singers;
 mod songs;
 mod users;
 
+/// The commands only this platform has, for [`Platform::run_extra`](atp_core::Platform::run_extra).
+pub use extra::Command;
+
 use std::time::Duration;
 
 use atp_core::{
@@ -93,7 +96,7 @@ impl Platform for QqMusic {
     guide: include_str!("../GUIDE.md"),
   };
 
-  type Extra = extra::Command;
+  type Extra = Command;
 
   fn new(ctx: Ctx) -> Result<Self> {
     Ok(Self { api: Api::new(ctx) })

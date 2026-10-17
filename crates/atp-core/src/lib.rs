@@ -26,6 +26,7 @@ mod mcp;
 pub mod model;
 pub mod music;
 pub mod oauth;
+pub mod open;
 pub mod output;
 pub mod paging;
 pub mod platform;
@@ -46,6 +47,7 @@ pub use error::{Error, ErrorCode, Result};
 pub use http::Http;
 pub use json::ValueExt;
 pub use model::*;
+pub use open::{Open, open, save_session};
 pub use platform::{
   Cap, Choices, Draft, Edit, Message, NoExtra, PageReq, Platform, PlatformInfo, PlatformKind,
   QrStatus, QrTicket, Query, Reply,

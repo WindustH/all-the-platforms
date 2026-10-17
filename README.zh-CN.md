@@ -46,6 +46,8 @@ $ atp tg listen -f jsonl          # 实时输出每一条新的 Telegram 消息
 - **为 Agent 和脚本设计。** 所有结果都装在同一个信封里，字段和错误码稳定；
   输出被管道接走时自动切换为 YAML。帖子、消息、用户、评论在各平台是同一种结构。
   `atp mcp` 把所有平台作为 MCP 服务提供给 AI Agent。
+- **也是 Rust 库。** 想基于某个平台做自己的项目，把它作为 crate feature 引入，
+  用带类型的方法调用同样的功能。
 - **直接用于数据分析。** 创作者后台数据（`insights`：趋势、流量来源、观众画像）、
   点赞和转发的人、完整的评论楼中楼、聊天记录导出、`--since` / `--until` 时间过滤，
   以及可直接导入 pandas / DuckDB 的 CSV、JSON Lines 输出。
@@ -207,6 +209,20 @@ atp feishu listen -f jsonl                     # 实时输出事件
 
 ```sh
 claude mcp add atp -- atp mcp              # 或 atp mcp --read-only（只读）
+```
+
+在 Rust 项目里当作库使用：每个平台是一个 feature，每条命令都是带类型的方法，登录状态和签名与命令行共用。
+
+```toml
+[dependencies]
+atp = { git = "https://github.com/WindustH/atp", default-features = false, features = ["zhihu"] }
+```
+
+```rust
+use atp::{PageReq, Platform, zhihu::Zhihu};
+
+let zhihu: Zhihu = atp::open()?;                 // 使用 `atp zhihu login` 保存的登录状态
+let hot = zhihu.hot(None, &PageReq::first(10)).await?;
 ```
 
 ## 文档
