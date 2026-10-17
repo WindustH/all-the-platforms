@@ -3,11 +3,12 @@
 //! Markdown as text, pins (沸点), the hot ranking and home feeds, search,
 //! comments with their replies, users, their articles, followers and
 //! followings, without an account. With a login: 点赞, collecting into
-//! collection sets, comments and replies, following, and the daily
-//! check-in.
+//! collection sets, comments and replies, following, the daily check-in,
+//! and editing your articles ([`edits`]).
 
 mod api;
 mod comments;
+mod edits;
 mod extra;
 mod feeds;
 mod library;
@@ -24,8 +25,8 @@ pub use extra::Command;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Page, PageReq, Platform, PlatformInfo,
-  PlatformKind, Post, Query, Reply, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Edit, Page, PageReq, Platform,
+  PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -60,6 +61,9 @@ impl Platform for Juejin {
       Cap::Favorite,
       Cap::Comment,
       Cap::Follow,
+      Cap::Edit,
+      Cap::EditTitle,
+      Cap::EditTopics,
       Cap::Download,
     ],
     choices: Choices {
@@ -149,6 +153,10 @@ impl Platform for Juejin {
 
   async fn favorite(&self, post: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
     library::favorite(&self.api, post, folder, undo).await
+  }
+
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    edits::edit(&self.api, post, edit).await
   }
 
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {

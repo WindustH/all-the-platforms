@@ -30,7 +30,7 @@ There are no tokens and no other environment variables.
 
 `whoami`, `collections` without a user, `like` / `unlike`, `favorite` /
 `unfavorite`, `comment` (and replies with `--reply-to`), `follow` /
-`unfollow`, and `check-in`.
+`unfollow`, `check-in`, and `edit` of your articles.
 
 ### How long it lasts
 
@@ -49,6 +49,10 @@ again.
   Douyin, without a page id; whether Juejin accepts ATP's signature has not
   been verified with a logged-in account. A refused signature shows as
   Juejin's own error.
+- `edit` talks to api.juejin.cn as the article editor does: no `a_bogus`,
+  but the CSRF token of ByteDance's secsdk (fetched once per run from
+  `/user_api/v1/sys/token`). This too has not been verified with a
+  logged-in account.
 - When api.juejin.cn answers with its bot check instead of data, commands
   fail with `verification_required` and juejin.cn as the page to open; on
   a terminal ATP opens it in your Chrome, you pass it by hand, and the
@@ -131,6 +135,33 @@ replies to a comment. Images are not supported.
 
 `pins USER`: a user's pins, newest first.
 
+### edit
+
+`edit ARTICLE [TEXT] [--title TITLE] [--topic TAG ...]` changes one of
+your articles the way the article editor (juejin.cn/editor) does: it
+loads the article's draft, saves it with the changes and publishes it
+again. It prints the change (each field as old → new) and asks (`-y` in
+scripts).
+
+- TEXT is the whole new Markdown (`-` reads a file from stdin). Images
+  already on Juejin keep working; other image links stay links (the
+  editor's copying of outside images to Juejin is not done). Articles
+  written in the rich-text editor can change their title and tags, not
+  their text.
+- `--topic` replaces the tags with Juejin tags of exactly those names
+  (looked up with the editor's tag search; a name without a match is
+  refused with the closest ones). At least one tag stays.
+- The category, cover, summary (摘要), columns (专栏) and topics (话题)
+  stay as they are; the summary is not rewritten for a new text. A new
+  cover is not supported.
+- Juejin reviews an updated article before showing the new version.
+  Pins (沸点) cannot be edited on Juejin.
+
+```
+atp juejin edit https://juejin.cn/post/7234567890123456789 - < article.md
+atp juejin edit 7234567890123456789 --title '新标题' --topic Rust --topic 后端
+```
+
 ### check-in
 
 The daily check-in (签到): answers the points gained and the total, or
@@ -138,6 +169,6 @@ that today's check-in was already done.
 
 ## Limits
 
-No QR login, no publishing articles or pins, no deleting, no
+No QR login, no publishing new articles or pins, no deleting, no
 notifications, no booklets (小册), courses or the lottery, no comment
 images, and no following feed (it needs a login ATP has not verified).

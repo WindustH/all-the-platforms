@@ -3,9 +3,11 @@
 //! for a month) and `spider=0`. Reads need no signature. Some writes are
 //! among the paths Juejin's page signs with ByteDance's `a_bogus` (its
 //! `bdms` SDK): those go out signed with [`atp_bytedance::abogus`] and an
-//! `msToken`, as the page sends them. Answers are `{err_no, err_msg,
-//! data}`; a page instead of JSON is Juejin's bot check.
+//! `msToken`, as the page sends them. The article editor's calls carry
+//! the secsdk CSRF token instead ([`Api::editor`]). Answers are `{err_no,
+//! err_msg, data}`; a page instead of JSON is Juejin's bot check.
 
+use std::cell::RefCell;
 use std::time::Duration;
 
 use atp_bytedance::abogus::{self, JUEJIN};
@@ -30,16 +32,26 @@ const SIGNED: &[&str] = &[
 const UUID_KEY: &str = "uuid";
 const UUID_TTL: Duration = Duration::from_secs(30 * 24 * 3600);
 const LOGIN_HINT: &str = "log in with `atp juejin login --browser` or `--cookie`";
+/// Where the secsdk hands out CSRF tokens, and the SDK version it names.
+const CSRF_PATH: &str = "/user_api/v1/sys/token";
+const CSRF_VERSION: &str = "1.2.10";
+/// What the secsdk sends when it got no token.
+const CSRF_DOWNGRADE: &str = "DOWNGRADE";
 
 pub struct Api {
   pub ctx: Ctx,
+  /// The editor's CSRF token, fetched once per run.
+  csrf: RefCell<Option<String>>,
 }
 
 impl Api {
   pub fn new(mut ctx: Ctx) -> Self {
     ctx.http.set_header("referer", &format!("{SITE}/"));
     ctx.http.set_header("origin", SITE);
-    Self { ctx }
+    Self {
+      ctx,
+      csrf: RefCell::new(None),
+    }
   }
 
   pub fn require_login(&self) -> Result<()> {
@@ -126,6 +138,61 @@ impl Api {
       .send()
       .await?;
     self.check(resp, path)
+  }
+
+  /// A call of the article editor (juejin.cn/editor): logged in, `POST` of
+  /// a JSON body with the secsdk CSRF token (`x-secsdk-csrf-token`), as the
+  /// editor's patched `fetch` sends every write to api.juejin.cn.
+  pub async fn editor(&self, path: &str, body: &Value) -> Result<Value> {
+    self.require_login()?;
+    let token = self.csrf_token().await?;
+    let resp = self
+      .ctx
+      .http
+      .request(Method::POST, format!("{API}{path}"))
+      .queries(self.common())
+      .header("x-secsdk-csrf-token", token)
+      .json(body)
+      .send()
+      .await?;
+    self.check(resp, path)
+  }
+
+  /// An editor call that changes something: after a pause like a
+  /// person's, as [`write`](Self::write) waits.
+  pub async fn editor_write(&self, path: &str, body: &Value) -> Result<Value> {
+    self.require_login()?;
+    self
+      .ctx
+      .http
+      .pause(Duration::from_millis(800), Duration::from_millis(2000))
+      .await;
+    self.editor(path, body).await
+  }
+
+  /// The CSRF token: `HEAD /user_api/v1/sys/token` answers it in
+  /// `x-ware-csrf-token` (`0,TOKEN,TTL_MS,…`); without one the SDK sends
+  /// `DOWNGRADE`, and so does ATP.
+  async fn csrf_token(&self) -> Result<String> {
+    if let Some(token) = self.csrf.borrow().clone() {
+      return Ok(token);
+    }
+    let resp = self
+      .ctx
+      .http
+      .request(Method::HEAD, format!("{API}{CSRF_PATH}"))
+      .header("x-secsdk-csrf-request", "1")
+      .header("x-secsdk-csrf-version", CSRF_VERSION)
+      .send()
+      .await?;
+    let answer = resp.header("x-ware-csrf-token").unwrap_or_default();
+    let fields: Vec<&str> = answer.split(',').collect();
+    let token = match fields.as_slice() {
+      ["0", token, ..] if !token.is_empty() => (*token).to_owned(),
+      _ => CSRF_DOWNGRADE.to_owned(),
+    };
+    *self.csrf.borrow_mut() = Some(token.clone());
+    Ok(token)
   }
 
   /// The answer's data, or the error it stands for.
