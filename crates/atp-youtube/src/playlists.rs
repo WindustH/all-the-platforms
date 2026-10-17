@@ -15,6 +15,9 @@ pub const PRIVACY: &[&str] = &["private", "unlisted", "public"];
 /// Videos sent in one `browse/edit_playlist` call by `folder-add` and
 /// `folder-remove`; how many YouTube takes at once is not known.
 const BATCH: usize = 50;
+/// Pages of a playlist `playlist-move` reads at most (a playlist holds
+/// 5,000 videos, about 100 a page).
+const PAGES: usize = 60;
 
 fn privacy(name: &str) -> Result<&'static str> {
   match name {
@@ -181,13 +184,13 @@ pub async fn reorder(api: &Api, folder: &str, post: &str, after: Option<&str>) -
 }
 
 /// `(video id, setVideoId)` of the playlist's entries, read page by page
-/// until every video of `wanted` turned up (the first entry of each) or the
-/// playlist ends.
+/// until every video of `wanted` turned up (the first entry of each), the
+/// playlist ends or [`PAGES`] pages were read.
 async fn entries(api: &Api, id: &str, wanted: &[String]) -> Result<Vec<(String, String)>> {
   api.require_login()?;
   let mut found: Vec<(String, String)> = Vec::new();
   let mut req = PageReq::first(100);
-  loop {
+  for _ in 0..PAGES {
     let l = parse::listing(&api.browse(&format!("VL{id}"), None, &req).await?);
     for post in &l.posts {
       let set = post.extra.get("set_video_id").and_then(Value::as_str);
@@ -203,9 +206,10 @@ async fn entries(api: &Api, id: &str, wanted: &[String]) -> Result<Vec<(String, 
     }
     match l.next {
       Some(next) => req.cursor = Some(next),
-      None => return Ok(found),
+      None => break,
     }
   }
+  Ok(found)
 }
 
 /// Save someone's playlist to the library (or remove it with `undo`).
