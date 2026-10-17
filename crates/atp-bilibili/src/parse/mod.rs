@@ -9,7 +9,7 @@ pub mod insights;
 mod video;
 
 pub use dynamic::{dynamic, dynamic_video, forward, from_desktop};
-pub use video::video;
+pub use video::{favorite, video};
 
 use atp_core::text::{from_secs, html_to_text};
 use atp_core::{Collection, Comment, Notification, User, Value, ValueExt, json};
@@ -86,6 +86,52 @@ pub fn user(v: &Value) -> User {
     .filter(|t| !t.is_empty())
   {
     u.extra.insert("official".into(), json!(title));
+  }
+  u
+}
+
+/// Whose relation list a row comes from: only the logged-in account's own
+/// lists say how it relates to the people on them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Rows {
+  /// Someone else's lists, follow groups, the blacklist.
+  Others,
+  /// Your followers: whether you follow them back.
+  MyFollowers,
+  /// Whom you follow: mutual, follow groups, special follow.
+  MyFollowing,
+}
+
+/// A row of a relation list (`/x/relation/followings`, `followers`,
+/// `friends`, `tag`, `blacks`): the user and when the relation began;
+/// rows of your own lists add `mutual` (attribute 6) and, for whom you
+/// follow, `groups` (follow group ids) and `special` (特别关注).
+pub fn relation(v: &Value, rows: Rows) -> User {
+  let mut u = user(v);
+  if let Some(at) = secs(v, &["mtime"]) {
+    u.extra.insert("followed_at".into(), json!(at));
+  }
+  if rows == Rows::Others {
+    return u;
+  }
+  if let Some(attribute) = v.i64("attribute") {
+    u.extra.insert("mutual".into(), json!(attribute == 6));
+  }
+  if rows != Rows::MyFollowing {
+    return u;
+  }
+  if let Some(tags) = v.as_object().and_then(|o| o.get("tag")) {
+    let ids: Vec<String> = tags
+      .as_array()
+      .into_iter()
+      .flatten()
+      .filter_map(|t| t.as_i64())
+      .map(|t| t.to_string())
+      .collect();
+    u.extra.insert("groups".into(), json!(ids));
+  }
+  if let Some(special) = v.i64("special") {
+    u.extra.insert("special".into(), json!(special == 1));
   }
   u
 }

@@ -1,10 +1,11 @@
 //! Videos in their many shapes: `view`, popular / ranking / related lists,
-//! search results, space uploads, favorites, history and watch-later items.
+//! search results, space uploads, favorites, history and watch-later items;
+//! also the audio tracks and collections a favorites folder holds.
 
 use atp_core::{Media, Metrics, Post, Value, ValueExt, json};
 
 use super::{author, https, plain, secs};
-use crate::refs::Video;
+use crate::refs::{Resource, Video, space_url};
 
 /// Seconds from a number or a `m:ss` / `h:mm:ss` string.
 pub fn duration(v: &Value, paths: &[&str]) -> Option<u64> {
@@ -120,4 +121,62 @@ fn video_extra(v: &Value, p: &mut Post) {
   if pages > 1 {
     p.extra.insert("pages".into(), json!(pages));
   }
+}
+
+/// An item of a favorites folder (`/x/v3/fav/resource/list`): a video
+/// (type 2), an audio track (12) or a collection of videos (合集, 21),
+/// with when it was saved; `None` for other kinds.
+pub fn favorite(m: &Value) -> Option<Post> {
+  let mut p = match m.u64("type")? {
+    2 => video(m),
+    12 => {
+      let id = m.str("id")?;
+      let mut p = held(m, "audio", format!("au{id}"), Resource::audio_url(&id));
+      p.extra.insert("auid".into(), json!(id));
+      p
+    }
+    21 => {
+      let id = m.str("id")?;
+      let url = m
+        .str("upper.mid")
+        .map(|mid| format!("{}/lists/{id}?type=season", space_url(mid)));
+      let mut p = held(m, "season", format!("season:{id}"), url.unwrap_or_default());
+      p.extra.insert("season_id".into(), json!(id));
+      p
+    }
+    _ => return None,
+  };
+  if let Some(at) = m.i64("fav_time") {
+    p.extra.insert("favorited_at".into(), json!(at));
+  }
+  Some(p)
+}
+
+/// A folder item that is not a video, under its own id and link.
+fn held(m: &Value, kind: &str, id: String, url: String) -> Post {
+  let mut p = Post {
+    id,
+    kind: kind.into(),
+    title: plain(m, &["title"]),
+    text: m
+      .str("intro")
+      .map(|s| s.trim().to_owned())
+      .filter(|s| !s.is_empty()),
+    url: Some(url).filter(|u| !u.is_empty()),
+    author: author(m, &["upper.mid"], &["upper.name"], &["upper.face"]),
+    created_at: secs(m, &["pubtime", "ctime"]),
+    metrics: metrics(m),
+    raw: Some(m.clone()),
+    ..Post::default()
+  };
+  if let Some(cover) = m.str("cover") {
+    p.media.push(Media {
+      alt: Some("cover".into()),
+      ..Media::image(https(cover))
+    });
+  }
+  if let Some(d) = duration(m, &["duration"]) {
+    p.extra.insert("duration".into(), json!(d));
+  }
+  p
 }

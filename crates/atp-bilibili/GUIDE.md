@@ -25,8 +25,9 @@ There are no other environment variables and no tokens.
 Most reads work without an account: search, hot, rankings, `read`,
 `comments`, `user`, `user-posts`, a user's lists and articles, bangumi,
 live rooms and `download`. Subtitles (most tracks), history, the dynamic
-feed, favorites of others, followers and following, notifications, watch
-later, chats, `live-following`, account insights and every write need one.
+feed, favorites of others, followers and following, follow groups, the
+blacklist, notifications, watch later, chats, `live-following`, account
+insights and every write need one.
 `listen` works logged out, but Bilibili hides the senders' names.
 
 Logged out, ATP fetches the device cookies a browser gets on its first
@@ -49,7 +50,11 @@ run `atp bili login` again.
 - HTTP 412 and codes -412, -509, -799, 34004, 12051, 12052 are
   `rate_limited`: wait a while before retrying, or log in.
 - ATP keeps at least 300 ms between requests and waits a random 0.4 to
-  1.2 s before every write.
+  1.2 s before every write, also between the users or posts of one
+  command.
+- Bilibili caps how many accounts one follows (22009) and blocks (22008);
+  bulk follows, blocks and removals are what risk control watches most:
+  space them out with `--interval`.
 - ATP speaks the website's own API, the way the web client does (WBI
   signatures, device cookies); it is not an official API.
 
@@ -71,7 +76,13 @@ run `atp bili login` again.
   `MID/series/ID`.
 - Favorites folders: the folder id, a `…/favlist?fid=<id>` link or `#N`
   after `collections`.
-- Follow groups: the group id or its exact name.
+- What a favorites folder holds (`folder-remove`, `folder-move`): videos,
+  audio tracks (`au123`, `https://www.bilibili.com/audio/au123`) and
+  collections (`season:ID`, a 合集's space link or `MID/ID`), or `#N`
+  after `favorites --folder F`.
+- Follow groups: the group id, its exact name or `#N` after
+  `follow-groups`. `-10` is the special-follow list (特别关注), `0` the
+  default group (默认分组) of everyone in no other group.
 - Topics (话题): the id or a link with `topic_id=`.
 - Private chats: `dm:MID` from `chats`, a uid or a space link (never a name).
 - Comments: `ROOT`, or `ROOT:PARENT` for a reply inside a thread; reply to
@@ -103,6 +114,26 @@ Includes the lifetime plays of the user's uploads.
 
 Need a login, also for other users. Bilibili caps others' lists at 5 pages.
 
+- `following --sort recent` (the default, latest follow first) or
+  `--sort visited` (most visited first, 最常访问); `visited` orders only
+  your own list.
+- `following [USER] --search WORDS` finds followings by name (Bilibili's
+  followings search, in follow order; no `--sort`).
+- `following --mutual` lists your mutual follows (互相关注), all in one
+  call; it takes no USER, `--sort` or `--search`.
+- On your own `following`, rows carry `extra.mutual`, `extra.groups`
+  (follow group ids, `[]` for the default group), `extra.special`
+  (特别关注) and `extra.followed_at`; on your own `followers`,
+  `extra.mutual` (whether you follow back) and `extra.followed_at`.
+  Others' lists carry `followed_at` only.
+
+### follow, unfollow
+
+Following several users goes through Bilibili's batch call, 50 users per
+call: all of them are looked up first (a name that finds nobody stops the
+command before anything changes), and users the call refuses come back
+with `ok: false`. Unfollowing several goes one by one.
+
 ### comments, replies
 
 `comments` works on videos, dynamics and articles. `--sort hot` (default)
@@ -122,7 +153,10 @@ of your folders; without it the default folder.
 ### collections, favorites
 
 `collections [USER]` lists favorites folders; `favorites [USER] [--folder
-F]` the videos of a folder (the default folder when omitted).
+F]` what a folder holds (the default folder when omitted), newest saved
+first, with `extra.favorited_at` (unix seconds). Besides videos a folder
+holds audio tracks (`kind: audio`, id `au…`) and collections of videos
+(合集, `kind: season`, id `season:ID`, linked to the owner's space).
 
 ### post
 
@@ -266,23 +300,66 @@ live start / end as they happen (names are hidden from logged-out viewers).
 `watch-later`, `later-add VIDEO`, `later-remove VIDEO`, `later-clear
 [--watched] [-y]` (emptying the whole list asks first; `-y` in scripts).
 
-### folder-create, folder-edit, folder-clean, folder-delete, saved-folders, save
+### folder-create, folder-edit, folder-delete
 
-`folder-create TITLE [--intro] [--private]`, `folder-edit`, `folder-clean`
-(drops unavailable videos), `folder-delete [-y]` (asks first; `-y` in
-scripts), `saved-folders` (folders and 合集 you saved), `save FOLDER|LIST
-[--undo]`.
+- `folder-create NAME [--desc TEXT] [--private]`; the result carries the
+  new folder's id and link.
+- `folder-edit FOLDER` changes `--name`, `--desc`, `--private` /
+  `--public` and `--cover IMAGE`; Bilibili's edit takes the whole folder,
+  so what is not given is sent back as it was. A new cover is uploaded
+  first; Bilibili reviews covers.
+- `folder-delete FOLDER… [-y]` deletes the folders with what they hold,
+  20 folders per call. The default folder cannot be deleted.
 
-### groups, group, group-create, group-rename, group-delete, group-assign, special
+### folder-add, folder-remove, folder-move
 
-`groups`, `group GROUP`, `group-create`, `group-rename`, `group-delete
-[-y]` (asks first, `-y` in scripts; its people move to the default group),
-`group-assign USER… --to GROUP…` (replaces their groups), `special USER
-[--undo]` (特别关注).
+- `folder-add FOLDER VIDEO…` saves videos, one call each (as
+  `favorite --folder` does); audio and 合集 are not added here.
+- `folder-remove FOLDER POST…` takes videos, audio (`au…`) and 合集
+  (`season:ID`) out, 20 per call.
+- `folder-move FROM TO POST… [--copy]` uses Bilibili's own move and copy,
+  20 per call; both folders must be yours.
+- POST arguments are all read before anything changes: one that is not a
+  video, `au…` or 合集 stops the command.
 
-### blacklist, block, shared-following
+### folder-clean, saved-folders, save
 
-`blacklist`, `block USER [--undo]`, `shared-following USER`.
+`folder-clean FOLDER` drops the videos that became unavailable,
+`saved-folders` lists the folders and 合集 you saved from others, `save
+FOLDER|LIST [--undo]` saves one or drops it.
+
+### follow-groups, follow-group, follow-group-create, follow-group-rename, follow-group-delete, follow-group-add, follow-group-remove
+
+- `follow-groups` lists your groups with the special-follow list (`-10`)
+  and the default group (`0`) among them.
+- `follow-group GROUP [--sort recent|visited]`; its rows carry no
+  relation details beyond `followed_at`.
+- `follow-group-delete GROUP [-y]` asks first; its people move to the
+  default group.
+- `follow-group-add` / `follow-group-remove GROUP USER…`: Bilibili sets a
+  user's groups all at once, so ATP reads each user's groups first and
+  sends them back with GROUP added or taken out, one user at a time; a
+  special follow stays. A user taken out of their last group lands in the
+  default group, and `0` itself is refused. Users you do not follow are
+  refused by Bilibili.
+
+### special
+
+`special USER [--undo]` marks a special follow (特别关注), the `-10`
+group.
+
+### block, unblock, blocked, remove-follower
+
+- `block USER…`: several users go through Bilibili's batch call, 50 per
+  call; `unblock` goes one by one.
+- `blocked` is your blacklist (黑名单), with `extra.blocked_at`.
+- `remove-follower USER… [-y]` (移除粉丝) asks first; one call per user.
+- Follows, blocks and removals send the fields the space page sends with
+  them.
+
+### shared-following
+
+`shared-following USER` lists the people both you and USER follow.
 
 ### comment-like, comment-pin, danmaku-send
 
@@ -295,3 +372,7 @@ SECS [--color HEX] [--mode scroll|top|bottom]`.
 - The data center no longer reports traffic sources (recommend, search ...).
 - Per-video trends cover the first and the last 30 days after publishing.
 - Reposts carry only a display date, so `--since` cannot filter them.
+- `following --sort visited` and `--mutual` exist for your own account
+  only.
+- How many users or items one batch call takes beyond what ATP sends (50
+  users, 20 folder items) is not known.

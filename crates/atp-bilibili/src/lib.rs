@@ -15,6 +15,7 @@ mod dynamics;
 mod edits;
 mod extra;
 mod folders;
+mod groups;
 mod history;
 mod insights;
 mod library;
@@ -43,9 +44,9 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, Insights, Media,
-  Message, Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus,
-  QrTicket, Query, Reply, Result, User, ValueExt,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, FolderSpec,
+  FollowQuery, Insights, Media, Message, Notification, Page, PageReq, Platform, PlatformInfo,
+  PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User, ValueExt,
 };
 
 use crate::api::Api;
@@ -128,6 +129,23 @@ impl Platform for Bilibili {
       Cap::Messages,
       Cap::Send,
       Cap::Listen,
+      Cap::FollowingSearch,
+      Cap::FollowingMutual,
+      Cap::RemoveFollower,
+      Cap::Block,
+      Cap::Blocked,
+      Cap::FollowGroups,
+      Cap::FollowGroupEdit,
+      Cap::FollowGroupMembers,
+      Cap::FolderCreate,
+      Cap::FolderEdit,
+      Cap::FolderDescription,
+      Cap::FolderPrivacy,
+      Cap::FolderCover,
+      Cap::FolderDelete,
+      Cap::FolderAdd,
+      Cap::FolderRemove,
+      Cap::FolderMove,
     ],
     choices: Choices {
       search_sort: &["totalrank", "click", "pubdate", "dm", "stow", "scores"],
@@ -144,6 +162,9 @@ impl Platform for Bilibili {
     guest: "search, hot, read, comments, user, user-posts, live, listen, download",
     guide: include_str!("../GUIDE.md"),
   };
+
+  const FOLLOWING_SORT: &'static [&'static str] = &["recent", "visited"];
+  const FOLLOW_GROUP_SORT: &'static [&'static str] = &["recent", "visited"];
 
   type Extra = Command;
 
@@ -240,7 +261,16 @@ impl Platform for Bilibili {
   }
 
   async fn following(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    users::following(&self.api, user, page).await
+    users::following(&self.api, user, &FollowQuery::default(), page).await
+  }
+
+  async fn following_with(
+    &self,
+    user: &str,
+    query: &FollowQuery,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    users::following(&self.api, user, query, page).await
   }
 
   async fn collections(&self, user: Option<&str>, _page: &PageReq) -> Result<Page<Collection>> {
@@ -302,7 +332,87 @@ impl Platform for Bilibili {
   }
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
-    users::follow(&self.api, user, undo).await
+    relations::follow(&self.api, user, undo).await
+  }
+
+  async fn follow_users(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    relations::follow_users(&self.api, users, undo).await
+  }
+
+  async fn remove_followers(&self, users: &[String]) -> Result<Vec<Action>> {
+    relations::remove_followers(&self.api, users).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    relations::block(&self.api, users, undo).await
+  }
+
+  async fn blocked(&self, page: &PageReq) -> Result<Page<User>> {
+    relations::blocked(&self.api, page).await
+  }
+
+  async fn follow_groups(&self, _page: &PageReq) -> Result<Page<Collection>> {
+    groups::list(&self.api).await
+  }
+
+  async fn follow_group(
+    &self,
+    group: &str,
+    sort: Option<&str>,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    groups::members(&self.api, group, sort, page).await
+  }
+
+  async fn follow_group_create(&self, name: &str) -> Result<Action> {
+    groups::create(&self.api, name).await
+  }
+
+  async fn follow_group_rename(&self, group: &str, name: &str) -> Result<Action> {
+    groups::rename(&self.api, group, name).await
+  }
+
+  async fn follow_group_delete(&self, group: &str) -> Result<Action> {
+    groups::delete(&self.api, group).await
+  }
+
+  async fn follow_group_add(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    groups::add(&self.api, group, users).await
+  }
+
+  async fn follow_group_remove(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    groups::remove(&self.api, group, users).await
+  }
+
+  async fn folder_create(&self, folder: &FolderSpec) -> Result<Action> {
+    folders::create(&self.api, folder).await
+  }
+
+  async fn folder_edit(&self, folder: &str, change: &FolderSpec) -> Result<Action> {
+    folders::edit(&self.api, folder, change).await
+  }
+
+  async fn folder_delete(&self, folders: &[String]) -> Result<Vec<Action>> {
+    folders::delete(&self.api, folders).await
+  }
+
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    folders::add(&self.api, folder, posts).await
+  }
+
+  async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    folders::remove(&self.api, folder, posts).await
+  }
+
+  /// Natively: `resource/move` or `resource/copy`.
+  async fn folder_move(
+    &self,
+    from: &str,
+    to: &str,
+    posts: &[String],
+    copy: bool,
+  ) -> Result<Vec<Action>> {
+    folders::shift(&self.api, from, to, posts, copy).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {

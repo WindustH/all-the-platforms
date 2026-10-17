@@ -1,160 +1,129 @@
-//! Relations beyond follow / unfollow: follow groups (分组), special
-//! follows, the blacklist and followings shared with another user.
+//! Changing relations: follow / unfollow (several users in one batch
+//! call), blocks and the blacklist, removing followers, special follows,
+//! and the followings shared with another user.
 
-use atp_core::text::from_secs;
-use atp_core::{Action, Collection, Error, Page, PageReq, Result, User, Value, ValueExt, json};
+use atp_core::bulk;
+use atp_core::{Action, Error, Page, PageReq, Result, User, ValueExt, json};
 
 use crate::api::Api;
 use crate::paging::Pn;
+use crate::parse::{self, Rows};
 use crate::refs::space_url;
-use crate::{parse, users};
+use crate::users;
 
-const TAGS: &str = "https://api.bilibili.com/x/relation/tags";
-const TAG: &str = "https://api.bilibili.com/x/relation/tag";
-const TAG_CREATE: &str = "https://api.bilibili.com/x/relation/tag/create";
-const TAG_UPDATE: &str = "https://api.bilibili.com/x/relation/tag/update";
-const TAG_DEL: &str = "https://api.bilibili.com/x/relation/tag/del";
-const ADD_USERS: &str = "https://api.bilibili.com/x/relation/tags/addUsers";
+const MODIFY: &str = "https://api.bilibili.com/x/relation/modify";
+const BATCH_MODIFY: &str = "https://api.bilibili.com/x/relation/batch/modify";
 const SPECIAL_ADD: &str = "https://api.bilibili.com/x/relation/tag/special/add";
 const SPECIAL_DEL: &str = "https://api.bilibili.com/x/relation/tag/special/del";
 const BLACKS: &str = "https://api.bilibili.com/x/relation/blacks";
-const MODIFY: &str = "https://api.bilibili.com/x/relation/modify";
 const SAME: &str = "https://api.bilibili.com/x/relation/same/followings";
 
-/// The web client tags these writes with its device description.
-const DEVICE: &str = r#"{"platform":"web","device":"pc","spmid":"333.1387"}"#;
+/// Users one `batch/modify` call takes.
+const BATCH: usize = 50;
 
-/// Your follow groups, with how many people each holds.
-pub async fn groups(api: &Api) -> Result<Page<Collection>> {
-  api.require_login()?;
-  let data = api.get(TAGS).send().await?;
-  let items = data
-    .as_array()
-    .into_iter()
-    .flatten()
-    .map(|t| Collection {
-      id: t.str("tagid").unwrap_or_default(),
-      kind: "group".into(),
-      name: t.str("name").unwrap_or_default(),
-      description: t.str("tip").filter(|d| !d.is_empty()),
-      items: t.count("count"),
-      raw: Some(t.clone()),
-      ..Collection::default()
-    })
-    .collect();
-  Ok(Page::last(items))
+/// What the space page reports with every relation change.
+const STATISTICS: &str = r#"{"appId":100,"platform":5}"#;
+
+/// The `act` of `/x/relation/modify`.
+#[derive(Debug, Clone, Copy)]
+enum Act {
+  Follow = 1,
+  Unfollow = 2,
+  Block = 5,
+  Unblock = 6,
+  RemoveFollower = 7,
 }
 
-/// A group id from its id or exact name.
-async fn group_id(api: &Api, group: &str) -> Result<String> {
-  if group.bytes().all(|b| b.is_ascii_digit() || b == b'-') {
-    return Ok(group.to_owned());
+impl Act {
+  fn name(self) -> &'static str {
+    match self {
+      Act::Follow => "follow",
+      Act::Unfollow => "unfollow",
+      Act::Block => "block",
+      Act::Unblock => "unblock",
+      Act::RemoveFollower => "remove-follower",
+    }
   }
-  groups(api)
-    .await?
-    .items
-    .into_iter()
-    .find(|g| g.name == group)
-    .map(|g| g.id)
-    .ok_or_else(|| Error::not_found(format!("no follow group named {group}")))
 }
 
-/// The people in one of your follow groups.
-pub async fn members(api: &Api, group: &str, page: &PageReq) -> Result<Page<User>> {
-  let id = group_id(api, group).await?;
-  let pn = Pn::of(page, 50);
-  let data = api
-    .get(TAG)
-    .arg("tagid", &id)
-    .arg("pn", pn.pn)
-    .arg("ps", pn.ps)
-    .send()
-    .await?;
-  let users: Vec<User> = data.as_array().into_iter().flatten().map(person).collect();
-  let full = users.len() >= pn.ps;
-  Ok(pn.page(users, full))
-}
-
-fn person(v: &Value) -> User {
-  let mut u = parse::user(v);
-  if let Some(at) = v.i64("mtime").and_then(from_secs) {
-    u.extra.insert("followed_at".into(), json!(at));
-  }
-  u
-}
-
-pub async fn create_group(api: &Api, name: &str) -> Result<Action> {
-  let data = api
-    .post(TAG_CREATE)
-    .query("x-bili-device-req-json", DEVICE)
-    .arg("tag", name)
-    .send()
-    .await?;
-  let id = data.str("tagid").unwrap_or_default();
-  Ok(Action::done("group-create", name).with_id(id))
-}
-
-pub async fn rename_group(api: &Api, group: &str, name: &str) -> Result<Action> {
-  let id = group_id(api, group).await?;
-  api
-    .post(TAG_UPDATE)
-    .query("x-bili-device-req-json", DEVICE)
-    .arg("tagid", &id)
-    .arg("name", name)
-    .send()
-    .await?;
-  Ok(Action::done("group-rename", id).with_message(name.to_owned()))
-}
-
-pub async fn delete_group(api: &Api, group: &str) -> Result<Action> {
-  let id = group_id(api, group).await?;
-  api
-    .post(TAG_DEL)
-    .query("x-bili-device-req-json", DEVICE)
-    .arg("tagid", &id)
-    .send()
-    .await?;
-  Ok(Action::done("group-delete", id))
-}
-
-/// Put users into groups (replacing their current groups); no groups = 默认分组.
-pub async fn assign(api: &Api, users: &[String], groups: &[String]) -> Result<Action> {
-  let mut mids = Vec::new();
-  for u in users {
-    mids.push(users::mid(api, u).await?);
-  }
-  let mut ids = Vec::new();
-  for g in groups {
-    ids.push(group_id(api, g).await?);
-  }
-  let tags = if ids.is_empty() {
-    "0".to_owned()
-  } else {
-    ids.join(",")
-  };
-  api
-    .post(ADD_USERS)
-    .query("x-bili-device-req-json", DEVICE)
-    .arg("fids", mids.join(","))
-    .arg("tagids", &tags)
-    .send()
-    .await?;
-  Ok(Action::done("group-assign", mids.join(",")).with_message(format!("groups {tags}")))
-}
-
-/// Mark (or with `undo` unmark) a user as a special follow (特别关注).
-pub async fn special(api: &Api, input: &str, undo: bool) -> Result<Action> {
+/// One relation change, sent with the fields the space page sends.
+async fn modify(api: &Api, input: &str, act: Act) -> Result<Action> {
   let mid = users::mid(api, input).await?;
+  let entity = json!({ "entity": "user", "entity_id": mid.parse::<u64>().unwrap_or_default() });
   api
-    .post(if undo { SPECIAL_DEL } else { SPECIAL_ADD })
+    .post(MODIFY)
+    .query("statistics", STATISTICS)
     .arg("fid", &mid)
+    .arg("act", act as u8)
+    .arg("re_src", 11)
+    .arg("gaia_source", "web_main")
+    .arg("spmid", "333.1387.0.0")
+    .arg("extend_content", entity.to_string())
     .send()
     .await?;
-  let action = if undo { "unspecial" } else { "special" };
-  Ok(Action::done(action, &mid).with_url(space_url(&mid)))
+  Ok(Action::done(act.name(), &mid).with_url(space_url(&mid)))
 }
 
-pub async fn blacklist(api: &Api, page: &PageReq) -> Result<Page<User>> {
+pub async fn follow(api: &Api, input: &str, undo: bool) -> Result<Action> {
+  modify(api, input, if undo { Act::Unfollow } else { Act::Follow }).await
+}
+
+/// Follow several users, 50 per call; unfollowing goes one by one.
+pub async fn follow_users(api: &Api, inputs: &[String], undo: bool) -> Result<Vec<Action>> {
+  if undo {
+    return bulk::each("unfollow", inputs, async |u| follow(api, u, true).await).await;
+  }
+  in_batches(api, inputs, Act::Follow).await
+}
+
+/// Block (or with `undo` unblock) users: several blocks go 50 per call.
+pub async fn block(api: &Api, inputs: &[String], undo: bool) -> Result<Vec<Action>> {
+  let act = if undo { Act::Unblock } else { Act::Block };
+  if undo || inputs.len() == 1 {
+    return bulk::each(act.name(), inputs, async |u| modify(api, u, act).await).await;
+  }
+  in_batches(api, inputs, act).await
+}
+
+/// `batch/modify` (follow or block only): every user resolved first, then
+/// 50 at a time; the users it names in `failed_fids` failed.
+async fn in_batches(api: &Api, inputs: &[String], act: Act) -> Result<Vec<Action>> {
+  let mids = users::mids(api, inputs).await?;
+  let name = act.name();
+  bulk::batches(name, &mids, BATCH, String::clone, async |chunk| {
+    let data = api
+      .post(BATCH_MODIFY)
+      .arg("fids", chunk.join(","))
+      .arg("act", act as u8)
+      .arg("re_src", 11)
+      .send()
+      .await?;
+    let failed: Vec<String> = data
+      .list("failed_fids")
+      .iter()
+      .filter_map(|f| f.as_u64().map(|f| f.to_string()))
+      .collect();
+    let refused = Error::upstream(format!("Bilibili did not {name} this user"));
+    let one = |mid: &String| {
+      if failed.contains(mid) {
+        Action::failed(name, mid, &refused)
+      } else {
+        Action::done(name, mid).with_url(space_url(mid))
+      }
+    };
+    Ok(chunk.iter().map(one).collect())
+  })
+  .await
+}
+
+/// Make users stop following you, one by one.
+pub async fn remove_followers(api: &Api, inputs: &[String]) -> Result<Vec<Action>> {
+  let act = Act::RemoveFollower;
+  bulk::each(act.name(), inputs, async |u| modify(api, u, act).await).await
+}
+
+/// The users you blocked, with `extra.blocked_at`.
+pub async fn blocked(api: &Api, page: &PageReq) -> Result<Page<User>> {
   api.require_login()?;
   let pn = Pn::of(page, 50);
   let data = api
@@ -167,9 +136,9 @@ pub async fn blacklist(api: &Api, page: &PageReq) -> Result<Page<User>> {
     .list("list")
     .iter()
     .map(|v| {
-      let mut u = parse::user(v);
-      if let Some(at) = v.i64("mtime").and_then(from_secs) {
-        u.extra.insert("blocked_at".into(), json!(at));
+      let mut u = parse::relation(v, Rows::Others);
+      if let Some(at) = u.extra.remove("followed_at") {
+        u.extra.insert("blocked_at".into(), at);
       }
       u
     })
@@ -177,17 +146,15 @@ pub async fn blacklist(api: &Api, page: &PageReq) -> Result<Page<User>> {
   Ok(pn.page(users, pn.before(data.u64("total"))))
 }
 
-/// Block (or with `undo` unblock) a user.
-pub async fn block(api: &Api, input: &str, undo: bool) -> Result<Action> {
+/// Mark (or with `undo` unmark) a user as a special follow (特别关注).
+pub async fn special(api: &Api, input: &str, undo: bool) -> Result<Action> {
   let mid = users::mid(api, input).await?;
   api
-    .post(MODIFY)
+    .post(if undo { SPECIAL_DEL } else { SPECIAL_ADD })
     .arg("fid", &mid)
-    .arg("act", if undo { 6 } else { 5 })
-    .arg("re_src", 11)
     .send()
     .await?;
-  let action = if undo { "unblock" } else { "block" };
+  let action = if undo { "unspecial" } else { "special" };
   Ok(Action::done(action, &mid).with_url(space_url(&mid)))
 }
 
@@ -203,6 +170,10 @@ pub async fn shared(api: &Api, input: &str, page: &PageReq) -> Result<Page<User>
     .arg("ps", pn.ps)
     .send()
     .await?;
-  let users = data.list("list").iter().map(person).collect();
+  let users = data
+    .list("list")
+    .iter()
+    .map(|v| parse::relation(v, Rows::Others))
+    .collect();
   Ok(pn.page(users, pn.before(data.u64("total"))))
 }

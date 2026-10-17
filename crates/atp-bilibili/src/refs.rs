@@ -1,7 +1,7 @@
 //! Parse the ids and links users pass in: videos (BV / av / URL / b23.tv),
 //! dynamics (`t.bilibili.com`, `/opus/`), articles (`cv…`), users (mid /
-//! space URL / name), comment threads, favorites folders, bangumi seasons,
-//! live rooms and a user's collections (合集 / 系列).
+//! space URL / name), comment threads, favorites folders and what they
+//! hold, bangumi seasons, live rooms and a user's collections (合集 / 系列).
 
 use std::sync::LazyLock;
 
@@ -35,6 +35,8 @@ static LIST: LazyLock<Regex> = LazyLock::new(|| {
 static SPACE: LazyLock<Regex> = LazyLock::new(|| {
   Regex::new(r"(?:space\.bilibili\.com/|m\.bilibili\.com/space/)(\d+)").expect("valid regex")
 });
+static AUDIO: LazyLock<Regex> =
+  LazyLock::new(|| Regex::new(r"(?i)(?:^|/)au(\d+)\b").expect("valid regex"));
 
 /// A video, with both ids (they convert into each other) and the part (`?p=`).
 #[derive(Debug, Clone)]
@@ -264,6 +266,72 @@ pub fn reply_target(input: &str) -> Result<(String, String)> {
     Err(Error::input(format!(
       "bad comment id `{input}`: expected ROOT or ROOT:PARENT"
     )))
+  }
+}
+
+/// What a favorites folder holds: a video, an audio track (`au…`) or a
+/// collection (合集), as the folder calls take it (`ID:TYPE`).
+#[derive(Debug, Clone)]
+pub struct Resource {
+  pub id: u64,
+  /// 2 a video, 12 an audio track, 21 a collection.
+  pub kind: u8,
+  /// How results name it: the BV id, `au…` or `season:…`.
+  pub name: String,
+}
+
+impl Resource {
+  pub const VIDEO: u8 = 2;
+  pub const AUDIO: u8 = 12;
+  pub const SEASON: u8 = 21;
+
+  /// `ID:TYPE`, the form of the `resources` field.
+  pub fn key(&self) -> String {
+    format!("{}:{}", self.id, self.kind)
+  }
+
+  pub fn audio_url(id: impl std::fmt::Display) -> String {
+    format!("https://www.bilibili.com/audio/au{id}")
+  }
+}
+
+/// A post argument as an item of a favorites folder: a video, `au…` or an
+/// audio link, `season:ID`, or a collection's space link or `MID/ID`.
+pub async fn resource(api: &Api, input: &str) -> Result<Resource> {
+  let input = input.trim();
+  let number = |s: &str| {
+    s.parse::<u64>()
+      .map_err(|_| Error::input(format!("bad id in {input}")))
+  };
+  if let Some(c) = AUDIO.captures(input) {
+    let id = number(&c[1])?;
+    return Ok(Resource {
+      id,
+      kind: Resource::AUDIO,
+      name: format!("au{id}"),
+    });
+  }
+  let season = match input.strip_prefix("season:") {
+    Some(id) => Some(id.to_owned()),
+    None => list(input).ok().filter(|l| l.2 == "season").map(|l| l.1),
+  };
+  if let Some(id) = season {
+    let id = number(&id)?;
+    return Ok(Resource {
+      id,
+      kind: Resource::SEASON,
+      name: format!("season:{id}"),
+    });
+  }
+  match post(api, input).await? {
+    PostRef::Video(v) => Ok(Resource {
+      id: v.aid,
+      kind: Resource::VIDEO,
+      name: v.bvid,
+    }),
+    _ => Err(Error::input(format!(
+      "not something a favorites folder holds: {input} (videos, au… audio, 合集)"
+    ))),
   }
 }
 

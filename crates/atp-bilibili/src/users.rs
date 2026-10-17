@@ -1,19 +1,21 @@
-//! Users: profiles, name lookup, followers / following and (un)follow.
+//! Users: profiles, name lookup, and the followers / following lists
+//! (sorted, searched, mutual).
 
-use atp_core::text::from_secs;
-use atp_core::{Action, Error, Page, PageReq, Query, Result, User, ValueExt, json};
+use atp_core::{Error, FollowQuery, Page, PageReq, Query, Result, User, ValueExt, paging};
 
-use crate::api::Api;
+use crate::api::{Api, Call};
 use crate::paging::Pn;
+use crate::parse::{self, Rows};
 use crate::refs::{self, UserRef};
-use crate::{parse, videos};
+use crate::videos;
 
 const NAV: &str = "https://api.bilibili.com/x/web-interface/nav";
 
 const CARD: &str = "https://api.bilibili.com/x/web-interface/card";
 const FOLLOWERS: &str = "https://api.bilibili.com/x/relation/followers";
 const FOLLOWINGS: &str = "https://api.bilibili.com/x/relation/followings";
-const MODIFY: &str = "https://api.bilibili.com/x/relation/modify";
+const SEARCH: &str = "https://api.bilibili.com/x/relation/followings/search";
+const FRIENDS: &str = "https://api.bilibili.com/x/relation/friends";
 const UPSTAT: &str = "https://api.bilibili.com/x/space/upstat";
 
 /// A user argument as a mid; names are looked up with user search (best match).
@@ -71,54 +73,91 @@ pub async fn profile(api: &Api, input: &str) -> Result<User> {
   Ok(user)
 }
 
-/// Relation lists; Bilibili answers -101 / -352 to anonymous visitors.
-async fn relations(api: &Api, url: &str, input: &str, page: &PageReq) -> Result<Page<User>> {
-  api.require_login()?;
-  let mid = mid(api, input).await?;
+/// One page of a relation list; Bilibili answers -101 / -352 to
+/// anonymous visitors.
+async fn rows(call: Call<'_>, rows: Rows, page: &PageReq) -> Result<Page<User>> {
   let pn = Pn::of(page, 50);
-  let data = api
-    .get(url)
-    .arg("vmid", mid)
-    .arg("pn", pn.pn)
-    .arg("ps", pn.ps)
-    .arg("order", "desc")
-    .send()
-    .await?;
+  let data = call.arg("pn", pn.pn).arg("ps", pn.ps).send().await?;
   let users = data
     .list("list")
     .iter()
-    .map(|v| {
-      let mut u = parse::user(v);
-      // When the relation started (following / being followed).
-      if let Some(at) = v.i64("mtime").and_then(from_secs) {
-        u.extra.insert("followed_at".into(), json!(at));
-      }
-      u
-    })
+    .map(|v| parse::relation(v, rows))
     .collect();
   Ok(pn.page(users, pn.before(data.u64("total"))))
 }
 
+/// A user argument as a mid, and whether it is the logged-in account.
+async fn whose(api: &Api, input: &str) -> Result<(String, bool)> {
+  api.require_login()?;
+  let mid = mid(api, input).await?;
+  let own = my_mid(api).await? == mid;
+  Ok((mid, own))
+}
+
 /// Followers (others' lists are capped by Bilibili at 5 pages).
 pub async fn followers(api: &Api, input: &str, page: &PageReq) -> Result<Page<User>> {
-  relations(api, FOLLOWERS, input, page).await
+  let (mid, own) = whose(api, input).await?;
+  let call = api.get(FOLLOWERS).arg("vmid", &mid).arg("order", "desc");
+  let kind = if own { Rows::MyFollowers } else { Rows::Others };
+  rows(call, kind, page).await
 }
 
-pub async fn following(api: &Api, input: &str, page: &PageReq) -> Result<Page<User>> {
-  relations(api, FOLLOWINGS, input, page).await
+/// Whom a user follows, in follow order or (your own) most visited
+/// first, searched by name, or your mutual follows.
+pub async fn following(
+  api: &Api,
+  input: &str,
+  query: &FollowQuery,
+  page: &PageReq,
+) -> Result<Page<User>> {
+  let (mid, own) = whose(api, input).await?;
+  let kind = if own { Rows::MyFollowing } else { Rows::Others };
+  if query.mutual {
+    if !own || query.search.is_some() || query.sort.is_some() {
+      return Err(Error::input(
+        "--mutual lists your own mutual follows, without USER, --sort or --search",
+      ));
+    }
+    let data = api.get(FRIENDS).send().await?;
+    let users = data.list("list").iter().map(|v| parse::relation(v, kind));
+    return Ok(paging::slice(users.collect(), page));
+  }
+  let call = match (&query.search, query.sort.as_deref()) {
+    (Some(_), Some(_)) => {
+      return Err(Error::input(
+        "--search lists matches in follow order; drop --sort",
+      ));
+    }
+    (Some(words), None) => api.get(SEARCH).arg("vmid", &mid).arg("name", words),
+    (None, None | Some("recent")) => api.get(FOLLOWINGS).arg("vmid", &mid).arg("order", "desc"),
+    (None, Some("visited")) if own => api
+      .get(FOLLOWINGS)
+      .arg("vmid", &mid)
+      .arg("order_type", "attention"),
+    (None, Some("visited")) => {
+      return Err(Error::input(
+        "--sort visited orders only your own following",
+      ));
+    }
+    (None, Some(sort)) => {
+      return Err(Error::input(format!(
+        "unknown --sort {sort} (recent or visited)"
+      )));
+    }
+  };
+  let call = call
+    .arg("gaia_source", "main_web")
+    .arg("web_location", "333.1387");
+  rows(call, kind, page).await
 }
 
-pub async fn follow(api: &Api, input: &str, undo: bool) -> Result<Action> {
-  let mid = mid(api, input).await?;
-  api
-    .post(MODIFY)
-    .arg("fid", &mid)
-    .arg("act", if undo { 2 } else { 1 })
-    .arg("re_src", 11)
-    .send()
-    .await?;
-  let action = if undo { "unfollow" } else { "follow" };
-  Ok(Action::done(action, &mid).with_url(refs::space_url(&mid)))
+/// User arguments as mids, all of them before anything is sent.
+pub async fn mids(api: &Api, inputs: &[String]) -> Result<Vec<String>> {
+  let mut out = Vec::with_capacity(inputs.len());
+  for input in inputs {
+    out.push(mid(api, input).await?);
+  }
+  Ok(out)
 }
 
 /// The logged-in account (from `nav`, which also refreshes the WBI keys).

@@ -1,4 +1,5 @@
-//! Favorites folders and their videos, adding / removing videos, and the watch history.
+//! Favorites folders and what they hold (videos, audio, 合集), saving a
+//! video into a folder or taking it out, and the watch history.
 
 use atp_core::{Action, Collection, Error, Page, PageReq, Post, Result, Value, ValueExt, json};
 
@@ -51,7 +52,8 @@ async fn default_folder(api: &Api, mid: &str) -> Result<u64> {
     .ok_or_else(|| Error::not_found("this account has no favorites folder"))
 }
 
-/// Videos saved in a folder (the user's default folder when none is given).
+/// What a folder holds, newest saved first (the user's default folder when
+/// none is given).
 pub async fn favorites(
   api: &Api,
   user: Option<&str>,
@@ -78,14 +80,7 @@ pub async fn favorites(
   let posts = data
     .list("medias")
     .iter()
-    .filter(|m| m.u64("type") == Some(2))
-    .map(|m| {
-      let mut p = parse::video(m);
-      if let Some(at) = m.i64("fav_time") {
-        p.extra.insert("favorited_at".into(), json!(at));
-      }
-      p
-    })
+    .filter_map(parse::favorite)
     .collect();
   Ok(pn.page(posts, data.bool("has_more") == Some(true)))
 }
