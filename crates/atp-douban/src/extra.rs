@@ -4,7 +4,7 @@ use atp_core::cli::PageArgs;
 use atp_core::{Data, Result};
 
 use crate::api::Api;
-use crate::{groups, subjects, users};
+use crate::{contacts, groups, subjects, users};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -59,6 +59,13 @@ pub enum Command {
     /// Your stars, 1 to 5 (doing and done only)
     #[arg(short, long)]
     rating: Option<u8>,
+  },
+  /// Set the remark (备注) you see for someone you follow (needs a login)
+  Remark {
+    /// User: /people/ link, uid, user number or #N
+    user: String,
+    /// The remark; empty clears it
+    text: String,
   },
 }
 
@@ -141,6 +148,9 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       status,
       rating,
     } => Data::Action(users::mark(api, &ctx.post_ref(&subject)?, &status, rating).await?),
+    Command::Remark { user, text } => {
+      Data::Action(contacts::remark(api, &ctx.user_ref(&user)?, text.trim()).await?)
+    }
   })
 }
 

@@ -34,8 +34,9 @@ hide their marks, answer `permission_denied`.
 
 ### With an account
 
-`whoami`, `library` without a user (your own marks) and `mark`. `read`
-of a subject then also shows your own mark in `extra.interest`.
+`whoami`, `library` without a user (your own marks), `mark`, `follow` /
+`unfollow`, `block` and `remark`. `read` of a subject then also shows
+your own mark in `extra.interest`.
 
 ### How long it lasts
 
@@ -54,7 +55,12 @@ that need it fail with `not_authenticated` and the hint to log in again.
 - Writes are the risky part: Douban restricts or bans accounts that mark
   or comment in bursts or in patterns that look automated. `mark` waits 3
   to 8 s before it sends and changes one subject per run; do not loop it
-  over long lists.
+  over long lists. `follow`, `block` and `remark` wait the same before
+  each person.
+- When Douban wants a captcha for a follow (`need_captcha`), `follow`
+  fails with `verification_required` and the person's page, where you
+  follow by hand; ATP does not open it, as the captcha belongs to that
+  one request.
 
 ## References
 
@@ -151,6 +157,22 @@ subject page's form does (needs a login with `ck`). `doing` is for shows,
 books and albums only; films are `wish` or `done`. An existing short
 comment, tags and stars are kept unless `--rating` replaces the stars.
 See the ban risk under Logging in.
+
+### follow, unfollow
+
+`follow USER [--undo]` follows (关注) a person as their page on
+www.douban.com does, by their user number; a uid is looked up first.
+
+### block
+
+`block USER…` puts people on your blacklist (加入黑名单), which also ends
+the follow both ways, one call per person. Douban's pages have no call to
+take someone off it, so `unblock` is refused, and there is no `blocked`.
+
+### remark
+
+`remark USER TEXT` sets the remark (备注) you see for someone you follow;
+`remark USER ''` clears it.
 
 ## Limits
 

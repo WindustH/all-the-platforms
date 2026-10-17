@@ -2,10 +2,12 @@
 //! with their ratings, short comments (短评) and reviews, Douban's lists
 //! (榜单), groups (小组) with their topics and replies, users and what they
 //! marked, through the JSON API m.douban.com's pages call ([`api`]). With
-//! a login: your own marks, and marking a subject (想看 / 看过) with stars.
+//! a login: your own marks, marking a subject (想看 / 看过) with stars,
+//! and following, blocking and remarking people ([`contacts`]).
 
 mod api;
 mod comments;
+mod contacts;
 mod extra;
 mod groups;
 mod login;
@@ -20,8 +22,8 @@ pub use extra::Command;
 use std::time::Duration;
 
 use atp_core::{
-  Cap, Choices, Comment, Ctx, Data, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post,
-  QrStatus, QrTicket, Query, Result, User,
+  Action, Cap, Choices, Comment, Ctx, Data, Page, PageReq, Platform, PlatformInfo, PlatformKind,
+  Post, QrStatus, QrTicket, Query, Result, User,
 };
 
 use crate::api::Api;
@@ -47,6 +49,8 @@ impl Platform for Douban {
       Cap::Comments,
       Cap::User,
       Cap::Download,
+      Cap::Follow,
+      Cap::Block,
     ],
     choices: Choices {
       search_filter: subjects::FILTER_NAMES,
@@ -107,6 +111,15 @@ impl Platform for Douban {
 
   async fn user(&self, user: &str) -> Result<User> {
     users::user(&self.api, user).await
+  }
+
+  async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
+    contacts::follow(&self.api, user, undo).await
+  }
+
+  /// Blocks only: Douban's web has no call to unblock.
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    contacts::block(&self.api, users, undo).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

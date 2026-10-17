@@ -17,6 +17,8 @@ use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 
 /// The mobile site, whose pages make the calls.
 pub const MOBILE: &str = "https://m.douban.com";
+/// The main site, whose people pages follow and block.
+pub const WWW: &str = "https://www.douban.com";
 pub const REXXAR: &str = "https://m.douban.com/rexxar/api/v2";
 pub const ACCOUNTS: &str = "https://accounts.douban.com";
 /// Cookies of a logged-in session.
@@ -93,7 +95,7 @@ impl Api {
       .header("x-requested-with", "XMLHttpRequest")
       .send()
       .await?;
-    self.check(resp, page)
+    self.check(resp, &format!("{MOBILE}{page}"))
   }
 
   /// A page of a Douban site, as HTML (the film charts).
@@ -116,6 +118,39 @@ impl Api {
   /// needs `ck`, and waits a few seconds first (Douban bans accounts that
   /// write in bursts).
   pub async fn post(&self, path: &str, page: &str, form: &[(&str, String)]) -> Result<Value> {
+    let resp = self
+      .send_form(&format!("{REXXAR}{path}"), MOBILE, page, form)
+      .await?;
+    self.check(resp, &format!("{MOBILE}{page}"))
+  }
+
+  /// A change made from a page of www.douban.com (`/j/contact/…`), sent
+  /// as the posts of its scripts are (`post_withck`): the JSON answer, or
+  /// `None` when a call that succeeded answered something else.
+  pub async fn post_www(
+    &self,
+    path: &str,
+    page: &str,
+    form: &[(&str, String)],
+  ) -> Result<Option<Value>> {
+    let resp = self
+      .send_form(&format!("{WWW}{path}"), WWW, page, form)
+      .await?;
+    let json = serde_json::from_slice::<Value>(&resp.body).is_ok();
+    if resp.status.is_success() && !json && checkpoint(&resp).is_none() {
+      return Ok(None);
+    }
+    self.check(resp, &format!("{WWW}{page}")).map(Some)
+  }
+
+  /// A form with `ck`, from the page `page` of `site`, after a pause.
+  async fn send_form(
+    &self,
+    url: &str,
+    site: &str,
+    page: &str,
+    form: &[(&str, String)],
+  ) -> Result<Resp> {
     self.require_login()?;
     let ck = self.ck();
     if ck.is_empty() {
@@ -130,17 +165,20 @@ impl Api {
       .await;
     let mut form = form.to_vec();
     form.push((CK, ck));
-    let resp = http
-      .request(Method::POST, format!("{REXXAR}{path}"))
+    let mut req = http
+      .request(Method::POST, url)
       .form(form)
-      .header("referer", format!("{MOBILE}{page}"))
-      .header("origin", MOBILE)
-      .send()
-      .await?;
-    self.check(resp, page)
+      .header("referer", format!("{site}{page}"))
+      .header("origin", site);
+    // jQuery marks the www pages' posts as its own.
+    if site == WWW {
+      req = req.header("x-requested-with", "XMLHttpRequest");
+    }
+    req.send().await
   }
 
-  /// The JSON answer, or the error it stands for.
+  /// The JSON answer, or the error it stands for; `page` is the address
+  /// of the page the call was made from.
   fn check(&self, resp: Resp, page: &str) -> Result<Value> {
     if let Some(check) = checkpoint(&resp) {
       return Err(verification(check));
@@ -181,7 +219,7 @@ impl Api {
     }
     if code == 1108 || has(&["captcha", "spam", "verify", "abnormal"]) {
       return Error::new(ErrorCode::VerificationRequired, text)
-        .with_url(format!("{MOBILE}{page}"))
+        .with_url(page.to_owned())
         .with_hint("open the page in a browser and pass Douban's check, then retry");
     }
     match status {
