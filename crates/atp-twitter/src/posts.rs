@@ -1,7 +1,7 @@
 //! Reading tweets: one tweet, search, quotes, home feeds, user timelines,
 //! likes, bookmarks and lists.
 
-use atp_core::{Error, Page, PageReq, Post, Query, Result, ValueExt, json};
+use atp_core::{Error, Page, PageReq, Post, Query, Result, Value, ValueExt, json};
 
 use crate::api::Api;
 use crate::graphql::{
@@ -15,6 +15,19 @@ use crate::users::{self, SEARCH_TIMELINE};
 
 pub async fn read(api: &Api, arg: &str) -> Result<Post> {
   let id = refs::tweet_id(arg)?;
+  let result = result(api, &id).await?;
+  parse::post(&result).ok_or_else(|| {
+    let reason = result
+      .str("reason")
+      .or_else(|| result.str("__typename"))
+      .map(|r| format!(" ({r})"))
+      .unwrap_or_default();
+    Error::not_found(format!("tweet {id} not found or not visible{reason}"))
+  })
+}
+
+/// One tweet's result (`TweetResultByRestId`), as X sends it.
+pub async fn result(api: &Api, id: &str) -> Result<Value> {
   let variables = json!({
     "tweetId": id,
     "withCommunity": false,
@@ -22,14 +35,7 @@ pub async fn read(api: &Api, arg: &str) -> Result<Post> {
     "withVoice": false,
   });
   let data = api.graphql(&TWEET_RESULT, variables).await?;
-  parse::post(data.at("data.tweetResult.result")).ok_or_else(|| {
-    let reason = data
-      .str("data.tweetResult.result.reason")
-      .or_else(|| data.str("data.tweetResult.result.__typename"))
-      .map(|r| format!(" ({r})"))
-      .unwrap_or_default();
-    Error::not_found(format!("tweet {id} not found or not visible{reason}"))
-  })
+  Ok(data.at("data.tweetResult.result").clone())
 }
 
 /// `sort`: top (default) or latest; `filter`: media, images or videos.

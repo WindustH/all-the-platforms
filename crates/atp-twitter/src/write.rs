@@ -1,5 +1,6 @@
-//! Writing: likes, bookmarks, retweets, posting / replying / quoting,
-//! deleting and following. Every write pauses briefly first.
+//! Writing: likes, bookmarks, retweets, posting / replying / quoting
+//! (and the new versions of edits, [`edits`](crate::edits)), deleting and
+//! following. Every write pauses briefly first.
 
 use atp_core::{Action, Draft, Error, Reply, Result, Value, ValueExt, json};
 
@@ -67,6 +68,8 @@ pub struct Links {
   pub quote: Option<String>,
   /// The tweet this one replaces (an edit).
   pub edit: Option<String>,
+  /// The media are marked sensitive (an edit keeps the mark).
+  pub sensitive: bool,
 }
 
 /// `CreateTweet`; returns the new tweet id.
@@ -77,7 +80,7 @@ pub async fn create(api: &Api, text: &str, media_ids: &[String], links: &Links) 
     .collect();
   let mut variables = json!({
     "tweet_text": text,
-    "media": { "media_entities": entities, "possibly_sensitive": false },
+    "media": { "media_entities": entities, "possibly_sensitive": links.sensitive },
     "semantic_annotation_ids": [],
     "dark_request": false,
   });
@@ -108,7 +111,7 @@ pub async fn publish(api: &Api, draft: &Draft) -> Result<Action> {
   let links = Links {
     reply_to: draft.reply_to.as_deref().map(refs::tweet_id).transpose()?,
     quote: draft.quote.as_deref().map(refs::tweet_id).transpose()?,
-    edit: None,
+    ..Links::default()
   };
   let media = uploads::images(api, &draft.images).await?;
   let id = create(api, text.trim(), &media, &links).await?;
@@ -141,22 +144,6 @@ pub async fn reply(api: &Api, post: &str, reply: &Reply) -> Result<Action> {
     Action::done("comment", target)
       .with_id(&id)
       .with_url(tweet_url("i", &id)),
-  )
-}
-
-/// Edit one of your tweets (X Premium, within an hour of posting, five
-/// times at most): a new version replaces it.
-pub async fn edit(api: &Api, post: &str, text: &str) -> Result<Action> {
-  let id = refs::tweet_id(post)?;
-  let links = Links {
-    edit: Some(id.clone()),
-    ..Links::default()
-  };
-  let new = create(api, text, &[], &links).await?;
-  Ok(
-    Action::done("edit", &id)
-      .with_id(&new)
-      .with_url(tweet_url("i", &new)),
   )
 }
 

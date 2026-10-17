@@ -134,9 +134,24 @@ Deletes your tweets, or a direct message (`CONVERSATION/MESSAGE`).
 
 ### edit, edits
 
-`edit POST TEXT` needs X Premium and works within an hour of posting,
-five times at most; the new version replaces the tweet. `edits POST`
-lists the earlier versions of an edited tweet.
+`edit POST TEXT` replaces the text of one of your tweets with a new
+version (X Premium). It loads the tweet first and stops before asking
+when X says it cannot change: not eligible (posts with a poll, promoted
+posts), past the hour after posting, no edits left (five in all), or not
+the newest version (it names the one to edit). Then it prints the change
+(the text as old → new, the edits left and what it keeps) and asks (`-y`
+in scripts).
+
+- The new version keeps the media (in their order, with their sensitive
+  mark), the quoted tweet and the tweet it answers; people tagged in
+  photos are not carried over. Only the text changes.
+- The result's `id` is the new version's; the old id shows the newest
+  version on X. `edits POST` lists the earlier versions of an edited
+  tweet.
+
+```
+atp x edit 1844012345678901234 'Fixed typo: the launch is on Friday'
+```
 
 ### similar
 

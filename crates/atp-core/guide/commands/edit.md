@@ -20,7 +20,7 @@ cover and visibility.
   (`edit-visibility`). Elsewhere they are hidden and refused.
 - What is not given stays as it was.
 - Content platforms (Bilibili, Discourse, Douyin, Facebook, Instagram,
-  Jike, Juejin, Lemmy, Mastodon, Weibo, YouTube, Zhihu) load the post
+  Jike, Juejin, Lemmy, Mastodon, Weibo, X, YouTube, Zhihu) load the post
   first, print the change (each field as old → new) and ask; scripts
   pass `-y`. Chat platforms change a message at once.
 - The result is an Action with the post's `id` and `url`.

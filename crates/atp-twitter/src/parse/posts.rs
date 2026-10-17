@@ -8,8 +8,9 @@ use super::media::media;
 use super::user;
 use crate::refs::tweet_url;
 
-/// `TweetWithVisibilityResults` wraps the tweet of limited-visibility posts.
-fn unwrap(v: &Value) -> &Value {
+/// The tweet of a tweet result: `TweetWithVisibilityResults` wraps the
+/// tweet of limited-visibility posts.
+pub fn tweet(v: &Value) -> &Value {
   match v.at("tweet") {
     t @ Value::Object(_)
       if v.str("__typename").as_deref() == Some("TweetWithVisibilityResults") =>
@@ -31,11 +32,11 @@ pub fn post(v: &Value) -> Option<Post> {
 }
 
 fn post_at(result: &Value, depth: usize) -> Option<Post> {
-  let outer = unwrap(result);
+  let outer = tweet(result);
   if depth > 2 || !is_tweet(outer) {
     return None;
   }
-  let retweeted = unwrap(outer.at("legacy.retweeted_status_result.result"));
+  let retweeted = tweet(outer.at("legacy.retweeted_status_result.result"));
   let (t, retweeter) = if is_tweet(retweeted) {
     (retweeted, user(outer.at("core.user_results.result")))
   } else {

@@ -10,6 +10,7 @@ mod account;
 mod api;
 mod comments;
 mod communities;
+mod edits;
 mod extra;
 mod graphql;
 mod insights;
@@ -38,7 +39,7 @@ use std::collections::BTreeMap;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, FolderSpec, Insights, Message,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, FolderSpec, Insights, Message,
   Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result,
   User,
 };
@@ -261,8 +262,8 @@ impl Platform for Twitter {
     }
   }
 
-  async fn edit(&self, post: &str, text: &str) -> Result<Action> {
-    write::edit(&self.api, post, text).await
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    edits::edit(&self.api, post, edit).await
   }
 
   async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
