@@ -131,6 +131,28 @@ are not supported yet).
 
 `--type mention|reply|renote|quote|reaction|follow|receiveFollowRequest|pollEnded|achievementEarned`.
 
+### edit
+
+`edit NOTE TEXT` replaces the text of one of your notes, on the servers
+that can edit notes: Sharkey (`notes/edit`) and CherryPick
+(`notes/update`, for the roles its admins allow). Misskey itself has no
+edits (2023.9.2 brought them, 2023.10.0 took them out), and other
+servers are refused before anything is sent; ATP tells them apart by the
+server's nodeinfo. It loads the note first, prints the change (the text
+as old → new, with what it keeps) and asks (`-y` in scripts).
+
+- Only the text changes. The content warning, files, poll (with its
+  votes), quote, reply, channel and visibility go along as they are;
+  on CherryPick also an event, the right-click setting and a scheduled
+  deletion.
+- Notes with a closed poll (and on CherryPick an ended event) are
+  refused: the server would not take them back.
+- Chat messages cannot be edited here.
+
+```
+atp misskey edit 9xyzabc123 'Fixed the link: https://example.com'
+```
+
 ### delete
 
 A note of yours, or a chat message given as `<chat>/<message>`.
@@ -157,5 +179,5 @@ keeps closing ends with an error.
 
 ## Limits
 
-No editing (Misskey has none), no clips or antennas yet, and one file per
+No editing on Misskey itself (only on Sharkey and CherryPick), no clips or antennas yet, and one file per
 chat message.

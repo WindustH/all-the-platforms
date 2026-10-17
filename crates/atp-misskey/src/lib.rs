@@ -1,13 +1,14 @@
 //! Misskey for all-the-platforms (any instance; misskey.io by default).
 //!
-//! Notes ([`posts`]), users, reactions, renotes and hashtags through the
-//! HTTP API ([`api`]), chat (direct chats and rooms: [`chats`],
+//! Notes ([`posts`]; editing them on the forks that can, [`edits`]),
+//! users, reactions, renotes and hashtags through the HTTP API ([`api`]), chat (direct chats and rooms: [`chats`],
 //! [`messages`]), live events through the streaming socket ([`live`]), and
 //! tokens or MiAuth for logging in ([`login`]). Public timelines, notes and
 //! users are readable without an account where the instance allows it.
 
 mod api;
 mod chats;
+mod edits;
 mod extra;
 mod live;
 mod login;
@@ -26,7 +27,7 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Message, Notification, Page,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Message, Notification, Page,
   PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
   User,
 };
@@ -74,6 +75,7 @@ impl Platform for Misskey {
       Cap::Follow,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
       Cap::Download,
       Cap::Chats,
       Cap::Messages,
@@ -232,6 +234,10 @@ impl Platform for Misskey {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     posts::delete(&self.api, post).await
+  }
+
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    edits::edit(&self.api, post, edit).await
   }
 
   async fn chats(&self, parent: Option<&str>, _page: &PageReq) -> Result<Page<Collection>> {

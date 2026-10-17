@@ -19,7 +19,7 @@ pub const LIKE: &str = "❤";
 
 /// A note argument → its id on this instance (links to other servers are
 /// looked up with `ap/show`, which needs an account).
-async fn note_id(api: &Api, arg: &str) -> Result<String> {
+pub async fn note_id(api: &Api, arg: &str) -> Result<String> {
   match refs::note(arg, &api.instance())? {
     NoteRef::Id(id) => Ok(id),
     NoteRef::Remote(uri) => {
