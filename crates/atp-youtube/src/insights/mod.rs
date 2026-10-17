@@ -1,7 +1,7 @@
 //! Analytics.
 //!
 //! Creator analytics come from the official YouTube Analytics API with OAuth
-//! credentials in the environment ([`oauth`]): totals, daily series and
+//! credentials in the environment ([`oauth`](crate::oauth)): totals, daily series and
 //! distributions (traffic source, playback location, device, OS, subscribed
 //! status, region, sharing service, age, gender, top videos) of the channel
 //! or of one of its videos. YouTube Studio's own backend is not used: its
@@ -12,7 +12,6 @@
 //! Without OAuth, a logged-in account gets its channel's public numbers and
 //! its recent uploads; other people's videos always get their public counters.
 
-mod oauth;
 mod official;
 mod report;
 
@@ -21,13 +20,11 @@ use jiff::ToSpan;
 use jiff::civil::Date;
 use jiff::tz::TimeZone;
 
-use self::oauth::{Credentials, SETUP_HINT};
 use self::report::Analytics;
 use crate::api::Api;
 use crate::channels::Tab;
+use crate::oauth::{Credentials, SETUP_HINT};
 use crate::{account, channels, refs, videos};
-
-pub use self::oauth::authorize;
 
 const NO_REACH: &str = "impressions and click-through rate are shown in YouTube Studio only; the Analytics API does not report them";
 

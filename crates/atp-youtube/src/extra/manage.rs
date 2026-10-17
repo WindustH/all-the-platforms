@@ -5,10 +5,10 @@ use atp_core::cli::confirm;
 use atp_core::{Action, Data, Page, Result, json};
 
 use crate::api::Api;
-use crate::{account, channels, comments, insights, library, playlists, refs};
+use crate::{account, channels, comments, library, oauth, playlists, refs};
 
 pub async fn oauth(api: &Api) -> Result<Data> {
-  Ok(Data::Value(insights::authorize(&api.ctx).await?))
+  Ok(Data::Value(oauth::authorize(&api.ctx).await?))
 }
 
 pub async fn accounts(api: &Api) -> Result<Data> {

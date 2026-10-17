@@ -13,12 +13,14 @@ mod api;
 mod captions;
 mod channels;
 mod comments;
+mod edits;
 mod extra;
 mod insights;
 mod library;
 mod live;
 mod music;
 mod notifications;
+mod oauth;
 mod parse;
 mod playlists;
 mod proto;
@@ -37,7 +39,7 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Error, Insights, Media, Message,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Edit, Error, Insights, Media, Message,
   Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result,
   User,
 };
@@ -81,6 +83,11 @@ impl Platform for YouTube {
       Cap::Comment,
       Cap::DeleteComment,
       Cap::Follow,
+      Cap::Edit,
+      Cap::EditTitle,
+      Cap::EditTopics,
+      Cap::EditCover,
+      Cap::EditVisibility,
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
@@ -239,6 +246,10 @@ impl Platform for YouTube {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     channels::follow(&self.api, user, undo).await
+  }
+
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    edits::edit(&self.api, post, edit).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {

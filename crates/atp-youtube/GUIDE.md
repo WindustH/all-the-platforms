@@ -29,34 +29,40 @@ From some networks YouTube asks to "confirm you're not a bot"; the command
 then fails with `verification_required`. Log in (`--browser`), wait a
 while, or use another network with `--proxy`.
 
-### Analytics (OAuth)
+### Analytics and edits (OAuth)
 
-The cookie session gives `insights` public numbers only. Creator analytics
-come from the official YouTube Analytics API, set up once:
+The cookie session gives `insights` public numbers only, and cannot
+change videos. Creator analytics come from the official YouTube Analytics
+API and `edit` goes through the YouTube Data API, set up once:
 
 1. In Google Cloud Console create a project and enable the **YouTube
    Analytics API** and the **YouTube Data API v3**.
 2. Create an OAuth client of type **Desktop app**.
 3. `export YOUTUBE_CLIENT_ID=… YOUTUBE_CLIENT_SECRET=…` and run
    `atp yt oauth`. Open the URL it prints in a browser logged in to the
-   channel's Google account and allow access (read-only:
-   `yt-analytics.readonly` and `youtube.readonly`). The browser returns to
-   a local port on `127.0.0.1`; `oauth` waits 5 minutes for it.
+   channel's Google account and allow access (`yt-analytics.readonly`
+   and `youtube.readonly` to read, `youtube.force-ssl` to edit the
+   channel's videos). The browser returns to a local port on
+   `127.0.0.1`; `oauth` waits 5 minutes for it.
 4. Export the `YOUTUBE_REFRESH_TOKEN` it prints and keep it secret.
 
 ATP trades the refresh token for access tokens and caches each until
 shortly before it expires. How long Google keeps the refresh token valid
-is not known; when Google refuses it, `insights` fails with
+is not known; when Google refuses it, `insights` and `edit` fail with
 `not_authenticated` ("Google refused the OAuth credentials"): run
 `atp yt oauth` again. If Google sends no refresh token, revoke the app's
-access in the Google account and run `oauth` again.
+access in the Google account and run `oauth` again. A grant made before
+`oauth` asked for `youtube.force-ssl` can only read: `edit` stops with
+`not_authenticated` and the hint to run `oauth` again and export the new
+token. While the Google Cloud project's consent screen is in testing,
+Google ends refresh tokens after seven days.
 
 ### Environment
 
 - `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`: the OAuth client for
-  analytics; `oauth` needs them too.
+  analytics and edits; `oauth` needs them too.
 - `YOUTUBE_REFRESH_TOKEN`: the grant `oauth` prints; with all three set,
-  `insights` uses the Analytics API.
+  `insights` uses the Analytics API and `edit` works.
 - `ATP_YOUTUBE_COOKIE`: a cookie header for one run, never saved.
 
 ## References
@@ -253,7 +259,35 @@ video gets its public counters.
 
 ### oauth
 
-The one-time grant for `insights`; see Logging in.
+The one-time grant for `insights` and `edit`; see Logging in.
+
+### edit
+
+`edit VIDEO [TEXT] [--title TITLE] [--topic TAG ...] [--no-topics]
+[--cover IMAGE] [--visibility public|private]` changes one of your videos
+through the YouTube Data API; it needs the OAuth setup (see Logging in),
+not the cookie session. It loads the video first, prints the change (each
+field as old → new) and asks (`-y` in scripts).
+
+- TEXT replaces the description, `--title` the title (100 characters at
+  most), `--topic` the tags (`--no-topics` removes them; 500 characters
+  in all). The rest of the video's details (category, languages,
+  licence, embedding, made-for-kids) go back as they are, since the API
+  deletes what an update leaves out.
+- `--visibility public|private`; `friends` does not exist on YouTube
+  and is refused. Making a scheduled video public drops its schedule.
+  An unlisted video shows as `unlisted` in the summary.
+- `--cover` sets a custom thumbnail (JPEG or PNG, 2 MB at most, 1280×720
+  recommended); YouTube allows it only to channels verified by phone.
+- Only videos of the channel the grant was made for can change. Each
+  edit costs about 50 units of the project's daily API quota (10,000 by
+  default), a thumbnail 50 more. Community posts cannot be edited here.
+
+```
+atp yt edit dQw4w9WgXcQ --title 'Better title' --topic music --topic 1987
+atp yt edit https://youtu.be/dQw4w9WgXcQ - --visibility private -y < description.txt
+atp yt edit dQw4w9WgXcQ --cover thumb.jpg
+```
 
 ### download
 

@@ -71,7 +71,7 @@ pub enum Command {
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Grant read access to YouTube Analytics once (prints YOUTUBE_REFRESH_TOKEN)
+  /// Grant access to YouTube Analytics and video edits once (prints YOUTUBE_REFRESH_TOKEN)
   #[command(after_long_help = EX_OAUTH)]
   Oauth,
   /// Dislike a video (only you see it)

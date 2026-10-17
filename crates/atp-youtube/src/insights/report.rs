@@ -6,13 +6,12 @@
 //! dimensions (`day`, `insightTrafficSourceType`, `ageGroup` ...) are the
 //! API's; [`METRICS`] maps them to the shared snake_case keys.
 
-use atp_core::{Breakdown, Error, ErrorCode, Point, Result, Series, Share, Value, ValueExt};
+use atp_core::{Breakdown, Point, Result, Series, Share, Value, ValueExt};
 
-use super::oauth::{Credentials, SETUP_HINT};
 use crate::api::Api;
+use crate::oauth::{Credentials, DATA};
 
 const REPORTS: &str = "https://youtubeanalytics.googleapis.com/v2/reports";
-const DATA: &str = "https://www.googleapis.com/youtube/v3";
 
 /// API metric → shared key; `averageViewPercentage` becomes a 0..1 ratio.
 pub const METRICS: &[(&str, &str)] = &[
@@ -163,32 +162,11 @@ pub struct Analytics<'a> {
 impl Analytics<'_> {
   async fn get(&self, url: &str, query: &[(&str, String)]) -> Result<Value> {
     let ctx = &self.api.ctx;
-    let token = self.creds.token(ctx).await?;
-    let resp = ctx
+    let req = ctx
       .http
       .get(url)
-      .no_cookies()
-      .header("authorization", format!("Bearer {token}"))
-      .queries(query.iter().map(|(k, v)| (*k, v)))
-      .send()
-      .await?;
-    let v = resp.value().unwrap_or_default();
-    if resp.status.is_success() {
-      return Ok(v);
-    }
-    let message = v
-      .str("error.message")
-      .unwrap_or_else(|| format!("HTTP {}", resp.status));
-    Err(match resp.status.as_u16() {
-      401 => {
-        self.creds.forget(ctx);
-        Error::auth(format!("the OAuth token was refused: {message}")).with_hint(SETUP_HINT)
-      }
-      403 => Error::new(ErrorCode::PermissionDenied, message),
-      400 => Error::input(format!("YouTube Analytics: {message}")),
-      429 => Error::new(ErrorCode::RateLimited, message),
-      _ => Error::upstream(format!("YouTube Analytics: {message}")),
-    })
+      .queries(query.iter().map(|(k, v)| (*k, v)));
+    self.creds.send(ctx, req, "YouTube Analytics").await
   }
 
   /// A report of the authorized channel (`video` restricts it to one video).

@@ -20,9 +20,9 @@ cover and visibility.
   (`edit-visibility`). Elsewhere they are hidden and refused.
 - What is not given stays as it was.
 - Content platforms (Bilibili, Discourse, Douyin, Instagram, Jike,
-  Lemmy, Mastodon, Weibo, Zhihu) load the post first, print the change
-  (each field as old → new) and ask; scripts pass `-y`. Chat platforms
-  change a message at once.
+  Lemmy, Mastodon, Weibo, YouTube, Zhihu) load the post first, print the
+  change (each field as old → new) and ask; scripts pass `-y`. Chat
+  platforms change a message at once.
 - The result is an Action with the post's `id` and `url`.
 
 More: `atp guide refs`
