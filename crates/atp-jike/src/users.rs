@@ -1,8 +1,10 @@
 //! Users: profiles (`/1.0/users/profile`), what they posted
 //! (`/1.0/personalUpdate/single`), followers and following
-//! (`/1.0/userRelation/…`), and following someone. Without a login a
-//! profile and its latest posts come from the user's page on m.okjike.com.
+//! (`/1.0/userRelation/…`), and following or blocking someone. Without a
+//! login a profile and its latest posts come from the user's page on
+//! m.okjike.com.
 
+use atp_core::bulk;
 use atp_core::{Action, Error, Page, PageReq, Post, Result, User, Value, ValueExt, json};
 
 use crate::api::Api;
@@ -87,4 +89,20 @@ pub async fn follow(api: &Api, arg: &str, undo: bool) -> Result<Action> {
     )
     .await?;
   Ok(Action::done(verb, username))
+}
+
+/// Block (拉黑) users, or with `undo` unblock them, one call each, as the
+/// profile menu does (`addBlock` / `removeBlock`).
+pub async fn block(api: &Api, inputs: &[String], undo: bool) -> Result<Vec<Action>> {
+  let (action, path) = if undo {
+    ("unblock", "/1.0/userRelation/removeBlock")
+  } else {
+    ("block", "/1.0/userRelation/addBlock")
+  };
+  bulk::each(action, inputs, async |input| {
+    let username = refs::user(input)?;
+    api.write(path, json!({"username": username})).await?;
+    Ok(Action::done(action, username))
+  })
+  .await
 }

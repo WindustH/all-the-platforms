@@ -127,6 +127,12 @@ public page, without tabs.
 
 Your saved posts (收藏), one list without folders.
 
+### block, unblock
+
+`block USER…` / `unblock USER…` (拉黑) as the profile menu does, one call
+per user. Jike's web app lists no blocked users, so there is no
+`blocked`.
+
 ### comment
 
 `comment POST TEXT [--reply-to COMMENT] [-i PICTURE]`: one PNG or JPEG

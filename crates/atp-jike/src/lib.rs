@@ -79,6 +79,7 @@ impl Platform for Jike {
       Cap::EditTopics,
       Cap::EditVisibility,
       Cap::Download,
+      Cap::Block,
     ],
     choices: Choices {
       comment_sort: comments::SORTS,
@@ -224,6 +225,10 @@ impl Platform for Jike {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     users::follow(&self.api, user, undo).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    users::block(&self.api, users, undo).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {
