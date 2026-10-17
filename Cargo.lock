@@ -512,6 +512,7 @@ name = "atp-bilibili"
 version = "0.1.1"
 dependencies = [
  "atp-core",
+ "base64 0.22.1",
  "clap",
  "flate2",
  "futures-util",

@@ -12,6 +12,7 @@ mod comments;
 mod device;
 mod discover;
 mod dynamics;
+mod edits;
 mod extra;
 mod folders;
 mod history;
@@ -42,9 +43,9 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media, Message,
-  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket,
-  Query, Reply, Result, User, ValueExt,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, Insights, Media,
+  Message, Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus,
+  QrTicket, Query, Reply, Result, User, ValueExt,
 };
 
 use crate::api::Api;
@@ -115,6 +116,11 @@ impl Platform for Bilibili {
       Cap::Follow,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
+      Cap::EditTitle,
+      Cap::EditTopics,
+      Cap::EditCover,
+      Cap::EditVisibility,
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
@@ -315,6 +321,15 @@ impl Platform for Bilibili {
       PostRef::Dynamic(id) => dynamics::delete(&self.api, &id).await,
       PostRef::Video(_) => Err(Error::unsupported("delete (videos)")),
       PostRef::Article(_) => Err(Error::unsupported("delete (articles)")),
+    }
+  }
+
+  /// Videos through the creator center, dynamics through their editor.
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    match self.post(post).await? {
+      PostRef::Video(v) => edits::video(&self.api, &v, edit).await,
+      PostRef::Dynamic(id) => edits::dynamic(&self.api, &id, edit).await,
+      PostRef::Article(_) => Err(Error::unsupported("edit (articles)")),
     }
   }
 

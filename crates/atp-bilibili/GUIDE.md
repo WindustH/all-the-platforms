@@ -130,6 +130,48 @@ Publishes a dynamic: text and images, one topic id with `--topic`, `--quote
 DYNAMIC` to repost (a repost cannot carry images). Replies go through
 `comment`.
 
+### edit
+
+Changes one of your videos or dynamics. It loads the post first, prints
+the change (each field as old → new) and asks (`-y` in scripts).
+Articles (专栏) are not edited.
+
+Videos (`BV…`, `av…`) change the way the creator center's edit page
+changes them:
+
+- TEXT replaces the description (简介, at most 2000 characters).
+- `--title` replaces the title (at most 80 characters).
+- `--topic NAME` (repeatable) replaces the tags, 10 at most; a topic the
+  video joined (参与话题) keeps its tag in front. A video keeps at least
+  one tag, so `--no-topics` is refused.
+- `--cover IMAGE` uploads a new cover (a 16:9 JPEG or PNG); the 4:3 crop
+  is cleared.
+- `--visibility public|private`; `friends` is refused.
+- The edit page sends the whole record back, so every other field is
+  copied from what was loaded. Joint submissions (联合投稿), videos for
+  chargers (充电专属), interactive videos and videos with a commercial
+  order are refused, and so is a new cover while a cover test runs.
+- Bilibili reviews a changed video again. While a video is reviewed, or
+  before it first opens, Bilibili refuses the edit and says why.
+
+Dynamics (`t.bilibili.com/ID`) change the way their editor changes them:
+
+- TEXT replaces the text; @-mentions in it are plain text. Pictures stay.
+  A dynamic with a lottery or a vote keeps its text (a new one would drop
+  them).
+- `--title` sets the title, an empty one removes it; reposts have none.
+- `--topic ID` sets the one topic (a numeric topic id, as on `post`);
+  `--no-topics` removes it.
+- `--cover` and `--visibility` are refused.
+- Only dynamics Bilibili offers to edit change: your own, not while they
+  are reviewed.
+
+```
+atp bili edit BV1xx411c7mD --title '新标题' --topic 编程 --topic Rust
+atp bili edit BV1xx411c7mD --visibility private
+atp bili edit https://t.bilibili.com/1012345678901234567 '改过的文字'
+```
+
 ### delete
 
 Deletes dynamics only; videos and articles are not deleted here.
