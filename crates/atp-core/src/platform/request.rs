@@ -1,5 +1,5 @@
-//! What commands hand to a platform: paging, queries, drafts, messages,
-//! QR logins.
+//! What commands hand to a platform: paging, queries, drafts, edits,
+//! follow queries, folders, messages, QR logins.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -110,6 +110,49 @@ impl Edit {
       || self.visibility.is_some();
     self.text.as_deref().filter(|_| !others)
   }
+}
+
+/// How `following` orders or narrows the list; the default is the plain
+/// listing.
+#[derive(Debug, Clone, Default)]
+pub struct FollowQuery {
+  /// One of [`Platform::FOLLOWING_SORT`](super::Platform::FOLLOWING_SORT).
+  pub sort: Option<String>,
+  /// Only the accounts whose name matches ([`Cap::FollowingSearch`](super::Cap::FollowingSearch)).
+  pub search: Option<String>,
+  /// Only the accounts that follow back ([`Cap::FollowingMutual`](super::Cap::FollowingMutual)).
+  pub mutual: bool,
+}
+
+impl FollowQuery {
+  /// Nothing asked beyond the plain listing.
+  pub fn is_empty(&self) -> bool {
+    self.sort.is_none() && self.search.is_none() && !self.mutual
+  }
+
+  /// The first option given, as the name an `unsupported` error shows.
+  pub fn option(&self) -> &'static str {
+    if self.search.is_some() {
+      "following --search"
+    } else if self.mutual {
+      "following --mutual"
+    } else {
+      "following --sort"
+    }
+  }
+}
+
+/// A favorites folder to create (`folder-create`, with a `name`), or the
+/// changes to one (`folder-edit`): what is `None` stays as it is.
+#[derive(Debug, Clone, Default)]
+pub struct FolderSpec {
+  pub name: Option<String>,
+  /// [`Cap::FolderDescription`](super::Cap::FolderDescription).
+  pub description: Option<String>,
+  /// [`Cap::FolderPrivacy`](super::Cap::FolderPrivacy).
+  pub private: Option<bool>,
+  /// A cover image ([`Cap::FolderCover`](super::Cap::FolderCover)).
+  pub cover: Option<PathBuf>,
 }
 
 /// A comment to send. `images` stay empty unless the platform declares

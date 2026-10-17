@@ -20,6 +20,8 @@ bookmarked posts, all of them or one folder's.
   was saved, and a page of posts all published before `--since` ends the
   listing; on a list kept in saving order that can stop early.
 
-Save a post with `favorite POST [--folder F]`.
+Save a post with `favorite POST [--folder F]`; create, change and delete
+folders and move posts between them with `folder-create`, `folder-edit`,
+`folder-delete`, `folder-add`, `folder-remove` and `folder-move`.
 
 More: `atp guide refs`

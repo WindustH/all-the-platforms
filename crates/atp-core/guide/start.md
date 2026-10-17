@@ -64,6 +64,8 @@ Write, analyse, download:
 | People | `user`, `user-posts` (`posts`), `followers`, `following` |
 | Your library | `collections`, `favorites` (`bookmarks`), `likes`, `history`, `notifications`, `unread` |
 | Interact | `like` / `unlike`, `favorite` / `unfavorite`, `comment`, `delete-comment`, `follow` / `unfollow`, `post` (`publish`), `delete` |
+| Follows | `remove-follower`, `block` / `unblock`, `blocked`, `follow-groups`, `follow-group`, `follow-group-create` / `-rename` / `-delete` / `-add` / `-remove` |
+| Folders | `folder-create`, `folder-edit`, `folder-delete`, `folder-add`, `folder-remove`, `folder-move` |
 | Analytics | `insights [POST]` |
 
 Commands a platform does not support are hidden from its `--help` and

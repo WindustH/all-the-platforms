@@ -57,6 +57,33 @@ const SHARED: &[(&[&str], &str)] = &[
     include_str!("../../guide/commands/like.md"),
   ),
   (
+    &["block", "unblock", "blocked", "remove-follower"],
+    include_str!("../../guide/commands/block.md"),
+  ),
+  (
+    &[
+      "follow-groups",
+      "follow-group",
+      "follow-group-create",
+      "follow-group-rename",
+      "follow-group-delete",
+      "follow-group-add",
+      "follow-group-remove",
+    ],
+    include_str!("../../guide/commands/follow-groups.md"),
+  ),
+  (
+    &[
+      "folder-create",
+      "folder-edit",
+      "folder-delete",
+      "folder-add",
+      "folder-remove",
+      "folder-move",
+    ],
+    include_str!("../../guide/commands/folders.md"),
+  ),
+  (
     &["comment", "delete-comment"],
     include_str!("../../guide/commands/comment.md"),
   ),

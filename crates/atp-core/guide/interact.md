@@ -1,4 +1,4 @@
-# Interacting: likes, comments, follows, posts
+# Interacting: likes, comments, follows, folders, posts
 
 All of these need a login and act as your account.
 
@@ -6,7 +6,7 @@ All of these need a login and act as your account.
     atp <platform> favorite POST [--folder F] [--undo]
     atp <platform> comment POST "text" [--reply-to COMMENT] [-i IMAGE ...]
     atp <platform> delete-comment POST COMMENT [-y]
-    atp <platform> follow USER [--undo]        # unfollow: `unfollow USER`
+    atp <platform> follow USER... [--undo]     # unfollow: `unfollow USER...`
     atp <platform> post "text" [--title T] [-i IMAGE ...] [--topic T ...]
                          [--reply-to POST] [--quote POST]
                          [--video FILE | --article FILE] [--cover IMAGE]
@@ -28,7 +28,34 @@ All of these need a login and act as your account.
   WhatsApp and Matrix chats), or from whichever came last where it takes
   both (Reddit users or subreddits, Spotify users or playlists).
 - The result is an Action with the id and link of anything created.
+  `follow` / `unfollow` and the commands below take several users, posts
+  or folders and print an Action for each.
 - Writes pause a moment first on platforms that flag bursts.
+
+Organizing what you follow and save, where the platform offers it:
+
+    atp <platform> following [--sort KEY] [--search WORDS] [--mutual]
+    atp <platform> remove-follower USER... [-y]
+    atp <platform> block USER... [--undo]      # unblock: `unblock USER...`
+    atp <platform> blocked
+    atp <platform> follow-groups               # then follow-group GROUP
+    atp <platform> follow-group-create NAME
+    atp <platform> follow-group-rename GROUP NAME
+    atp <platform> follow-group-delete GROUP [-y]
+    atp <platform> follow-group-add GROUP USER...
+    atp <platform> follow-group-remove GROUP USER...
+    atp <platform> folder-create NAME [--desc TEXT] [--private]
+    atp <platform> folder-edit FOLDER [--name N] [--desc T] [--private | --public] [--cover IMAGE]
+    atp <platform> folder-delete FOLDER... [-y]
+    atp <platform> folder-add FOLDER POST...
+    atp <platform> folder-remove FOLDER POST...
+    atp <platform> folder-move FROM TO POST... [--copy]
+
+GROUP and FOLDER take ids or `#N` after `follow-groups` / `collections`;
+USER and POST take `#N` of the last user or post list. A failed user or
+post does not stop the others: it is marked `ok: false` with its error,
+and the exit code is 1. `atp guide <platform> folder-move` (or any of
+these) says what one platform does.
 
 What `post` publishes, per platform:
 

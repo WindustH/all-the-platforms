@@ -9,6 +9,8 @@ mod account;
 mod args;
 mod chat;
 mod command;
+mod folders;
+mod follows;
 mod input;
 mod library;
 mod media;
@@ -26,6 +28,8 @@ pub use self::args::{GlobalArgs, PageArgs};
 pub use self::chat::ChatCommand;
 pub use self::command::CommonCommand;
 use self::command::{Outcome, Run};
+pub use self::folders::FolderCommand;
+pub use self::follows::{FollowCommand, GroupCommand};
 pub use self::input::{Change, check_files, check_images, confirm, read_text};
 pub use self::library::LibraryCommand;
 pub use self::media::{DownloadArgs, MediaCommand};
@@ -80,6 +84,20 @@ fn required_cap(name: &str) -> Option<&'static [Cap]> {
     "react" => &[Cap::React],
     "edit" => &[Cap::Edit],
     "listen" => &[Cap::Listen],
+    "remove-follower" => &[Cap::RemoveFollower],
+    "block" | "unblock" => &[Cap::Block],
+    "blocked" => &[Cap::Blocked],
+    "follow-groups" | "follow-group" => &[Cap::FollowGroups],
+    "follow-group-create" | "follow-group-rename" | "follow-group-delete" => {
+      &[Cap::FollowGroupEdit]
+    }
+    "follow-group-add" | "follow-group-remove" => &[Cap::FollowGroupMembers],
+    "folder-create" => &[Cap::FolderCreate],
+    "folder-edit" => &[Cap::FolderEdit],
+    "folder-delete" => &[Cap::FolderDelete],
+    "folder-add" => &[Cap::FolderAdd],
+    "folder-remove" => &[Cap::FolderRemove],
+    "folder-move" => &[Cap::FolderMove],
     _ => return None,
   })
 }
@@ -160,11 +178,42 @@ pub fn command<P: Platform>() -> clap::Command {
   cmd = with_choices(cmd, "feed", "kind", ch.feed_kind);
   cmd = with_choices(cmd, "comments", "sort", ch.comment_sort);
   cmd = with_choices(cmd, "notifications", "kind", ch.notification_kind);
+  cmd = with_choices(cmd, "following", "sort", P::FOLLOWING_SORT);
+  cmd = with_choices(cmd, "follow-group", "sort", P::FOLLOW_GROUP_SORT);
+  cmd = manage_options(cmd, &info);
   if info.supports(Cap::Files) {
     cmd = drive_words(cmd, info.id);
   }
   if let Some(system) = P::COORD {
     cmd = cmd.arg(coord_arg(system));
+  }
+  cmd
+}
+
+/// `following --search` / `--mutual` and the options of `folder-create` /
+/// `folder-edit`, hidden where the platform does not offer them.
+fn manage_options(cmd: clap::Command, info: &PlatformInfo) -> clap::Command {
+  let following = [
+    ("search", Cap::FollowingSearch),
+    ("mutual", Cap::FollowingMutual),
+  ];
+  let mut cmd = cmd.mut_subcommand("following", |mut c| {
+    for (arg, cap) in following {
+      if !info.supports(cap) {
+        c = hide_arg(c, arg);
+      }
+    }
+    c
+  });
+  for sub in ["folder-create", "folder-edit"] {
+    cmd = cmd.mut_subcommand(sub, |mut c| {
+      for (arg, cap) in folders::FOLDER_OPTIONS {
+        if !info.supports(*cap) {
+          c = hide_arg(c, arg);
+        }
+      }
+      c
+    });
   }
   cmd
 }

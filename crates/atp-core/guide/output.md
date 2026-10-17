@@ -57,7 +57,10 @@ Every platform maps its data onto the same shapes:
   platform counters such as `coins`, `danmaku`, `quotes`, `crossposts`),
   `media`, `tags`, `quoted`, `extra`.
 - **User**: `id`, `name`, `handle`, `url`, `avatar`, `bio`, `verified`,
-  `location`, `stats` (`followers`, `following`, `posts`, `likes` ...), `followed`.
+  `location`, `stats` (`followers`, `following`, `posts`, `likes` ...), `followed`;
+  on your own `following` / `followers` also `extra.mutual`,
+  `extra.followed_at`, `extra.groups`, `extra.special`, `extra.remark`
+  where the platform tells them.
 - **Comment**: `id`, `author`, `text`, `created_at`, `likes`, `reply_count`,
   `reply_to`, `location`, `replies`, `replies_cursor` (where a thread
   `--replies` cut short continues).
@@ -66,7 +69,8 @@ Every platform maps its data onto the same shapes:
 - **File** (cloud drives): `id`, `name`, `path`, `dir`, `size` (bytes),
   `updated_at`, `md5`, `share` (`url`, `code`, `expires_at`), `extra`.
 - **Notification**, **Action** (every write: `action`, `target`, `ok`, `id`,
-  `url`), **Auth**, **Transcript** (`cues` of `from`, `to`, `text`),
+  `url`; commands on several things print one per thing, a failed one
+  with `ok: false`, `error` and `message`), **Auth**, **Transcript** (`cues` of `from`, `to`, `text`),
   **Downloads**, **Insights** (`atp guide analysis`).
 - Map platforms: places are posts with a `place` (`location`, `address`,
   `category`, `phone`, `rating`, `distance_m`, region, `hours`), **Routes**

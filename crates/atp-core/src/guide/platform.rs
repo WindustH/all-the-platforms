@@ -16,6 +16,8 @@ const CHOICES: &[(&str, &str, &str)] = &[
   ("feed", "kind", "--type"),
   ("comments", "sort", "--sort"),
   ("notifications", "kind", "--type"),
+  ("following", "sort", "--sort"),
+  ("follow-group", "sort", "--sort"),
 ];
 
 fn about(cmd: &clap::Command) -> String {

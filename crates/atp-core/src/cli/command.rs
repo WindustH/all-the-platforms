@@ -7,11 +7,13 @@ use clap::Subcommand;
 
 use super::account::AccountCommand;
 use super::chat::ChatCommand;
+use super::folders::FolderCommand;
+use super::follows::FollowCommand;
 use super::library::LibraryCommand;
 use super::media::MediaCommand;
 use super::read::ReadCommand;
 use super::write::WriteCommand;
-use super::{account, chat, library, media, read, write};
+use super::{account, chat, folders, follows, library, media, read, write};
 use crate::account::Loaded;
 use crate::error::Result;
 use crate::model::Data;
@@ -31,6 +33,10 @@ pub enum CommonCommand {
   #[command(flatten)]
   Write(WriteCommand),
   #[command(flatten)]
+  Follows(FollowCommand),
+  #[command(flatten)]
+  Folders(FolderCommand),
+  #[command(flatten)]
   Media(MediaCommand),
   #[command(flatten)]
   Chat(ChatCommand),
@@ -44,10 +50,16 @@ pub(super) struct Outcome {
 }
 
 impl Outcome {
+  /// The exit code is 1 when an action of the result failed.
   pub(super) fn saved(data: Data) -> Self {
+    let code = if data.failed() {
+      ExitCode::FAILURE
+    } else {
+      ExitCode::SUCCESS
+    };
     Self {
       data,
-      code: ExitCode::SUCCESS,
+      code,
       persist: true,
     }
   }
@@ -67,6 +79,8 @@ impl CommonCommand {
       CommonCommand::Read(cmd) => read::run(p, cmd).await?,
       CommonCommand::Library(cmd) => library::run(p, cmd).await?,
       CommonCommand::Write(cmd) => write::run(p, cmd).await?,
+      CommonCommand::Follows(cmd) => follows::run(p, cmd).await?,
+      CommonCommand::Folders(cmd) => folders::run(p, cmd).await?,
       CommonCommand::Media(cmd) => media::run(p, cmd).await?,
       CommonCommand::Chat(cmd) => chat::run(p, cmd, run.format, run.raw).await?,
     };

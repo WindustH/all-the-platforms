@@ -118,6 +118,7 @@ pub fn rows(data: &Data) -> Vec<Value> {
     Data::User(x) => vec![value(x)],
     Data::File(x) => vec![value(x)],
     Data::Action(x) => vec![value(x)],
+    Data::Actions(x) => each(x),
     Data::Auth(x) => vec![value(x)],
     Data::Counts(x) => vec![value(x)],
     Data::Transcript(t) => t

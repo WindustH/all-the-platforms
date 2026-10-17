@@ -72,6 +72,34 @@ pub enum Cap {
   Listen,
   /// A drive: `search`, `read` and `download` work on files and folders.
   Files,
+  /// `following --search`.
+  FollowingSearch,
+  /// `following --mutual`.
+  FollowingMutual,
+  RemoveFollower,
+  /// `block` / `unblock`.
+  Block,
+  /// `blocked`: the accounts you block.
+  Blocked,
+  /// `follow-groups` and `follow-group`: your follow groups and their members.
+  FollowGroups,
+  /// `follow-group-create`, `follow-group-rename`, `follow-group-delete`.
+  FollowGroupEdit,
+  /// `follow-group-add`, `follow-group-remove`.
+  FollowGroupMembers,
+  FolderCreate,
+  FolderEdit,
+  /// `--desc` of `folder-create` / `folder-edit`.
+  FolderDescription,
+  /// `--private` (and `--public`) of `folder-create` / `folder-edit`.
+  FolderPrivacy,
+  /// `folder-edit --cover`.
+  FolderCover,
+  FolderDelete,
+  FolderAdd,
+  FolderRemove,
+  /// `folder-move` (and `--copy`): natively, or by adding and removing.
+  FolderMove,
 }
 
 impl Cap {
@@ -128,6 +156,23 @@ impl Cap {
     Cap::EditVisibility,
     Cap::Listen,
     Cap::Files,
+    Cap::FollowingSearch,
+    Cap::FollowingMutual,
+    Cap::RemoveFollower,
+    Cap::Block,
+    Cap::Blocked,
+    Cap::FollowGroups,
+    Cap::FollowGroupEdit,
+    Cap::FollowGroupMembers,
+    Cap::FolderCreate,
+    Cap::FolderEdit,
+    Cap::FolderDescription,
+    Cap::FolderPrivacy,
+    Cap::FolderCover,
+    Cap::FolderDelete,
+    Cap::FolderAdd,
+    Cap::FolderRemove,
+    Cap::FolderMove,
   ];
 
   pub fn name(self) -> &'static str {
@@ -184,6 +229,23 @@ impl Cap {
       Cap::EditVisibility => "edit-visibility",
       Cap::Listen => "listen",
       Cap::Files => "files",
+      Cap::FollowingSearch => "following-search",
+      Cap::FollowingMutual => "following-mutual",
+      Cap::RemoveFollower => "remove-follower",
+      Cap::Block => "block",
+      Cap::Blocked => "blocked",
+      Cap::FollowGroups => "follow-groups",
+      Cap::FollowGroupEdit => "follow-group-edit",
+      Cap::FollowGroupMembers => "follow-group-members",
+      Cap::FolderCreate => "folder-create",
+      Cap::FolderEdit => "folder-edit",
+      Cap::FolderDescription => "folder-description",
+      Cap::FolderPrivacy => "folder-privacy",
+      Cap::FolderCover => "folder-cover",
+      Cap::FolderDelete => "folder-delete",
+      Cap::FolderAdd => "folder-add",
+      Cap::FolderRemove => "folder-remove",
+      Cap::FolderMove => "folder-move",
     }
   }
 }

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use clap::Subcommand;
 
+use super::follows;
 use super::input::{check_files, check_images, confirm, read_text};
 use crate::error::{Error, Result};
 use crate::model::Data;
@@ -201,18 +202,21 @@ pub enum WriteCommand {
     #[arg(short, long)]
     yes: bool,
   },
-  /// Follow a user
+  /// Follow users
+  #[command(after_long_help = EX_FOLLOW)]
   Follow {
-    /// User: an id, a handle or a link, or #N from the last list
-    user: String,
+    /// Users: ids, handles or links, or #N from the last list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
     /// Unfollow instead
     #[arg(long)]
     undo: bool,
   },
-  /// Unfollow a user
+  /// Unfollow users
   Unfollow {
-    /// User: an id, a handle or a link, or #N from the last list
-    user: String,
+    /// Users: ids, handles or links, or #N from the last list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
   },
   /// Publish a post
   #[command(name = "post", after_long_help = EX_POST)]
@@ -308,8 +312,8 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: WriteCommand) -> Result<Data> {
       confirm(yes, &format!("delete comment {comment}"))?;
       p.delete_comment(&ctx.post_ref(&post)?, &comment).await?
     }
-    WriteCommand::Follow { user, undo } => p.follow(&p.follow_ref(&user)?, undo).await?,
-    WriteCommand::Unfollow { user } => p.follow(&p.follow_ref(&user)?, true).await?,
+    WriteCommand::Follow { users, undo } => return follows::follow(p, &users, undo).await,
+    WriteCommand::Unfollow { users } => return follows::follow(p, &users, true).await,
     WriteCommand::Publish(args) => publish(p, *args).await?,
     WriteCommand::Delete { post, yes } => {
       let post = ctx.post_ref(&post)?;
@@ -423,6 +427,16 @@ Examples:
   atp x comment '#1' 'Numbers for this week' -i chart.png
 
 `atp platforms` lists where --image works (comment-images).";
+
+const EX_FOLLOW: &str = "\
+Examples:
+  atp x follow NASA
+  atp bili follow 946974 '#2' '#5'
+  atp bili unfollow '#3'
+
+Several users give one result each; a failed one does not stop the rest,
+unless the platform asks for a login, a check or a pause.
+More: atp guide <platform> follow";
 
 const EX_POST: &str = "\
 Examples:

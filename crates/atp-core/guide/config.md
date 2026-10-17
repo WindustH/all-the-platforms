@@ -60,5 +60,6 @@ On Windows, a copy or a hard link named after the platform does the same:
 
 ## Exit codes
 
-0 success; 1 failure (and `status` when not logged in); 2 invalid input;
+0 success; 1 failure (and `status` when not logged in, and a command on
+several users, posts or folders when any of them failed); 2 invalid input;
 3 not logged in.

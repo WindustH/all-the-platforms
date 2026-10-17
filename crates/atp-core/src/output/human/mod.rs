@@ -34,6 +34,7 @@ pub fn render(data: &Data) {
     Data::User(user) => user_card(user),
     Data::File(file) => file_card(file),
     Data::Action(action) => action_line(action),
+    Data::Actions(actions) => action_lines(actions),
     Data::Auth(auth) => auth_line(auth),
     Data::Counts(counts) => {
       for (k, v) in counts {

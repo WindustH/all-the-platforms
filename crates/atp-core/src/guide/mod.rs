@@ -69,7 +69,7 @@ pub const TOPICS: &[Topic] = &[
   },
   Topic {
     name: "interact",
-    summary: "Likes, favorites, comments, follows, posting and deleting",
+    summary: "Likes, favorites, comments, follows, blocks, follow groups, folders, posting",
     body: include_str!("../../guide/interact.md"),
   },
   Topic {

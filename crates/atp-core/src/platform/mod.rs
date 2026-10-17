@@ -40,6 +40,14 @@ pub trait Platform: Sized {
   /// `--coord`.
   const COORD: Option<crate::geo::System> = None;
 
+  /// Values of `following --sort`, the plain order first: `recent` (latest
+  /// follow first), `oldest`, `smart` (the platform's own mix), `visited`
+  /// (most visited). Empty (the default) hides the option.
+  const FOLLOWING_SORT: &'static [&'static str] = &[];
+
+  /// Values of `follow-group --sort`, as for [`Self::FOLLOWING_SORT`].
+  const FOLLOW_GROUP_SORT: &'static [&'static str] = &[];
+
   /// Whether a `verification_required` error may be passed in the person's
   /// browser and the command retried with the cookies it set. A platform
   /// without session cookies (`cookie_domains` empty) has none to take
@@ -162,6 +170,21 @@ pub trait Platform: Sized {
     unsupported!("following")
   }
 
+  /// `following` sorted (`--sort`), searched (`--search`) or narrowed to
+  /// mutual follows (`--mutual`). Without any of them it is
+  /// [`following`](Self::following); a platform that offers them overrides it.
+  async fn following_with(
+    &self,
+    user: &str,
+    query: &FollowQuery,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    if query.is_empty() {
+      return self.following(user, page).await;
+    }
+    Err(Error::unsupported(query.option()))
+  }
+
   /// Favorites folders, lists and similar containers (`None` = the logged-in account).
   async fn collections(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
     unsupported!("collections")
@@ -230,6 +253,118 @@ pub trait Platform: Sized {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     unsupported!("delete")
+  }
+
+  // ── follows ──────────────────────────────────────────────────────────
+  //
+  // Commands on several users or posts return one Action per item, in
+  // order (see [`bulk`](crate::bulk)); failed items are Actions with `ok`
+  // false. A single item fails with its error instead.
+
+  /// `follow` / `unfollow` of several users: one by one through
+  /// [`follow`](Self::follow) by default; platforms with a batch call
+  /// override it.
+  async fn follow_users(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    let action = if undo { "unfollow" } else { "follow" };
+    crate::bulk::each(action, users, async |user| self.follow(user, undo).await).await
+  }
+
+  /// Make users stop following you.
+  async fn remove_followers(&self, users: &[String]) -> Result<Vec<Action>> {
+    unsupported!("remove-follower")
+  }
+
+  /// Block (or with `undo` unblock) users.
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    unsupported!("block")
+  }
+
+  /// The accounts you block.
+  async fn blocked(&self, page: &PageReq) -> Result<Page<User>> {
+    unsupported!("blocked")
+  }
+
+  /// Your follow groups (关注分组, lists of the people you follow), as
+  /// Collections of kind `group`.
+  async fn follow_groups(&self, page: &PageReq) -> Result<Page<Collection>> {
+    unsupported!("follow-groups")
+  }
+
+  /// The people in one of your follow groups; `sort` is one of
+  /// [`Self::FOLLOW_GROUP_SORT`].
+  async fn follow_group(
+    &self,
+    group: &str,
+    sort: Option<&str>,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    unsupported!("follow-group")
+  }
+
+  async fn follow_group_create(&self, name: &str) -> Result<Action> {
+    unsupported!("follow-group-create")
+  }
+
+  async fn follow_group_rename(&self, group: &str, name: &str) -> Result<Action> {
+    unsupported!("follow-group-rename")
+  }
+
+  async fn follow_group_delete(&self, group: &str) -> Result<Action> {
+    unsupported!("follow-group-delete")
+  }
+
+  /// Put users into a follow group; their other groups stay.
+  async fn follow_group_add(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    unsupported!("follow-group-add")
+  }
+
+  /// Take users out of a follow group; they stay followed.
+  async fn follow_group_remove(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    unsupported!("follow-group-remove")
+  }
+
+  // ── folders ──────────────────────────────────────────────────────────
+  //
+  // Favorites folders: the containers `collections` lists and `favorite
+  // --folder` saves into (收藏夹, boards, bookmark folders).
+
+  /// Create a folder; `folder.name` is set.
+  async fn folder_create(&self, folder: &FolderSpec) -> Result<Action> {
+    unsupported!("folder-create")
+  }
+
+  /// Rename a folder or change its description, visibility or cover.
+  async fn folder_edit(&self, folder: &str, change: &FolderSpec) -> Result<Action> {
+    unsupported!("folder-edit")
+  }
+
+  async fn folder_delete(&self, folders: &[String]) -> Result<Vec<Action>> {
+    unsupported!("folder-delete")
+  }
+
+  /// Save posts into a folder.
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    unsupported!("folder-add")
+  }
+
+  /// Take posts out of a folder.
+  async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    unsupported!("folder-remove")
+  }
+
+  /// Move posts from one folder to another, or with `copy` add them to
+  /// `to` and keep them in `from`. By default
+  /// [`folder_add`](Self::folder_add) then
+  /// [`folder_remove`](Self::folder_remove); platforms with a move call
+  /// override it.
+  async fn folder_move(
+    &self,
+    from: &str,
+    to: &str,
+    posts: &[String],
+    copy: bool,
+  ) -> Result<Vec<Action>> {
+    crate::bulk::move_by_adding(self, from, to, posts, copy).await
   }
 
   // ── analytics ────────────────────────────────────────────────────────

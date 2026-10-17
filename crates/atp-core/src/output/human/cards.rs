@@ -264,6 +264,15 @@ pub(super) fn action_line(a: &Action) {
   }
 }
 
+/// A line per action, then how many failed when some did.
+pub(super) fn action_lines(list: &[Action]) {
+  list.iter().for_each(action_line);
+  let failed = list.iter().filter(|a| !a.ok).count();
+  if failed > 0 {
+    note(&format!("{failed} of {} failed", list.len()));
+  }
+}
+
 pub(super) fn auth_line(a: &AuthStatus) {
   match (&a.user, a.authenticated) {
     (Some(u), true) => {

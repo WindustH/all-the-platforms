@@ -36,13 +36,14 @@ one. Each platform crate re-exports its `Command` enum for `run_extra`.
 | `platform` | `Platform` trait; `cap` (capabilities), `info` (`PlatformInfo`, `Choices`, login ways), `request` (`PageReq`, `Query`, `Draft`, `Edit`, `Reply`, `Message`, `QrTicket`) |
 | `ctx` | `Ctx`: what a platform works with (HTTP client with the session cookies, files, session extras, login hints, `#N` resolution) |
 | `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `FileEntry` (drives), `Page<T>`, `Action`, `AuthStatus`, `Insights`, `Transcript`, and `Data` (everything a command can print), one file per type |
-| `cli` | the shared commands, one module per area (`account`, `read`, `library`, `write`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options; questions on the terminal (`prompt`) |
+| `cli` | the shared commands, one module per area (`account`, `read`, `library`, `write`, `follows`, `folders`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options; questions on the terminal (`prompt`) |
 | `app` | top-level program, multi-call (`bili` symlink) |
 | `open` | platforms in Rust code: `open`, `Open` (cookies, proxy, timeout), `save_session` |
 | `platforms` | `atp platforms`: one row per platform grouped by kind, `atp platforms <id>` in detail, the same data as JSON |
 | `account` | `login` (QR / token / browser / cookie string), `logout`, `status` |
 | `http` | Chrome-fingerprinted client (wreq), cookie jar, pacing, proxy; `request` (building, sending, retries, streaming), `response` |
 | `store` | session file (0600), data files the user keeps beside it (`data`, `put_data`: lists and settings `logout` leaves alone), TTL cache (values and raw bytes), `#N` short-index lists |
+| `bulk` | commands on several things (`follow A B C`, `folder-add F P…`): one `Action` per thing in order, `each` one by one and `batches` through a platform's batch call, a failed thing marked and the rest going on, a login / check / rate-limit error ending the run; `move_by_adding`, the default `folder-move` |
 | `paging` | `collect`: follow cursors until `--limit` items, dropping repeated items, until the upstream ends or repeats a cursor; `collect_within`: also `--max-pages` (`Bounds`); `collect_window`: `--since` / `--until` |
 | `download` | save media, merge DASH audio/video, audio-only, WAV segments (ffmpeg); `files`: a drive's files and folders under their own names, through `.part` files resumed by `Range`, with per-link headers and links renewed mid-file |
 | `upload` | files too big for memory: `LocalFile`, `Hashes` (md5, sha1, 4 MB block md5s, md5 of the first 256 KB in one read), `Parts` (part by part with retries, a progress bar and resume state in the private cache; optionally the SHA-1 state before each part, `Sha1Midway`) |
@@ -104,6 +105,23 @@ A platform crate exports one type implementing `atp_core::Platform`:
   token instead.
 - `const COORD: Option<geo::System>`: map platforms name the coordinate
   system they work in; it is the default of the `--coord` option they get.
+- `const FOLLOWING_SORT` / `FOLLOW_GROUP_SORT`: the values of
+  `following --sort` and `follow-group --sort` (`recent`, `oldest`,
+  `smart`, `visited`); empty hides the option. `following_with` takes
+  the `FollowQuery` (`--sort`, `--search` behind `Cap::FollowingSearch`,
+  `--mutual` behind `Cap::FollowingMutual`) and falls back to
+  `following` when it is empty.
+- Managing follows and folders: `follow_users` (several users; by
+  default `follow` one by one, platforms with a batch call override it),
+  `remove_followers`, `block`, `blocked`, the follow groups
+  (`follow_groups`, `follow_group`, `follow_group_create` / `rename` /
+  `delete` / `add` / `remove`) and the favorites folders
+  (`folder_create` / `edit` with a `FolderSpec`, `folder_delete`,
+  `folder_add`, `folder_remove`, `folder_move`, by default add then
+  remove). Methods on several users, posts or folders return one Action
+  per item (`Data::Actions`; one item prints a single Action). Each
+  command has its `Cap`; `FolderDescription`, `FolderPrivacy` and
+  `FolderCover` show the options of `folder-create` / `folder-edit`.
 
 ### Chat platforms
 

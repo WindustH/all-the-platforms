@@ -42,6 +42,8 @@ pub enum Data {
   User(Box<User>),
   File(Box<FileEntry>),
   Action(Action),
+  /// One Action per thing of a command given several (`follow A B C`).
+  Actions(Vec<Action>),
   Auth(AuthStatus),
   Counts(BTreeMap<String, u64>),
   Transcript(Transcript),
@@ -66,6 +68,24 @@ impl Data {
       Data::Notifications(p) => p.next_cursor.as_deref(),
       Data::Files(p) => p.next_cursor.as_deref(),
       _ => None,
+    }
+  }
+
+  /// The result of a command given one thing or several: an Action, or
+  /// the Actions.
+  pub fn actions(mut list: Vec<Action>) -> Data {
+    match list.len() {
+      1 => Data::Action(list.remove(0)),
+      _ => Data::Actions(list),
+    }
+  }
+
+  /// Whether an action failed: the exit code is then not zero.
+  pub fn failed(&self) -> bool {
+    match self {
+      Data::Action(a) => !a.ok,
+      Data::Actions(list) => list.iter().any(|a| !a.ok),
+      _ => false,
     }
   }
 

@@ -9,6 +9,7 @@
 mod account;
 pub mod app;
 pub mod browser;
+pub mod bulk;
 pub mod chat;
 pub mod cli;
 pub mod credentials;
@@ -49,7 +50,7 @@ pub use json::ValueExt;
 pub use model::*;
 pub use open::{Open, open, save_session};
 pub use platform::{
-  Cap, Choices, Draft, Edit, Message, NoExtra, PageReq, Platform, PlatformInfo, PlatformKind,
-  QrStatus, QrTicket, Query, Reply,
+  Cap, Choices, Draft, Edit, FolderSpec, FollowQuery, Message, NoExtra, PageReq, Platform,
+  PlatformInfo, PlatformKind, QrStatus, QrTicket, Query, Reply,
 };
 pub use serde_json::{Value, json};

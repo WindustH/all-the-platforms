@@ -5,6 +5,7 @@ Act as your account: `like` / `unlike` a post, `favorite` / `unfavorite`
     atp x unlike '#3'
     atp bili favorite '#1' --folder 12345678
     atp x follow NASA
+    atp bili follow 946974 '#2' '#5'
 
 - `unlike`, `unfavorite` and `unfollow` are the same as `like --undo`,
   `favorite --undo` and `follow --undo`.
@@ -12,6 +13,12 @@ Act as your account: `like` / `unlike` a post, `favorite` / `unfavorite`
   handle, link, `url` or `#N` of the last user list.
 - `--folder F` saves into (or removes from) one folder or list: its id, or
   `#N` after `collections`. Without it each platform uses its default.
+- `follow` and `unfollow` take several users. One gives an Action, as
+  always; several give one Action each, in order, through the platform's
+  batch call where it has one, else one by one. A user that fails gets
+  `ok: false` with `error` and `message` and the rest go on; a login, a
+  human check or a rate limit ends the run and marks the rest as not
+  tried. The exit code is 1 when any failed.
 - Some platforms give `follow` a wider meaning, such as joining a channel
   or group, or subscribing to a community; the platform's notes say what
   USER may be there.

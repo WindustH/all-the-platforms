@@ -7,7 +7,7 @@ use super::threads::Threads;
 use crate::error::Result;
 use crate::model::Data;
 use crate::paging::Bounds;
-use crate::platform::{Cap, Platform, Query};
+use crate::platform::{Cap, FollowQuery, Platform, Query};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum SearchKind {
@@ -129,9 +129,19 @@ pub enum ReadCommand {
     page: PageArgs,
   },
   /// Accounts a user follows (yours when USER is omitted)
+  #[command(after_long_help = EX_FOLLOWING)]
   Following {
     /// User: an id, a handle or a link, or #N; yours when omitted
     user: Option<String>,
+    /// Order (values differ per platform)
+    #[arg(short, long)]
+    sort: Option<String>,
+    /// Only the accounts whose name matches these words
+    #[arg(long, value_name = "WORDS")]
+    search: Option<String>,
+    /// Only the accounts that follow back
+    #[arg(long)]
+    mutual: bool,
     #[command(flatten)]
     page: PageArgs,
   },
@@ -172,7 +182,20 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: ReadCommand) -> Result<Data> {
     ReadCommand::User { user } => Ok(Data::User(Box::new(p.user(&ctx.user_ref(&user)?).await?))),
     ReadCommand::UserPosts { user, page } => user_posts(p, &user_or_me(p, user).await?, page).await,
     ReadCommand::Followers { user, page } => followers(p, &user_or_me(p, user).await?, page).await,
-    ReadCommand::Following { user, page } => following(p, &user_or_me(p, user).await?, page).await,
+    ReadCommand::Following {
+      user,
+      sort,
+      search,
+      mutual,
+      page,
+    } => {
+      let query = FollowQuery {
+        sort,
+        search,
+        mutual,
+      };
+      following(p, &user_or_me(p, user).await?, &query, page).await
+    }
   }
 }
 
@@ -244,9 +267,16 @@ async fn followers<P: Platform>(p: &P, user: &str, page: PageArgs) -> Result<Dat
   ))
 }
 
-async fn following<P: Platform>(p: &P, user: &str, page: PageArgs) -> Result<Data> {
+async fn following<P: Platform>(
+  p: &P,
+  user: &str,
+  query: &FollowQuery,
+  page: PageArgs,
+) -> Result<Data> {
   Ok(Data::Users(
-    page.collect(async |r| p.following(user, &r).await).await?,
+    page
+      .collect(async |r| p.following_with(user, query, &r).await)
+      .await?,
   ))
 }
 
@@ -340,6 +370,18 @@ Examples:
 Totals, daily series and breakdowns (traffic sources, audience ...); warnings
 say what a platform withholds. Others' posts get public counters.
 More: atp guide analysis, atp guide <platform>";
+
+const EX_FOLLOWING: &str = "\
+Examples:
+  atp bili following -n 200 -f csv > following.csv
+  atp bili following --sort visited   # the ones you visit most
+  atp bili following --search 游戏
+  atp bili following --mutual         # people who follow you back
+  atp x following NASA -n 50
+
+--sort values, --search and --mutual differ per platform; rows carry
+extra.mutual, extra.groups, extra.special, extra.followed_at where the
+platform tells them. More: atp guide <platform> following";
 
 const EX_USER_POSTS: &str = "\
 Examples:

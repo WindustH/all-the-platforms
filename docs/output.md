@@ -74,7 +74,7 @@ error:
 | Exit code | Meaning |
 | --- | --- |
 | 0 | success |
-| 1 | any failure not listed below; also `status` when not logged in |
+| 1 | any failure not listed below; also `status` when not logged in, and a command on several things when any of them failed |
 | 2 | invalid input (bad arguments, unknown id format ...) |
 | 3 | not authenticated |
 
@@ -120,7 +120,10 @@ ranges in, when it does not honour the `Range` header).
 
 **User**: `id`, `name`, `handle`, `url`, `avatar`, `bio`, `verified`,
 `location`, `stats` (`followers`, `following`, `posts`, `likes`, ...),
-`followed`, `created_at`, `extra`.
+`followed`, `created_at`, `extra`. Rows of your own `following` /
+`followers` carry what the platform tells about the relation under these
+`extra` keys: `mutual` (bool), `followed_at`, `groups` (follow group
+ids), `special` (bool), `remark`.
 
 **Comment**: `id`, `author`, `text`, `created_at`, `likes`, `reply_count`,
 `reply_to`, `location`, `replies` (nested comments), `replies_cursor`
@@ -134,7 +137,12 @@ POST ID --cursor`).
 `created_at`, `unread`.
 
 **Action** (every write command): `action`, `target`, `ok`, and `id` / `url`
-of anything created.
+of anything created. A command given several users, posts or folders
+(`follow A B C`, `folder-add F P1 P2`, `block` ...) prints a list of
+Actions, one per thing in the order given (one row each in `jsonl` /
+`csv`); one that failed has `ok: false`, `error` (an error code below)
+and `message`. A login, a human check or a rate limit ends such a run:
+the things after it are not tried (`message` says so).
 
 **Auth** (`login`, `status`): `authenticated`, `user`, `source`, `saved_at`.
 

@@ -22,6 +22,21 @@
   pages in a row with nothing inside the window the listing stops and
   prints a cursor to go on.
 - `followers` and `following` give Users and refuse `--since` / `--until`.
+- `following --sort KEY` orders the list where the platform can:
+  `recent` (latest follow first), `oldest`, `smart` (the platform's own
+  mix), `visited` (the ones you visit most); `atp guide <platform>
+  following` shows the platform's values. `--search WORDS` keeps the
+  accounts whose name matches, `--mutual` the ones that follow you back.
+  Where a platform lacks one of them it is hidden and refused.
+- On your own lists, users carry what the platform tells about the
+  relation in `extra`: `mutual` (true when you follow each other),
+  `followed_at` (when the follow began), `groups` (the ids of the follow
+  groups they are in, `[]` for none; see `follow-groups`), `special` (a
+  special follow, 特别关注) and `remark` (the name you gave them). Keys a
+  platform does not know are left out.
 - `#N` afterwards refers to the posts or users just listed.
+
+Act on the lists with `follow` / `unfollow`, `remove-follower`, `block`
+and the follow-group commands (`follow-groups`, `follow-group-add` ...).
 
 More: `atp guide refs`, `atp guide analysis`
