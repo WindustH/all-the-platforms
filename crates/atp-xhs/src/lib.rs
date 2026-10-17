@@ -258,6 +258,15 @@ impl Platform for Xhs {
     interactions::favorite(&self.api, post, folder, undo).await
   }
 
+  async fn favorite_posts(
+    &self,
+    posts: &[String],
+    folder: Option<&str>,
+    undo: bool,
+  ) -> Result<Vec<Action>> {
+    interactions::favorite_notes(&self.api, posts, folder, undo).await
+  }
+
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
     interactions::comment(&self.api, post, reply).await
   }

@@ -18,16 +18,20 @@ pub async fn whoami(api: &Api) -> Result<User> {
   if me.bool("guest") == Some(true) {
     return Err(Error::auth("not logged in (guest session)").with_hint("run `atp xhs login`"));
   }
-  Ok(parse::profile(&me, None))
+  let user = parse::profile(&me, None);
+  if !user.id.is_empty() {
+    // Set once per command; a second lookup finds the same account.
+    let _ = api.me.set(user.id.clone());
+  }
+  Ok(user)
 }
 
 /// The logged-in account's id, looked up once per command.
 pub async fn my_id(api: &Api) -> Result<String> {
-  if let Some(id) = api.me.get() {
-    return Ok(id.clone());
+  match api.me.get() {
+    Some(id) => Ok(id.clone()),
+    None => Ok(whoami(api).await?.id),
   }
-  let id = whoami(api).await?.id;
-  Ok(api.me.get_or_init(|| id).clone())
 }
 
 pub async fn user(api: &Api, arg: &str) -> Result<User> {

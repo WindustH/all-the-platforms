@@ -4,8 +4,8 @@
 //! Few accounts still have boards; the web app lists them on profiles
 //! (`board/user`, page-numbered) and opens one at `/board/<id>`. It puts a
 //! collected note into a board with `note/move`, which names only the board
-//! the note goes to: a note sits in one board at a time, and the web has no
-//! way to take it out of one without uncollecting it.
+//! the note goes to: as far as the web shows, a note sits in one board at a
+//! time, and nothing takes it out of one without uncollecting it.
 
 use atp_core::{
   Action, Collection, Error, FolderSpec, Page, PageReq, Post, Result, Value, ValueExt, bulk, json,

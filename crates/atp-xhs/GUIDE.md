@@ -118,10 +118,11 @@ their own (`--cover` is not offered).
 
 `folder-add BOARD NOTE…` puts notes into a board and `folder-move FROM TO
 NOTE…` moves them there, one call per note (`note/move`, the call the
-web's board picker makes after you collect a note). The call names only
-the board a note goes to: a note sits in one board at a time, so adding
-it to a board takes it out of any other, `folder-move` does not check
-that the notes were in FROM, and `--copy` is refused. There is no
+web's board picker makes after you collect a note). The call, named for
+moving notes between boards, names only the board a note goes to; as far
+as the web shows, a note sits in one board at a time, so adding it to a
+board takes it out of any other, `folder-move` does not check that the
+notes were in FROM, and `--copy` is refused. There is no
 `folder-remove`: the web has no way to take a note out of a board
 without uncollecting it (`unfavorite`). Collect a note before adding it;
 whether `folder-add` collects one you have not collected is not known.
@@ -155,9 +156,9 @@ where they show it, someone else's.
 
 `invalid-follows` lists the accounts you follow that the relation panel's
 batch manager (批量管理) files under its `invalid` tab, latest follow
-first: by its name, accounts that were closed or banned (what the tab is
-called on the page comes from the server and is not known). Unfollow
-them with `unfollow '#1' '#2' …`.
+first. Which accounts land there (closed or banned ones, going by the
+name) and what the page calls the tab come from the server and are not
+known. Unfollow them with `unfollow '#1' '#2' …`.
 
 ### follow, unfollow
 
@@ -221,12 +222,14 @@ the web API ignores.
 
 ### favorite, unfavorite
 
-Collects notes or uncollects them, one call each: the web's uncollect
-call takes one note. `favorite NOTE… --folder BOARD` collects each note,
-then puts it into the board as `folder-add` does; when that second step
-fails, the note stays collected outside the board and the error says so.
-`unfavorite` refuses `--folder`: uncollecting takes a note out of its
-board too.
+Collects notes or uncollects them, one call each: the web sends its
+uncollect call one note at a time, though the field is named `note_ids`,
+and whether it takes several is not known.
+
+`favorite NOTE… --folder BOARD` collects each note, then puts it into
+the board as `folder-add` does; when that second step fails, the note
+stays collected outside the board and the error says so. `unfavorite`
+refuses `--folder`: uncollecting takes a note out of its board too.
 
 ### insights
 

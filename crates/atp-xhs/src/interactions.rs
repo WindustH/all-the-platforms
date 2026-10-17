@@ -1,7 +1,7 @@
 //! Interactions: like, collect, comment, follow (`InteractionEndpointsMixin`,
 //! `SocialEndpointsMixin`). Each pauses briefly first, as bursts get flagged.
 
-use atp_core::{Action, Error, Reply, Result, ValueExt, json};
+use atp_core::{Action, Error, Reply, Result, ValueExt, bulk, json};
 
 use crate::api::Api;
 use crate::boards;
@@ -31,12 +31,7 @@ pub async fn like(api: &Api, arg: &str, undo: bool) -> Result<Action> {
 /// collected note goes into it next, as the board picker the web shows
 /// after collecting does.
 pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
-  let board = folder.map(refs::board_ref).transpose()?;
-  if undo && board.is_some() {
-    return Err(Error::input(
-      "unfavorite takes a note out of its board too: drop --folder",
-    ));
-  }
+  let board = favorite_board(folder, undo)?;
   let note = prepare_note(api, arg).await?;
   let (path, body, action) = match undo {
     false => (
@@ -62,6 +57,32 @@ pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) ->
       message: format!("collected, but not put into board {board}: {}", e.message),
       ..e
     }),
+  }
+}
+
+/// `favorite` / `unfavorite` of several notes, one by one, the board
+/// checked once first.
+pub async fn favorite_notes(
+  api: &Api,
+  notes: &[String],
+  folder: Option<&str>,
+  undo: bool,
+) -> Result<Vec<Action>> {
+  favorite_board(folder, undo)?;
+  let action = if undo { "unfavorite" } else { "favorite" };
+  let favorite = async |note: &str| favorite(api, note, folder, undo).await;
+  bulk::each(action, notes, favorite).await
+}
+
+/// The board `favorite --folder` puts notes into; `unfavorite` takes a
+/// note out of its board anyway.
+fn favorite_board(folder: Option<&str>, undo: bool) -> Result<Option<String>> {
+  match folder {
+    Some(_) if undo => Err(Error::input(
+      "unfavorite takes a note out of its board too: drop --folder",
+    )),
+    Some(board) => refs::board_ref(board).map(Some),
+    None => Ok(None),
   }
 }
 
