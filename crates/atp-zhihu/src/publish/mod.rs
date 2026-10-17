@@ -1,4 +1,7 @@
-//! Publishing: image upload (register → OSS → poll), pins (想法), questions and articles.
+//! Publishing: image upload (register → OSS → poll), pins (想法), questions
+//! and articles; changes to answers and pins in [`edit`].
+
+mod edit;
 
 use std::path::PathBuf;
 
@@ -9,6 +12,8 @@ use crate::api::{Api, V4, WWW, ZHUANLAN};
 use crate::markup;
 use crate::refs::{answer_url, article_url, question_url};
 use crate::uploads::{Image, upload_all};
+
+pub use self::edit::edit;
 
 /// Plain text as HTML paragraphs, one per line.
 fn paragraphs(text: &str) -> String {
@@ -221,6 +226,129 @@ pub async fn article(
   )
 }
 
+/// The answer editor's settings (`getSubmitData`). A new answer sets them
+/// all; a changed one leaves reposting and comments out, so they stay.
+struct AnswerForm {
+  reshipment: Option<String>,
+  comments: Option<String>,
+  can_reward: bool,
+  /// The reward request (赞赏语), when rewards are on.
+  tagline: String,
+  disclaimer_status: String,
+  disclaimer_type: String,
+  /// The id of the inviter thanked under the answer; empty for none.
+  thank_inviter: String,
+  /// Declared a commercial report (商业报备).
+  is_report: bool,
+  /// `content_source` of the answer (`hybridInfo.contentSource`).
+  content_source: Value,
+}
+
+impl Default for AnswerForm {
+  fn default() -> Self {
+    Self {
+      reshipment: Some("allowed".into()),
+      comments: Some("all".into()),
+      can_reward: false,
+      tagline: String::new(),
+      disclaimer_status: "close".into(),
+      disclaimer_type: "none".into(),
+      thank_inviter: String::new(),
+      is_report: false,
+      content_source: Value::Null,
+    }
+  }
+}
+
+impl AnswerForm {
+  fn reward(&self) -> Value {
+    let mut reward = json!({ "can_reward": self.can_reward });
+    if !self.tagline.is_empty() {
+      reward["tagline"] = self.tagline.clone().into();
+    }
+    reward
+  }
+
+  fn thanks(&self) -> Value {
+    let status = if self.thank_inviter.is_empty() {
+      "close"
+    } else {
+      "open"
+    };
+    json!({ "thank_inviter_status": status, "thank_inviter": self.thank_inviter })
+  }
+
+  /// `pc_business_params`: the settings in snake case, as one JSON text.
+  fn business(&self) -> String {
+    let mut business = serde_json::Map::new();
+    if let Some(setting) = &self.reshipment {
+      business.insert("reshipment_settings".into(), setting.clone().into());
+    }
+    if let Some(setting) = &self.comments {
+      business.insert("comment_permission".into(), setting.clone().into());
+    }
+    let rest = json!({
+      "reward_setting": self.reward(), "disclaimer_status": self.disclaimer_status,
+      "disclaimer_type": self.disclaimer_type,
+      "commercial_report_info": { "is_report": self.is_report },
+      "commercial_zhitask_bind_info": null, "is_report": self.is_report,
+      "table_of_contents_enabled": false,
+    });
+    for part in [rest, self.thanks()] {
+      business.extend(
+        part
+          .as_object()
+          .into_iter()
+          .flatten()
+          .map(|(k, v)| (k.clone(), v.clone())),
+      );
+    }
+    if !self.content_source.is_null() {
+      business.insert("content_source".into(), self.content_source.clone());
+    }
+    Value::Object(business).to_string()
+  }
+}
+
+/// The `data` of `content/publish` for an answer (the editor's `w`):
+/// `draft` says whether it is new or which answer it changes.
+fn answer_data(
+  question: &str,
+  html: String,
+  text_len: usize,
+  form: &AnswerForm,
+  draft: Value,
+) -> Value {
+  let setting = |key: &str, value: &Option<String>| match value {
+    Some(value) => json!({ key: value }),
+    None => json!({}),
+  };
+  let mut hybrid_info = json!({});
+  if !form.content_source.is_null() {
+    hybrid_info["contentSource"] = form.content_source.clone();
+  }
+  json!({
+    "publish": { "traceId": trace_id() },
+    "hybridInfo": hybrid_info,
+    "draft": draft,
+    "extra_info": {
+      "question_id": question, "publisher": "pc", "pc_business_params": form.business(),
+    },
+    "hybrid": { "html": html, "textLength": text_len },
+    "reprint": setting("reshipment_settings", &form.reshipment),
+    "commentsPermission": setting("comment_permission", &form.comments),
+    "appreciate": form.reward(),
+    "publishSwitch": { "draft_type": "normal" },
+    "creationStatement": {
+      "disclaimer_status": form.disclaimer_status, "disclaimer_type": form.disclaimer_type,
+    },
+    "commercialReportInfo": { "isReport": i32::from(form.is_report) },
+    "toFollower": {},
+    "contentsTables": { "table_of_contents_enabled": false },
+    "thanksInvitation": form.thanks(),
+  })
+}
+
 /// Answer a question through the editor's publish endpoint.
 pub async fn answer(
   api: &Api,
@@ -232,32 +360,9 @@ pub async fn answer(
   api.prepare_write().await?;
   let (html, text_len, _) = body_html(api, body, markdown, "answer").await?;
   let images = upload_all(api, images, "answer").await?;
-  let business = json!({
-    "reshipment_settings": "allowed", "comment_permission": "all",
-    "reward_setting": { "can_reward": false }, "disclaimer_status": "close",
-    "disclaimer_type": "none", "commercial_report_info": { "is_report": false },
-    "commercial_zhitask_bind_info": null, "is_report": false,
-    "table_of_contents_enabled": false, "thank_inviter_status": "close", "thank_inviter": "",
-  });
-  let data = json!({
-    "publish": { "traceId": trace_id() },
-    "hybridInfo": {},
-    "draft": { "isPublished": false, "disabled": 1 },
-    "extra_info": {
-      "question_id": question, "publisher": "pc",
-      "pc_business_params": business.to_string(),
-    },
-    "hybrid": { "html": html + &images_html(&images), "textLength": text_len },
-    "reprint": { "reshipment_settings": "allowed" },
-    "commentsPermission": { "comment_permission": "all" },
-    "appreciate": { "can_reward": false },
-    "publishSwitch": { "draft_type": "normal" },
-    "creationStatement": { "disclaimer_status": "close", "disclaimer_type": "none" },
-    "commercialReportInfo": { "isReport": 0 },
-    "toFollower": {},
-    "contentsTables": { "table_of_contents_enabled": false },
-    "thanksInvitation": { "thank_inviter_status": "close", "thank_inviter": "" },
-  });
+  let html = html + &images_html(&images);
+  let draft = json!({ "isPublished": false, "disabled": 1 });
+  let data = answer_data(question, html, text_len, &AnswerForm::default(), draft);
   let id = content_publish(api, &json!({ "action": "answer", "data": data })).await?;
   Ok(
     Action::done("publish", "answer")

@@ -155,6 +155,29 @@ image alone on its line (`![caption](path)`, uploaded and placed there), and
 a link alone on its line with the title `"card"` (`[text](url "card")`) as a
 link card. Without it, every line becomes a paragraph.
 
+### edit
+
+Changes one of your answers or pins (想法) the way Zhihu's editors do. It
+loads the post first, prints the change (each field as old → new) and asks
+(`-y` in scripts).
+
+- Answers: TEXT replaces the whole answer, one paragraph per line; the old
+  answer's pictures and formatting go, and the summary counts the
+  pictures. Reposting, comment, reward, disclaimer and thanks settings
+  stay. Video answers and paid answers are refused; answers have no
+  `--title`.
+- Pins: TEXT replaces the text, `--title` the title (an empty one removes
+  it). Pictures, the video, a link card, topics, the circle and the place
+  stay as they are. Pins with a vote are refused.
+- Articles, questions and videos are not edited here; change articles in
+  the column editor.
+
+```
+atp zhihu edit a:123456789 '改过的回答，每行一段'
+cat answer.txt | atp zhihu edit https://www.zhihu.com/question/1/answer/123456789 -
+atp zhihu edit p:1234567890123456789 '新的想法' --title '标题'
+```
+
 ### delete
 
 Removes your own pin, article, question or answer (not videos).

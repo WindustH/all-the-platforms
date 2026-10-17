@@ -34,9 +34,9 @@ use std::time::Duration;
 
 use api::Api;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Notification, Page,
-  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
-  User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, Insights, Notification,
+  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply,
+  Result, User,
 };
 use refs::Target;
 
@@ -80,6 +80,8 @@ impl Platform for Zhihu {
       Cap::Follow,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
+      Cap::EditTitle,
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
@@ -254,6 +256,11 @@ impl Platform for Zhihu {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     posts::delete(&self.api, &Target::parse(post)?).await
+  }
+
+  /// Answers and pins, through their editors.
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    publish::edit(&self.api, &Target::parse(post)?, edit).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {
