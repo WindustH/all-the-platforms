@@ -40,9 +40,9 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Message, Notification,
-  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply,
-  Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, FolderSpec, Insights, Message,
+  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket,
+  Query, Reply, Result, User,
 };
 
 use api::Api;
@@ -94,6 +94,13 @@ impl Platform for Xhs {
       Cap::Messages,
       Cap::Send,
       Cap::Listen,
+      Cap::FolderCreate,
+      Cap::FolderEdit,
+      Cap::FolderDescription,
+      Cap::FolderPrivacy,
+      Cap::FolderDelete,
+      Cap::FolderAdd,
+      Cap::FolderMove,
     ],
     choices: Choices {
       search_sort: search::SEARCH_SORTS,
@@ -249,6 +256,32 @@ impl Platform for Xhs {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     notes::delete(&self.api, post).await
+  }
+
+  async fn folder_create(&self, folder: &FolderSpec) -> Result<Action> {
+    boards::create(&self.api, folder).await
+  }
+
+  async fn folder_edit(&self, folder: &str, change: &FolderSpec) -> Result<Action> {
+    boards::edit(&self.api, folder, change).await
+  }
+
+  async fn folder_delete(&self, folders: &[String]) -> Result<Vec<Action>> {
+    boards::delete(&self.api, folders).await
+  }
+
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    boards::add(&self.api, folder, posts).await
+  }
+
+  async fn folder_move(
+    &self,
+    from: &str,
+    to: &str,
+    posts: &[String],
+    copy: bool,
+  ) -> Result<Vec<Action>> {
+    boards::shift(&self.api, from, to, posts, copy).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {

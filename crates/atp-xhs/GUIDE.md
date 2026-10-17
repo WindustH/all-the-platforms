@@ -66,8 +66,8 @@ Users: the id, a `/user/profile/<id>` link, or a short link.
 
 Chats: the other account's user id (from `chats`) or a profile link;
 messages are `<chat>/<message id>`. Live rooms (`listen`): `live:ROOM`, a
-`/livestream/<room>` link or the room number. Boards: the id or a
-`/board/<id>` link.
+`/livestream/<room>` link or the room number. Boards: the id, a
+`/board/<id>` link or `#N` after `collections`.
 
 Activities (EVENT): `#N` of the last list, the activity id, its link, or
 its exact name.
@@ -101,6 +101,29 @@ Comments have no sort order. Read comments carry their images in
 `collections [USER]` lists boards (专辑) and `favorites --folder BOARD`
 their notes; few accounts still have boards. Without `--folder`,
 `favorites` lists the notes a user collected.
+
+### folder-create, folder-edit, folder-delete
+
+Boards are the favorites folders here. `folder-create NAME [--desc TEXT]
+[--private]` makes one as the profile's 专辑 tab does: a name of 12
+characters at most, a description of 1000, public unless `--private`.
+`folder-edit BOARD [--name …] [--desc …] [--private | --public]` reads the
+board first and keeps what is not given. `folder-delete BOARD…` asks
+first (`-y` in scripts) and deletes one board per call; the notes in it
+stay collected and keep showing in `favorites`. Boards have no cover of
+their own (`--cover` is not offered).
+
+### folder-add, folder-move
+
+`folder-add BOARD NOTE…` puts notes into a board and `folder-move FROM TO
+NOTE…` moves them there, one call per note (`note/move`, the call the
+web's board picker makes after you collect a note). The call names only
+the board a note goes to: a note sits in one board at a time, so adding
+it to a board takes it out of any other, `folder-move` does not check
+that the notes were in FROM, and `--copy` is refused. There is no
+`folder-remove`: the web has no way to take a note out of a board
+without uncollecting it (`unfavorite`). Collect a note before adding it;
+whether `folder-add` collects one you have not collected is not known.
 
 ### following
 
@@ -163,7 +186,12 @@ the web API ignores.
 
 ### favorite, unfavorite
 
-Collects a note; there are no folders (`--folder` is not supported).
+Collects notes or uncollects them, one call each: the web's uncollect
+call takes one note. `favorite NOTE… --folder BOARD` collects each note,
+then puts it into the board as `folder-add` does; when that second step
+fails, the note stays collected outside the board and the error says so.
+`unfavorite` refuses `--folder`: uncollecting takes a note out of its
+board too.
 
 ### insights
 

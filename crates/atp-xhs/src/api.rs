@@ -5,7 +5,7 @@
 use std::cell::{Cell, RefCell};
 use std::time::Duration;
 
-use atp_core::http::{Req, Resp, status_error};
+use atp_core::http::{Method, Req, Resp, status_error};
 use atp_core::{Ctx, Error, ErrorCode, Result, Value, ValueExt};
 
 use crate::sign::{self, SignSession};
@@ -25,7 +25,8 @@ const RAP_PATHS: &[&str] = &[
   "/web_api/sns/v2/note",
 ];
 
-/// A main-API request: GET parameters or a JSON body sent as signed.
+/// What a main-API request carries, sent as signed: query parameters
+/// (GET, DELETE) or a JSON body (POST, PUT).
 enum Body<'a> {
   Query(&'a [(&'a str, &'a str)]),
   Json(String),
@@ -56,7 +57,7 @@ impl Api {
 
   /// Signed GET; `params` keep their order, as they are part of the signature.
   pub async fn get(&self, path: &str, params: &[(&str, &str)]) -> Result<Value> {
-    self.send_main(path, Body::Query(params), &[]).await
+    self.get_with(path, params, &[]).await
   }
 
   /// Signed GET with extra headers.
@@ -66,7 +67,9 @@ impl Api {
     params: &[(&str, &str)],
     headers: &[(&str, &str)],
   ) -> Result<Value> {
-    self.send_main(path, Body::Query(params), headers).await
+    self
+      .send_main(Method::GET, path, Body::Query(params), headers)
+      .await
   }
 
   pub async fn post(&self, path: &str, body: &Value) -> Result<Value> {
@@ -81,14 +84,37 @@ impl Api {
     headers: &[(&str, &str)],
   ) -> Result<Value> {
     self
-      .send_main(path, Body::Json(body.to_string()), headers)
+      .send_main(Method::POST, path, Body::Json(body.to_string()), headers)
       .await
   }
 
-  async fn send_main(&self, path: &str, body: Body<'_>, headers: &[(&str, &str)]) -> Result<Value> {
+  /// Signed PUT of a JSON body.
+  pub async fn put(&self, path: &str, body: &Value) -> Result<Value> {
+    self
+      .send_main(Method::PUT, path, Body::Json(body.to_string()), &[])
+      .await
+  }
+
+  /// Signed DELETE; `params` go in the query.
+  pub async fn delete(&self, path: &str, params: &[(&str, &str)]) -> Result<Value> {
+    self
+      .send_main(Method::DELETE, path, Body::Query(params), &[])
+      .await
+  }
+
+  /// One signed request. The web app's signer treats every method alike:
+  /// it signs the request target (path and query), then the JSON body when
+  /// there is one; so a DELETE signs as a GET does and a PUT as a POST does.
+  async fn send_main(
+    &self,
+    method: Method,
+    path: &str,
+    body: Body<'_>,
+    headers: &[(&str, &str)],
+  ) -> Result<Value> {
     let a1 = self.device();
     let now = sign::now_ms();
-    // What gets signed: the request target for GET, path + exact body for POST.
+    // What gets signed: the request target, or the path and the exact body.
     let (target, content, rap_data) = match &body {
       Body::Query(params) => {
         let target = sign::get_content(path, params);
@@ -100,10 +126,10 @@ impl Api {
       }
       Body::Json(json) => (path.to_owned(), format!("{path}{json}"), json.clone()),
     };
-    let post = matches!(body, Body::Json(_));
+    let with_body = matches!(body, Body::Json(_));
     let mut signed = sign::main_headers(
       &mut self.session.borrow_mut(),
-      post,
+      with_body,
       path,
       &content,
       &a1,
@@ -113,11 +139,10 @@ impl Api {
       let rap_url = format!("//edith.xiaohongshu.com{path}");
       signed.push(("x-rap-param", sign::x_rap_param(&rap_url, &rap_data, now)));
     }
-    let url = format!("{EDITH}{target}");
-    let mut req = match body {
-      Body::Json(json) => self.ctx.http.post(url).json_text(json),
-      Body::Query(_) => self.ctx.http.get(url),
-    };
+    let mut req = self.ctx.http.request(method, format!("{EDITH}{target}"));
+    if let Body::Json(json) = body {
+      req = req.json_text(json);
+    }
     req = base_headers(req, HOME);
     for (k, v) in signed {
       req = req.header(k, v);

@@ -12,7 +12,7 @@ use super::session::SignState;
 /// Encoded `x3` for one request.
 ///
 /// `d` is the MD5 of the signed content (URI plus query or body), `m` the MD5
-/// of the path for POST requests (equal to `d` for GET).
+/// of the path for requests with a body (equal to `d` for those without).
 pub fn x3(
   d: &[u8; 16],
   m: &[u8; 16],

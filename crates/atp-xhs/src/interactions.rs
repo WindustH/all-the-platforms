@@ -4,6 +4,7 @@
 use atp_core::{Action, Error, Reply, Result, ValueExt, json};
 
 use crate::api::Api;
+use crate::boards;
 use crate::refs::{self, NoteRef, user_url};
 
 const COMMENT: &str = "/api/sns/web/v1/comment/post";
@@ -26,9 +27,15 @@ pub async fn like(api: &Api, arg: &str, undo: bool) -> Result<Action> {
   Ok(Action::done(action, &note.id).with_url(note.url()))
 }
 
+/// Collect a note (or with `undo`, uncollect it). With a board, the
+/// collected note goes into it next, as the board picker the web shows
+/// after collecting does.
 pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
-  if folder.is_some() {
-    return Err(Error::unsupported("favorite --folder"));
+  let board = folder.map(refs::board_ref).transpose()?;
+  if undo && board.is_some() {
+    return Err(Error::input(
+      "unfavorite takes a note out of its board too: drop --folder",
+    ));
   }
   let note = prepare_note(api, arg).await?;
   let (path, body, action) = match undo {
@@ -44,7 +51,18 @@ pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) ->
     ),
   };
   api.post(path, &body).await?;
-  Ok(Action::done(action, &note.id).with_url(note.url()))
+  let done = Action::done(action, &note.id).with_url(note.url());
+  let Some(board) = board else {
+    return Ok(done);
+  };
+  api.write_pause().await;
+  match boards::place(api, &board, &note).await {
+    Ok(()) => Ok(done.with_message(format!("board {board}"))),
+    Err(e) => Err(Error {
+      message: format!("collected, but not put into board {board}: {}", e.message),
+      ..e
+    }),
+  }
 }
 
 /// Comment on a note, or reply to one of its comments.

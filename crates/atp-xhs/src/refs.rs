@@ -72,6 +72,27 @@ pub fn live_url(room: &str) -> String {
   format!("{HOME}/livestream/{room}")
 }
 
+static BOARD_LINK: LazyLock<Regex> =
+  LazyLock::new(|| Regex::new(r"/board/([0-9a-f]{24})").expect("regex"));
+
+/// A board (专辑): its id or a `/board/<id>` link.
+pub fn board_ref(arg: &str) -> Result<String> {
+  let arg = arg.trim();
+  if let Some(m) = BOARD_LINK.captures(arg) {
+    return Ok(m[1].to_owned());
+  }
+  if arg.len() == 24 && arg.bytes().all(|b| b.is_ascii_hexdigit()) {
+    return Ok(arg.to_owned());
+  }
+  Err(Error::input(format!(
+    "not a board: {arg} (expected a board id or a /board/<id> link)"
+  )))
+}
+
+pub fn board_url(id: &str) -> String {
+  format!("{HOME}/board/{id}")
+}
+
 /// Keep query-significant characters of a token from breaking the URL.
 fn sanitize(token: &str) -> String {
   token

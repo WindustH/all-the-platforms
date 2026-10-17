@@ -1,22 +1,28 @@
-//! Boards (专辑): the named collections notes are saved into, and their notes.
+//! Boards (专辑): the named collections notes are saved into, their notes,
+//! and managing them as the profile's 专辑 tab and the board page do.
 //!
 //! Few accounts still have boards; the web app lists them on profiles
-//! (`board/user`, page-numbered) and opens one at `/board/<id>`.
+//! (`board/user`, page-numbered) and opens one at `/board/<id>`. It puts a
+//! collected note into a board with `note/move`, which names only the board
+//! the note goes to: a note sits in one board at a time, and the web has no
+//! way to take it out of one without uncollecting it.
 
-use std::sync::LazyLock;
-
-use atp_core::{Collection, Error, Page, PageReq, Post, Result, Value, ValueExt};
-use regex::Regex;
+use atp_core::{
+  Action, Collection, Error, FolderSpec, Page, PageReq, Post, Result, Value, ValueExt, bulk, json,
+};
 
 use crate::api::Api;
-use crate::refs;
+use crate::refs::{self, NoteRef, board_ref, board_url};
 use crate::users::{self, note_page};
 
+const BOARD: &str = "/api/sns/web/v1/board";
 const USER_BOARDS: &str = "/api/sns/web/v1/board/user";
 const BOARD_NOTES: &str = "/api/sns/web/v1/board/note";
+const MOVE: &str = "/api/sns/web/v1/note/move";
 
-static BOARD_LINK: LazyLock<Regex> =
-  LazyLock::new(|| Regex::new(r"/board/([0-9a-f]{24})").expect("regex"));
+/// The longest name and description the web's board form takes.
+const NAME_MAX: usize = 12;
+const DESC_MAX: usize = 1000;
 
 /// A user's boards (default: the logged-in account).
 pub async fn list(api: &Api, user: Option<&str>, req: &PageReq) -> Result<Page<Collection>> {
@@ -42,7 +48,7 @@ pub async fn list(api: &Api, user: Option<&str>, req: &PageReq) -> Result<Page<C
 /// Notes of one board, by id or `/board/<id>` link.
 pub async fn notes(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Post>> {
   api.require_login()?;
-  let id = board_id(arg)?;
+  let id = board_ref(arg)?;
   let num = req.size_within(30).to_string();
   let cursor = req.cursor.clone().unwrap_or_default();
   let params = [
@@ -54,17 +60,153 @@ pub async fn notes(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Post>> {
   Ok(note_page(api, &api.get(BOARD_NOTES, &params).await?))
 }
 
-fn board_id(arg: &str) -> Result<String> {
-  let arg = arg.trim();
-  if let Some(m) = BOARD_LINK.captures(arg) {
-    return Ok(m[1].to_owned());
+// ── managing ────────────────────────────────────────────────────────────
+
+/// Create a board, public unless `private`, as the 专辑 tab's form does.
+pub async fn create(api: &Api, spec: &FolderSpec) -> Result<Action> {
+  api.require_login()?;
+  check(spec)?;
+  let name = spec.name.clone().unwrap_or_default();
+  let body = json!({
+    "name": name,
+    "desc": spec.description.as_deref().unwrap_or_default(),
+    "privacy": privacy(spec.private.unwrap_or(false)),
+  });
+  api.write_pause().await;
+  let data = api.post(BOARD, &body).await?;
+  let action = Action::done("folder-create", name);
+  Ok(match data.first_str(&["id", "board_id"]) {
+    Some(id) => action.with_url(board_url(&id)).with_id(id),
+    None => action,
+  })
+}
+
+/// Rename a board or change its description or privacy. The board page's
+/// form sends all three, so what is not given is read from the board.
+pub async fn edit(api: &Api, arg: &str, spec: &FolderSpec) -> Result<Action> {
+  api.require_login()?;
+  check(spec)?;
+  let id = board_ref(arg)?;
+  let board = info(api, &id).await?;
+  let kept =
+    |new: &Option<String>, key: &str| new.clone().or_else(|| board.str(key)).unwrap_or_default();
+  let current = board
+    .i64("privacy")
+    .or_else(|| board.bool("privacy").map(i64::from));
+  let body = json!({
+    "boardid": id,
+    "name": kept(&spec.name, "name"),
+    "desc": kept(&spec.description, "desc"),
+    "privacy": spec.private.map_or(current.unwrap_or(0), privacy),
+  });
+  api.write_pause().await;
+  api.put(BOARD, &body).await?;
+  Ok(Action::done("folder-edit", &id).with_url(board_url(&id)))
+}
+
+/// Delete boards, one call each. Their notes stay collected.
+pub async fn delete(api: &Api, boards: &[String]) -> Result<Vec<Action>> {
+  api.require_login()?;
+  bulk::each("folder-delete", boards, async |arg| {
+    let id = board_ref(arg)?;
+    api.write_pause().await;
+    api.delete(BOARD, &[("board_id", id.as_str())]).await?;
+    Ok(Action::done("folder-delete", id))
+  })
+  .await
+}
+
+/// Put notes into a board, one call each; a note in another board leaves
+/// it.
+pub async fn add(api: &Api, board: &str, notes: &[String]) -> Result<Vec<Action>> {
+  api.require_login()?;
+  let id = board_ref(board)?;
+  bulk::each("folder-add", notes, async |arg| {
+    let note = place_ref(api, &id, arg).await?;
+    let action = Action::done("folder-add", &note.id).with_url(note.url());
+    Ok(action.with_message(format!("board {id}")))
+  })
+  .await
+}
+
+/// Move notes into another board with the same call, which does not name
+/// the board they leave. A note sits in one board, so there is no `copy`.
+pub async fn shift(
+  api: &Api,
+  from: &str,
+  to: &str,
+  notes: &[String],
+  copy: bool,
+) -> Result<Vec<Action>> {
+  if copy {
+    return Err(
+      Error::unsupported("folder-move --copy")
+        .with_hint("a Xiaohongshu note sits in one board at a time"),
+    );
   }
-  if arg.len() == 24 && arg.bytes().all(|b| b.is_ascii_hexdigit()) {
-    return Ok(arg.to_owned());
+  api.require_login()?;
+  let (from, to) = (board_ref(from)?, board_ref(to)?);
+  bulk::each("folder-move", notes, async |arg| {
+    let note = place_ref(api, &to, arg).await?;
+    let action = Action::done("folder-move", &note.id).with_url(note.url());
+    Ok(action.with_message(format!("{from} → {to}")))
+  })
+  .await
+}
+
+/// Put a resolved note into a board, as the board picker shown after
+/// collecting does.
+pub async fn place(api: &Api, board: &str, note: &NoteRef) -> Result<()> {
+  let body = json!({"target_board_id": board, "notes_id": note.id});
+  api.post(MOVE, &body).await?;
+  Ok(())
+}
+
+async fn place_ref(api: &Api, board: &str, arg: &str) -> Result<NoteRef> {
+  let note = refs::note_ref(api, arg).await?;
+  api.write_pause().await;
+  place(api, board, &note).await?;
+  Ok(note)
+}
+
+/// One board as the board page loads it.
+async fn info(api: &Api, id: &str) -> Result<Value> {
+  let path = format!("{BOARD}/{id}");
+  let data = api
+    .get(&path, &[("image_formats", "jpg,webp,avif")])
+    .await?;
+  match data.str("name") {
+    Some(_) => Ok(data),
+    None => Err(Error::not_found(format!("no board {id}"))),
   }
-  Err(Error::input(format!(
-    "not a board: {arg} (expected a board id or a /board/<id> link)"
-  )))
+}
+
+/// The limits of the web's board form.
+fn check(spec: &FolderSpec) -> Result<()> {
+  if spec
+    .name
+    .as_ref()
+    .is_some_and(|n| n.chars().count() > NAME_MAX)
+  {
+    return Err(Error::input(format!(
+      "a board name has at most {NAME_MAX} characters"
+    )));
+  }
+  if spec
+    .description
+    .as_ref()
+    .is_some_and(|d| d.chars().count() > DESC_MAX)
+  {
+    return Err(Error::input(format!(
+      "a board description has at most {DESC_MAX} characters"
+    )));
+  }
+  Ok(())
+}
+
+/// `privacy` as the web sends it: 1 private, 0 public.
+fn privacy(private: bool) -> i64 {
+  i64::from(private)
 }
 
 fn board(v: &Value) -> Option<Collection> {
@@ -74,7 +216,7 @@ fn board(v: &Value) -> Option<Collection> {
     .first()
     .and_then(|i| i.as_str().map(str::to_owned).or_else(|| i.str("url")));
   let mut collection = Collection {
-    url: Some(format!("{}/board/{id}", crate::api::HOME)),
+    url: Some(board_url(&id)),
     kind: "board".into(),
     name: v.first_str(&["name", "title"]).unwrap_or_default(),
     description: v.str("desc"),

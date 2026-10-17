@@ -55,18 +55,20 @@ pub fn quote(s: &str, safe: &[u8]) -> String {
 
 /// Signing headers for one main-API request.
 ///
-/// `content` is [`get_content`] for GET, or `path` followed by the exact JSON
-/// body for POST.
+/// `content` is [`get_content`] for a request without a body (GET, DELETE),
+/// or `path` followed by the exact JSON body for one with a body (POST,
+/// PUT): the web app's signer adds the body to the request target whatever
+/// the method.
 pub fn main_headers(
   session: &mut SignSession,
-  post: bool,
+  with_body: bool,
   path: &str,
   content: &str,
   a1: &str,
   now_ms: u64,
 ) -> Vec<(&'static str, String)> {
   let d: [u8; 16] = Md5::digest(content.as_bytes()).into();
-  let m: [u8; 16] = if post {
+  let m: [u8; 16] = if with_body {
     Md5::digest(path.as_bytes()).into()
   } else {
     d
