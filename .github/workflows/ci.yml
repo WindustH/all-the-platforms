@@ -38,6 +38,10 @@ jobs:
           "$atp" platforms --json > /dev/null
           "$atp" guide mcp > /dev/null
           "$atp" bili search --help > /dev/null
+          # Debug builds assert that no platform repeats a command name.
+          for p in $("$atp" platforms --json | jq -r '.data.platforms[].id' | tr -d '\r'); do
+            "$atp" "$p" --help > /dev/null
+          done
           printf '%s\n' \
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
             '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
