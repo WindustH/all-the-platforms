@@ -111,7 +111,7 @@ async fn editable(api: &Api, mid: &str, post: &Value) -> Result<Editable> {
       .or_else(|| post.first_str(&["longText.longTextContent", "text_raw"]))
       .unwrap_or_default(),
     pictures: pictures(&status, post)?,
-    left,
+    left: left.filter(|n| *n > 0),
     status,
   })
 }

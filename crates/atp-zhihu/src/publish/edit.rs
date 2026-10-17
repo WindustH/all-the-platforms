@@ -18,7 +18,7 @@ use super::{AnswerForm, answer_data, content_publish, paragraphs, trace_id};
 use crate::api::{Api, V4, WWW};
 use crate::refs::{Target, answer_url};
 
-const ANSWER_INCLUDE: &str = "content,editable_content,reward_info,attachment,content_source,question,answer_type,paid_info,relationship.is_author";
+const ANSWER_INCLUDE: &str = "content,editable_content,reward_info,attachment,content_source,question,answer_type,relationship.is_author";
 /// Parts of a pin's editor data that go back as they are.
 const PIN_KEPT: &[&str] = &["linkCard", "topic", "ring", "location"];
 
@@ -58,7 +58,11 @@ async fn answer(api: &Api, id: &str, edit: &Edit) -> Result<Action> {
     .unwrap_or_default();
   let mut change = Change::new(format!("Zhihu answer {id}:"));
   change.field("text", &html_to_text(&old), text);
-  let pictures = old.matches("<img").count();
+  // A picture is a <figure>, often with a second <img> in <noscript>.
+  let pictures = match old.matches("<figure").count() {
+    0 => old.matches("<img").count(),
+    figures => figures,
+  };
   if pictures > 0 {
     change.field("pictures", &pictures.to_string(), "0");
   }
@@ -94,8 +98,7 @@ fn refuse(v: &Value) -> Result<()> {
     v.str("attachment.type").as_deref(),
     Some("video" | "zvideo")
   );
-  let paid = v.str("answer_type").as_deref() == Some("paid_column_content")
-    || v.at("paid_info").as_object().is_some_and(|o| !o.is_empty());
+  let paid = v.str("answer_type").as_deref() == Some("paid_column_content");
   match (video, paid) {
     (true, _) => Err(Error::unsupported("edit of video answers")),
     (_, true) => Err(Error::unsupported("edit of paid answers")),
@@ -136,7 +139,7 @@ fn form(answer: &Value, settings: &Value) -> AnswerForm {
 
 async fn pin(api: &Api, id: &str, edit: &Edit) -> Result<Action> {
   let plugin = plugin(api, id).await?;
-  if !plugin.at("vote").is_null() {
+  if plugin.at("vote").as_object().is_some_and(|o| !o.is_empty()) {
     return Err(Error::unsupported("edit of pins with a vote"));
   }
   let old_html = plugin.str("hybrid.html").unwrap_or_default();

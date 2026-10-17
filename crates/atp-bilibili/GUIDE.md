@@ -164,7 +164,8 @@ Dynamics (`t.bilibili.com/ID`) change the way their editor changes them:
   `--no-topics` removes it.
 - `--cover` and `--visibility` are refused.
 - Only dynamics Bilibili offers to edit change: your own, not while they
-  are reviewed.
+  are reviewed, and not with a commercial card. The summary shows the
+  edits left and Bilibili's warning when it gives them.
 
 ```
 atp bili edit BV1xx411c7mD --title '新标题' --topic 编程 --topic Rust

@@ -19,8 +19,9 @@ cover and visibility.
   `--cover PATH` (`edit-cover`); `--visibility public|friends|private`
   (`edit-visibility`). Elsewhere they are hidden and refused.
 - What is not given stays as it was.
-- Platforms that show the change before sending it (Douyin) ask first;
-  scripts pass `-y`.
+- Content platforms (Bilibili, Douyin, Jike, Weibo, Zhihu) load the post
+  first, print the change (each field as old → new) and ask; scripts pass
+  `-y`.
 - The result is an Action with the post's `id` and `url`.
 
 More: `atp guide refs`

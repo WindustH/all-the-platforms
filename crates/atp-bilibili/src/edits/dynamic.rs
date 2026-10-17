@@ -1,9 +1,10 @@
 //! Changing a dynamic as t.bilibili.com's editor does (dyn-home bundle
 //! `index.*.js`: `_getEditData`, `getReq`, `feed/edit/dyn`). The
-//! dynamic's detail gives its text nodes, pictures, title and topic,
-//! `edit/infos` whether it may change now, and the whole dynamic goes
-//! back through `feed/edit/dyn`, signed like `create/dyn`: what is not
-//! asked is sent as it was, the pictures included.
+//! dynamic's detail gives its text nodes, pictures, title and topic;
+//! `edit/infos` whether it may change now, the edits left and, for a
+//! repost, what it reposts; the whole dynamic goes back through
+//! `feed/edit/dyn`, signed like `create/dyn`: what is not asked is sent
+//! as it was, the pictures included.
 
 use atp_core::cli::Change;
 use atp_core::{Action, Edit, Error, ErrorCode, Result, Value, ValueExt, json};
@@ -58,15 +59,10 @@ pub async fn edit(api: &Api, id: &str, edit: &Edit) -> Result<Action> {
     return Err(Error::unsupported("edit --visibility (dynamics)"));
   }
   api.require_login()?;
-  let old = Dynamic::of(id, &detail(api, id).await?)?;
-  api
-    .get(INFOS)
-    .arg("dyn_id", id)
-    .arg("scene", 1)
-    .send()
-    .await?;
+  let mut old = Dynamic::of(id, &detail(api, id).await?)?;
+  let infos = infos(api, &mut old).await?;
   let new = change(&old, edit)?;
-  ask(&old, &new, edit.yes)?;
+  ask(&old, &new, &infos, edit.yes)?;
   let mut body = json!({ "dyn_id_str": id, "dyn_req": request(&new) });
   if let Some(orig) = &new.repost_of {
     body["web_repost_src"] = json!({ "dyn_id_str": orig });
@@ -106,35 +102,77 @@ async fn detail(api: &Api, id: &str) -> Result<Value> {
   }
 }
 
+/// What the editor learns when it opens (`edit/infos`): whether the
+/// dynamic may change now (an error says why not), the edits left, a
+/// warning to show, and the dynamic a repost reposts. A commercial card
+/// would have to go back with the edit; such dynamics are refused.
+async fn infos(api: &Api, old: &mut Dynamic) -> Result<Value> {
+  let infos = api
+    .get(INFOS)
+    .arg("dyn_id", &old.id)
+    .arg("scene", 1)
+    .send()
+    .await?;
+  if infos
+    .at("commercial")
+    .as_object()
+    .is_some_and(|o| !o.is_empty())
+  {
+    return Err(Error::unsupported(
+      "edit of dynamics with a commercial card",
+    ));
+  }
+  if old.repost_of.is_some() {
+    if let Some(orig) = infos.str("orig_dyn_id_str").filter(|o| o != "0") {
+      old.repost_of = Some(orig);
+    }
+    if old.repost_of.as_deref() == Some("") {
+      return Err(Error::unsupported(
+        "edit of a repost whose original is gone",
+      ));
+    }
+  }
+  Ok(infos)
+}
+
+/// Text, picture and repost dynamics the editor offers to change; a
+/// video's dynamic changes with the video.
+fn editable(item: &Value, kind: &str) -> Result<()> {
+  match kind {
+    "DYNAMIC_TYPE_WORD" | "DYNAMIC_TYPE_DRAW" | "DYNAMIC_TYPE_FORWARD" => {}
+    "DYNAMIC_TYPE_AV" => {
+      let bvid = item
+        .str("modules.module_dynamic.major.archive.bvid")
+        .unwrap_or_default();
+      return Err(
+        Error::input("this dynamic announces a video; edit the video instead")
+          .with_hint(format!("atp bili edit {bvid}")),
+      );
+    }
+    "DYNAMIC_TYPE_ARTICLE" => return Err(Error::unsupported("edit (articles)")),
+    _ => {
+      return Err(Error::unsupported(format!(
+        "edit of a dynamic of type {kind}"
+      )));
+    }
+  }
+  if item.bool("basic.editable") != Some(true) {
+    return Err(
+      Error::new(
+        ErrorCode::PermissionDenied,
+        "Bilibili does not offer to edit this dynamic",
+      )
+      .with_hint("only your own dynamics change, and not while they are reviewed"),
+    );
+  }
+  Ok(())
+}
+
 impl Dynamic {
   fn of(id: &str, item: &Value) -> Result<Self> {
     let kind = item.str("type").unwrap_or_default();
+    editable(item, &kind)?;
     let body = item.at("modules.module_dynamic");
-    match kind.as_str() {
-      "DYNAMIC_TYPE_WORD" | "DYNAMIC_TYPE_DRAW" | "DYNAMIC_TYPE_FORWARD" => {}
-      "DYNAMIC_TYPE_AV" => {
-        let bvid = body.str("major.archive.bvid").unwrap_or_default();
-        return Err(
-          Error::input("this dynamic announces a video; edit the video instead")
-            .with_hint(format!("atp bili edit {bvid}")),
-        );
-      }
-      "DYNAMIC_TYPE_ARTICLE" => return Err(Error::unsupported("edit (articles)")),
-      _ => {
-        return Err(Error::unsupported(format!(
-          "edit of a dynamic of type {kind}"
-        )));
-      }
-    }
-    if item.bool("basic.editable") != Some(true) {
-      return Err(
-        Error::new(
-          ErrorCode::PermissionDenied,
-          "Bilibili does not offer to edit this dynamic",
-        )
-        .with_hint("only your own dynamics change, and not while they are reviewed"),
-      );
-    }
     let opus = body.at("major.opus");
     let (title, nodes, pictures, picture_mode) = if opus.is_object() {
       (
@@ -151,8 +189,7 @@ impl Dynamic {
     Ok(Self {
       id: id.to_owned(),
       repost_of: (kind == "DYNAMIC_TYPE_FORWARD")
-        .then(|| item.str("orig.id_str"))
-        .flatten(),
+        .then(|| item.str("orig.id_str").unwrap_or_default()),
       title: title.unwrap_or_default(),
       text: shown(&contents),
       locked: contents
@@ -275,8 +312,9 @@ fn topic(given: &str, old: Option<&Topic>) -> Result<Topic> {
   Ok(Topic { id, name })
 }
 
-/// Show the change and ask (or take `--yes`).
-fn ask(old: &Dynamic, new: &Dynamic, yes: bool) -> Result<()> {
+/// Show the change, with the edits left and Bilibili's warning, and ask
+/// (or take `--yes`).
+fn ask(old: &Dynamic, new: &Dynamic, infos: &Value, yes: bool) -> Result<()> {
   let topic = |t: &Option<Topic>| match t {
     Some(Topic {
       name: Some(name), ..
@@ -293,6 +331,12 @@ fn ask(old: &Dynamic, new: &Dynamic, yes: bool) -> Result<()> {
     .field("topic", &topic(&old.topic), &topic(&new.topic));
   if !old.pictures.is_empty() {
     change.row("pictures", &format!("{} (kept)", old.pictures.len()));
+  }
+  if let Some(left) = infos.u64("remain_edit_times") {
+    change.row("edits", &format!("{left} left"));
+  }
+  if let Some(warning) = infos.str("edit_alert_msg") {
+    change.row("note", &warning);
   }
   change.confirm(yes, "change this dynamic on Bilibili")
 }

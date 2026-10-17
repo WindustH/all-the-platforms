@@ -247,6 +247,12 @@ fn body(view: &Value, new: &Fields, cover: Option<String>, csrf: &str) -> Value 
   } else {
     view.i64("watermark.state").unwrap_or(0)
   };
+  // 1 hides the video from the space, 2 (the default) shows it.
+  let space_hidden = view
+    .i64("space_hidden")
+    .or_else(|| a.i64("space_hidden"))
+    .filter(|s| *s != 0)
+    .unwrap_or(2);
   let mut body = json!({
     "aid": a.at("aid"),
     "title": new.title,
@@ -264,7 +270,7 @@ fn body(view: &Value, new: &Fields, cover: Option<String>, csrf: &str) -> Value 
     "handle_staff": false,
     "topic_grey": 1,
     "is_only_self": i32::from(new.private),
-    "space_hidden": view.i64("space_hidden").filter(|s| *s != 0).unwrap_or(2),
+    "space_hidden": space_hidden,
     "watermark": { "state": watermark },
     "no_reprint": a.i64("no_reprint").unwrap_or(0),
     "is_360": i32::from(a.i64("is_360") == Some(1)),
