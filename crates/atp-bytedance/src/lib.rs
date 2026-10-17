@@ -3,11 +3,13 @@
 //! ids), the query encoding it signs ([`query`]), visitor identity cookies
 //! ([`visitor`]), the passports' QR and phone logins ([`passport`]), the
 //! key pair logins register for signed writes ([`ticket_guard`]) and the
-//! live rooms' push protocol with its signature ([`webcast`]).
+//! live rooms' push protocol with its signature ([`webcast`]), and the
+//! AWS-style signatures of the upload gateways ([`sigv4`]).
 
 pub mod abogus;
 pub mod passport;
 pub mod query;
+pub mod sigv4;
 pub mod ticket_guard;
 pub mod visitor;
 pub mod webcast;

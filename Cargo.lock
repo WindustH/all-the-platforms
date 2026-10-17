@@ -541,6 +541,7 @@ version = "0.1.0"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
+ "btls",
  "flate2",
  "hmac 0.12.1",
  "jiff",
@@ -698,6 +699,7 @@ dependencies = [
  "base64 0.22.1",
  "cbc 0.1.2",
  "clap",
+ "crc32fast",
  "futures-util",
  "jiff",
  "md-5",

@@ -40,6 +40,13 @@ pub const DOUYIN: App = App {
   aid: 6383,
   page_id: 6241,
 };
+/// creator.douyin.com starts its own copy of the SDK (`bdms` 1.0.1.16,
+/// through `sdk-glue` 1.0.0.62) with these ids; its queries carry
+/// `aid=1128` all the same.
+pub const DOUYIN_CREATOR: App = App {
+  aid: 2906,
+  page_id: 33638,
+};
 pub const TOUTIAO: App = App {
   aid: 24,
   page_id: 6457,

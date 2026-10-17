@@ -151,6 +151,7 @@ pub fn command<P: Platform>() -> clap::Command {
   if !info.supports(Cap::CommentImages) {
     cmd = cmd.mut_subcommand("comment", |c| c.mut_arg("images", |a| a.hide(true)));
   }
+  cmd = cmd.mut_subcommand("post", |c| write::post_options(c, &info));
   let ch = info.choices;
   cmd = with_choices(cmd, "search", "sort", ch.search_sort);
   cmd = with_choices(cmd, "search", "filter", ch.search_filter);

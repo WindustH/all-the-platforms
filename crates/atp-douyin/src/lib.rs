@@ -5,12 +5,15 @@
 //! `a_bogus` (see [`sign`]). Writes carry ticket-guard headers signed with
 //! the key ATP registers when it logs in (QR code or texted code), so a
 //! session copied from a browser reads but does not write. `listen` follows
-//! live rooms over the webcast websocket.
+//! live rooms over the webcast websocket. Publishing and deleting go
+//! through the creator platform ([`creator`]), as its web uploader does.
 
 mod api;
 mod comments;
+mod creator;
 mod discover;
 mod extra;
+mod items;
 mod library;
 mod live;
 mod login;
@@ -20,13 +23,15 @@ mod posts;
 mod refs;
 mod rooms;
 mod sign;
+mod uploads;
 mod users;
+mod works;
 
 use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Media, Notification, Page, PageReq,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Media, Notification, Page, PageReq,
   Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User,
 };
 
@@ -41,7 +46,7 @@ impl Platform for Douyin {
     id: "douyin",
     name: "Douyin",
     aliases: &["dy"],
-    about: "Douyin (抖音): videos, image posts, comments, users, hot boards and live danmaku",
+    about: "Douyin (抖音): videos, image posts, comments, users, hot boards, live danmaku and publishing",
     home: "https://www.douyin.com",
     cookie_domains: &["douyin.com"],
     required_cookies: api::LOGIN_COOKIES,
@@ -68,6 +73,15 @@ impl Platform for Douyin {
       Cap::Comment,
       Cap::DeleteComment,
       Cap::Follow,
+      Cap::Publish,
+      Cap::PostVideo,
+      Cap::PostArticle,
+      Cap::PostVisibility,
+      Cap::PostSchedule,
+      Cap::PostAiLabel,
+      Cap::PostCollection,
+      Cap::PostMusic,
+      Cap::Delete,
       Cap::Listen,
       Cap::Download,
     ],
@@ -212,6 +226,14 @@ impl Platform for Douyin {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     users::follow(&self.api, user, undo).await
+  }
+
+  async fn publish(&self, draft: &Draft) -> Result<Action> {
+    works::publish(&self.api, draft).await
+  }
+
+  async fn delete(&self, post: &str) -> Result<Action> {
+    works::delete(&self.api, post).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {

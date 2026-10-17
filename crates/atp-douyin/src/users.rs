@@ -183,15 +183,20 @@ pub async fn following(api: &Api, arg: &str, page: &PageReq) -> Result<Page<User
   relations(api, arg, FOLLOWING, "followings", page).await
 }
 
+/// The logged-in account's uid.
+pub async fn uid(api: &Api) -> Result<String> {
+  let me = whoami(api).await?;
+  me.extra
+    .get("uid")
+    .and_then(Value::as_str)
+    .map(str::to_owned)
+    .ok_or_else(|| Error::upstream("Douyin returned the account without its uid"))
+}
+
 /// The MD5 of the logged-in account's uid, which the web client appends
 /// to its writes.
 pub async fn uid_hash(api: &Api) -> Result<String> {
-  let me = whoami(api).await?;
-  let uid = me
-    .extra
-    .get("uid")
-    .and_then(Value::as_str)
-    .ok_or_else(|| Error::upstream("Douyin returned the account without its uid"))?;
+  let uid = uid(api).await?;
   Ok(
     Md5::digest(uid.as_bytes())
       .iter()

@@ -40,6 +40,19 @@ pub enum Command {
     /// web_rid or live.douyin.com/… link
     room: String,
   },
+  /// Your collections (合集), which `post --collection` takes
+  Mixes {
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// The music library of image posts and articles, for `post --music`
+  #[command(after_long_help = EX_MUSICS)]
+  Musics {
+    /// A category id from the list without it (TYPE:ID); shows its songs
+    category: Option<String>,
+    #[command(flatten)]
+    page: PageArgs,
+  },
 }
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
@@ -64,6 +77,16 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       )
     }
     Command::Live { room } => Data::Post(Box::new(rooms::room(api, &room).await?)),
+    Command::Mixes { page } => Data::Collections(
+      page
+        .collect(async |r| library::mixes(api, &r).await)
+        .await?,
+    ),
+    Command::Musics { category, page } => Data::Collections(
+      page
+        .collect(async |r| library::musics(api, category.as_deref(), &r).await)
+        .await?,
+    ),
   })
 }
 
@@ -75,3 +98,11 @@ Examples:
 The code is typed in on the terminal. A captcha stops the login with
 verification_required.
 More: atp guide douyin login-sms";
+
+const EX_MUSICS: &str = "\
+Examples:
+  atp douyin musics                   # the categories
+  atp douyin musics 1:7 -n 40         # the songs of one
+  atp douyin post -i a.jpg -i b.jpg --title 标题 --music 7123456789012345678
+
+More: atp guide douyin musics";

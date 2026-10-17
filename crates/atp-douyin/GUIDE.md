@@ -24,8 +24,8 @@ only printed). It needs a terminal; ATP never reads texts itself.
 Before either login ATP creates a key pair and hands the public key to the
 passport, as the browser does (Douyin's "ticket guard"); the passport
 answers the login with a ticket for that key, which ATP keeps with the
-session. Likes, favorites, comments and follows are signed with it, so
-they work only on sessions made by these two logins. Whether the passport
+session. Likes, favorites, comments, follows, publishing and deleting are
+signed with it, so they work only on sessions made by these two logins. Whether the passport
 issues that ticket to ATP's logins has not been confirmed; without it,
 writes fail with `not_authenticated` ("this session cannot sign writes").
 
@@ -82,6 +82,15 @@ log in again.
   that reproduces them reports likes sent without device traits answered
   with HTTP 403 and the session logged out. Try them on an account you can
   afford to log in again.
+- Publishing and deleting go to creator.douyin.com like its web uploader:
+  `a_bogus` with the creator page's ids, the secsdk CSRF token, and the
+  ticket-guard signature its consumer SDK makes (an HMAC under a key
+  agreed with Douyin's built-in server key, over the passport's clock).
+  When Douyin wants an identity check (二次验证), a captcha, or answers
+  with nothing, the command stops with `verification_required` and the
+  upload page; ATP does not open it for you, since passing a check there
+  does not clear the call ATP made. Publish once on creator.douyin.com in
+  the browser (pass the check it asks for), then retry.
 
 ## References
 
@@ -179,6 +188,72 @@ login`.
 `mix MIX` and `music MUSIC` list the posts of a mix or a music; `related
 POST` the posts Douyin recommends next to one.
 
+### post
+
+Publishes through the creator platform (creator.douyin.com) the way its
+web uploader does. The files are uploaded first (videos in parts, with
+progress; a video upload that stopped continues when the same command
+runs again within two hours), then the work is created. Before anything
+is uploaded ATP prints what it is about to publish (format, title,
+visibility, the AI label, files and sizes) and asks; scripts pass `-y`.
+The answer is the new work's id (`post` → `id`), which `delete` and
+`read` take.
+
+One of three formats per post:
+
+- **Video**: `--video FILE`, an optional `--title` (30 characters at
+  most) and TEXT (the description, 1000 at most). Without `--cover`
+  Douyin's first frame is the cover; `--cover IMAGE` uploads one.
+- **Image post (图文)**: `-i IMAGE` (repeatable, in order; the first is
+  the cover), `--title` (20 at most), TEXT, and `--music ID` for
+  background music (ids from `atp douyin musics`).
+- **Article (文章)**: `--article FILE`, a Markdown or plain-text file sent
+  as the body (100 characters at least; pictures inside it are not
+  uploaded, so `![...](...)` is refused), `--title` (required, 30 at
+  most), `--cover IMAGE` (required), TEXT as the summary (30 at most),
+  and `--music ID`.
+
+Options for all three:
+
+- `--topic NAME` (or `--tag`, repeatable) adds a hashtag after the text.
+  Videos and image posts take any name, as typed in the editor; an
+  article's topics must be ones Douyin suggests for that exact name.
+- `--visibility public|friends|private` (default public; `private` is
+  仅自己可见). Posts in a collection must be public.
+- `--ai` sets Douyin's 「内容由AI生成」 declaration (自主声明), which China's
+  rules on labelling AI-generated content require for AI-made or
+  AI-narrated work: the item carries `declare.user_declare_info` =
+  `{"choose_value":"aigc"}`. Videos and image posts only; the article
+  form has no declaration.
+- `--schedule WHEN` publishes later, 2 hours to 14 days ahead (`+3h`,
+  `2026-10-20 20:00` in local time, or an RFC 3339 time).
+- `--collection NAME|ID` adds the post to one of your collections (合集)
+  as its next episode (`atp douyin mixes` lists them).
+
+```
+atp douyin post --video ep01.mp4 --cover ep01.jpg --title '『操作系统 Ep.01』绪论' --ai --visibility private
+atp douyin post -i a.jpg -i b.jpg -i c.jpg --title 测试 '正文' --topic 摄影
+atp douyin post --article notes.md --title 读书笔记 --cover head.jpg '一句话摘要'
+```
+
+### delete
+
+Deletes one of your works through the creator platform (the id, a link,
+or `#N`), after asking (`-y` in scripts).
+
+### mixes
+
+Your collections (合集) on the creator platform, with their episode
+counts; `post --collection` takes a name or an id from here. Creating a
+collection is not offered.
+
+### musics
+
+The music library of image posts and articles: without an argument its
+categories (`TYPE:ID`), with one the songs of that category, each with
+its id and length in seconds. Searching the library is not offered (the
+page searches through a separately signed service).
+
 ### download
 
 Videos at the highest bitrate without watermark, every image of an image
@@ -186,9 +261,18 @@ post (with live-photo clips) and its music; `--audio-only` saves the music.
 
 ## Limits
 
-- No publishing (`post`) or deleting posts: the creator platform's upload
-  flow (ImageX / VOD uploads, then `create_v2`) can be reproduced over
-  plain HTTP, but the reference that does so reports `create_v2` answering
-  an empty body even with a complete write key and device traits.
+- Publishing and deleting are built from the contract of the creator
+  platform's web client (its page bundles), and have not been run against
+  a real account yet.
+- Formats the web uploader also offers that ATP does not: panoramic
+  video (全景视频), which needs the projection settings and a server-side
+  transcode change (`vr/transcode/change`) ATP does not reproduce; short
+  drama (短剧), which needs a playlet qualification and its own series.
+  Daily posts (日常) and text-only posts are made in the app; the web
+  uploader has neither.
+- Not offered when publishing: mentions (@), locations and other anchors,
+  hot topics, co-creators, paid content, choosing a video's music (Douyin
+  picks it), editing a cover in the page's editor, and pictures inside
+  articles.
 - Writes are untested against the live site (see Risk control).
 - No creator analytics yet.

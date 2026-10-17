@@ -6,16 +6,21 @@
 //! `bd-ticket-guard-server-data` (a ticket, a `ts_sign` and a certificate
 //! for that key). Writes then sign `ticket=…&path=…&timestamp=…` with the
 //! private key (`bd-ticket-guard-client-data`). Shapes as `cv-cat/catbus`
-//! (`src/platforms/douyin/web/crypto.ts`, MIT) reproduces them; only the
-//! ECDSA variant is offered (sign type 0), not the HMAC one keyed by an
-//! ECDH exchange with the server certificate.
+//! (`src/platforms/douyin/web/crypto.ts`, MIT) reproduces them.
+//!
+//! Two variants: ECDSA (sign type 0), which www.douyin.com's writes carry,
+//! and the HMAC one (sign type 1) of the creator platform's secure
+//! consumer SDK ([`consumer_headers`]), keyed by an ECDH exchange with the
+//! `ecies-server` key built into that SDK.
 
 use atp_core::text::{decode_uri_component, encode_uri_component};
 use atp_core::{Error, Result, Value, ValueExt, json};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use hmac::{Hmac, Mac};
 use ring::rand::SystemRandom;
 use ring::signature::{ECDSA_P256_SHA256_ASN1_SIGNING, EcdsaKeyPair, KeyPair};
+use sha2::Sha256;
 
 /// Header of the passport's answer holding the ticket for the key.
 pub const SERVER_DATA: &str = "bd-ticket-guard-server-data";
@@ -25,6 +30,16 @@ pub const SERVER_DATA_COOKIE: &str = "bd_ticket_guard_server_data";
 pub const CLIENT_DATA_COOKIE: &str = "bd_ticket_guard_client_data";
 /// Cookie naming the web client kind (`2`).
 pub const WEB_DOMAIN_COOKIE: &str = "bd_ticket_guard_client_web_domain";
+
+/// Public key of the `ecies-server` certificate (issued by
+/// `ticket_guard_ca_ecdsa_256`, valid to 2069) that the creator pages'
+/// secure consumer SDK 1.0.0.22 falls back to; its HMAC keys come from
+/// ECDH with it.
+const ECIES_SERVER_KEY: &str = "-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEhNpZQz5X3PEavuSeR14YOHnRYz5w
+hd1GuyQaIhP36D/Zuy+RCyHL8QoBMWkQh20PJAgivwK2eBV/6gqG2QJE6A==
+-----END PUBLIC KEY-----
+";
 
 /// The private key, kept as PKCS#8.
 pub struct Key {
@@ -74,6 +89,21 @@ impl Key {
       .sign(&SystemRandom::new(), message.as_bytes())
       .map_err(|_| Error::internal("could not sign with the ticket-guard key"))?;
     Ok(STANDARD.encode(signature.as_ref()))
+  }
+
+  /// The consumer SDK's HMAC key: HKDF-SHA256 (empty salt and info, 32
+  /// bytes) of the ECDH secret between this key and the ecies server key.
+  pub fn hmac_key(&self) -> Result<[u8; 32]> {
+    use btls::derive::Deriver;
+    use btls::pkey::PKey;
+    let fail = |e: btls::error::ErrorStack| Error::internal(format!("ticket-guard ECDH: {e}"));
+    let private = PKey::private_key_from_pkcs8(&self.pkcs8).map_err(fail)?;
+    let peer = PKey::public_key_from_pem(ECIES_SERVER_KEY.as_bytes()).map_err(fail)?;
+    let mut deriver = Deriver::new(&private).map_err(fail)?;
+    deriver.set_peer(&peer).map_err(fail)?;
+    let secret = deriver.derive_to_vec().map_err(fail)?;
+    let prk = hmac_sha256(&[0u8; 32], &secret);
+    Ok(hmac_sha256(&prk, &[1]))
   }
 
   /// The `bd_ticket_guard_client_data` cookie: the public key for the passport.
@@ -160,4 +190,54 @@ pub fn write_headers(
     ("bd-ticket-guard-web-version", ticket.web_version().into()),
     ("bd-ticket-guard-web-sign-type", "0".into()),
   ])
+}
+
+/// Headers of a write the creator platform's secure consumer SDK guards
+/// (`create_v2`, `delete` ...), in its order: the HMAC of ticket, path and
+/// `timestamp` under [`Key::hmac_key`] (sign type 1), or ECDSA (type 0)
+/// when the exchange fails, as the SDK falls back. `trusted` marks a
+/// timestamp the passport handed out (`bd-ticket-guard-ts`), as `t_trust`.
+pub fn consumer_headers(
+  key: &Key,
+  ticket: &Ticket,
+  path: &str,
+  timestamp: i64,
+  trusted: bool,
+) -> Result<Vec<(&'static str, String)>> {
+  let content = format!("ticket={}&path={path}&timestamp={timestamp}", ticket.ticket);
+  let (req_sign, sign_type) = match key.hmac_key() {
+    Ok(hmac_key) => (
+      STANDARD.encode(hmac_sha256(&hmac_key, content.as_bytes())),
+      "1",
+    ),
+    Err(e) => {
+      tracing::debug!("{e}; signing with ECDSA");
+      (key.sign(&content)?, "0")
+    }
+  };
+  let mut payload = json!({
+    "ts_sign": ticket.ts_sign,
+    "req_content": "ticket,path,timestamp",
+    "req_sign": req_sign,
+    "timestamp": timestamp,
+  });
+  if trusted {
+    payload["t_trust"] = json!(1);
+  }
+  Ok(vec![
+    ("bd-ticket-guard-ree-public-key", key.public()),
+    ("bd-ticket-guard-web-version", ticket.web_version().into()),
+    ("bd-ticket-guard-web-sign-type", sign_type.into()),
+    ("bd-ticket-guard-version", "2".into()),
+    (
+      "bd-ticket-guard-client-data",
+      STANDARD.encode(payload.to_string()),
+    ),
+  ])
+}
+
+fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
+  let mut mac = <Hmac<Sha256>>::new_from_slice(key).expect("HMAC takes any key");
+  mac.update(data);
+  mac.finalize().into_bytes().into()
 }

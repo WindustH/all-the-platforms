@@ -222,6 +222,37 @@ pub fn parse_when(s: &str) -> Result<Timestamp, String> {
   })
 }
 
+/// A time ahead from the command line: `+2h` / `+3d` / `+30m` from now, a
+/// local `2026-10-20 20:00`, or an RFC 3339 timestamp.
+pub fn parse_later(s: &str) -> Result<Timestamp, String> {
+  let s = s.trim();
+  if let Some(rest) = s.strip_prefix('+')
+    && let Some((num, unit)) = rest.split_at_checked(rest.len().saturating_sub(1))
+    && let Ok(n) = num.parse::<i64>()
+  {
+    let secs = match unit {
+      "d" => 86_400,
+      "h" => 3_600,
+      "m" => 60,
+      _ => 0,
+    };
+    if secs > 0 {
+      return Timestamp::now()
+        .checked_add(jiff::SignedDuration::from_secs(n * secs))
+        .map_err(|e| e.to_string());
+    }
+  }
+  if let Ok(time) = s.replacen(' ', "T", 1).parse::<jiff::civil::DateTime>() {
+    return time
+      .to_zoned(TimeZone::system())
+      .map(|z| z.timestamp())
+      .map_err(|e| e.to_string());
+  }
+  s.parse::<Timestamp>().map_err(|_| {
+    format!("`{s}` is not a time: use +2h / +1d, 2026-10-20 20:00 (local) or an RFC 3339 timestamp")
+  })
+}
+
 /// The shortcode (without colons) of common emoji, for chat platforms that
 /// take reactions by name (Slack, Mattermost, Rocket.Chat): `👍` → `+1`.
 /// Anything else comes back as given, minus surrounding colons.

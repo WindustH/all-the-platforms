@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 atp-core.workspace = true
 base64.workspace = true
+# BoringSSL, already built for the HTTP client (wreq): ECDH with a stored P-256 key, which ring does not offer.
+btls = "0.5.6"
 flate2 = "1"
 hmac = "0.12"
 jiff.workspace = true

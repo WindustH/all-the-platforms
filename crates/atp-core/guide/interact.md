@@ -9,6 +9,9 @@ All of these need a login and act as your account.
     atp <platform> follow USER [--undo]        # unfollow: `unfollow USER`
     atp <platform> post "text" [--title T] [-i IMAGE ...] [--topic T ...]
                          [--reply-to POST] [--quote POST]
+                         [--video FILE | --article FILE] [--cover IMAGE]
+                         [--visibility V] [--ai] [--schedule WHEN]
+                         [--collection C] [--music ID] [-y]
     atp <platform> delete POST [-y]
 
 - `post -` and `comment POST -` read the text from stdin:
@@ -16,7 +19,10 @@ All of these need a login and act as your account.
 - `comment -i` attaches images where the platform takes them (Twitter / X;
   `comment-images` in `atp platforms`); the text may then be left out.
 - `delete` and `delete-comment` ask for confirmation on a terminal; scripts
-  pass `-y`.
+  pass `-y`. So does `post` on Douyin, before it uploads anything.
+- `--video`, `--article`, `--cover`, `--visibility`, `--ai`, `--schedule`,
+  `--collection` and `--music` exist where the platform offers them
+  (`post-video`, `post-article`, `post-ai-label` ... in `atp platforms`).
 - `follow '#N'` takes from the last user list. Where following joins a
   chat, group or community it takes from that list instead (Telegram,
   WhatsApp and Matrix chats), or from whichever came last where it takes
@@ -33,6 +39,7 @@ What `post` publishes, per platform:
 | Twitter / X | a tweet (4 images max) | text or image | hashtags | `--reply-to`, `--quote` |
 | Bilibili | a dynamic | text or image | a topic id | `--quote` reposts |
 | Reddit | a text, link, image or gallery post | `--title`, `--topic r/sub` or `u/you` | subreddit | a single URL makes a link post; `--quote` crossposts |
+| Douyin | a video, an image post (图文) or an article (文章) | `--video`, `-i` or `--article` | hashtags | `--ai`, `--visibility`, `--schedule`, `--collection`, `--music`; asks first |
 | YouTube | — | | | uploads are not supported |
 
 Reply-to forms: Bilibili takes `ROOT` or `ROOT:PARENT`; Reddit and X take the

@@ -4,10 +4,10 @@ use std::path::PathBuf;
 
 use clap::Subcommand;
 
-use super::input::{check_images, confirm, read_text};
+use super::input::{check_files, check_images, confirm, read_text};
 use crate::error::{Error, Result};
 use crate::model::Data;
-use crate::platform::{Cap, Draft, Platform, Reply};
+use crate::platform::{Cap, Draft, Platform, PlatformInfo, Reply};
 
 #[derive(Debug, clap::Args)]
 pub struct PublishArgs {
@@ -26,8 +26,70 @@ pub struct PublishArgs {
   #[arg(long, value_name = "POST")]
   pub quote: Option<String>,
   /// Attach a topic / hashtag (repeatable)
-  #[arg(long = "topic", value_name = "TOPIC")]
+  #[arg(long = "topic", alias = "tag", value_name = "TOPIC")]
   pub topics: Vec<String>,
+  /// Publish a video file
+  #[arg(long, value_name = "PATH", conflicts_with_all = ["images", "article"])]
+  pub video: Option<PathBuf>,
+  /// Publish an article: a Markdown or plain-text file as its body
+  #[arg(long, value_name = "PATH", conflicts_with = "images")]
+  pub article: Option<PathBuf>,
+  /// Cover image of the video or article
+  #[arg(long, value_name = "PATH")]
+  pub cover: Option<PathBuf>,
+  /// Who can see the post
+  #[arg(long, value_parser = ["public", "friends", "private"])]
+  pub visibility: Option<String>,
+  /// Declare the content AI-generated (the platform's AI label)
+  #[arg(long)]
+  pub ai: bool,
+  /// Publish later: +2h, +1d, 2026-10-20 20:00 (local) or an RFC 3339 time
+  #[arg(long, value_name = "WHEN", value_parser = crate::text::parse_later)]
+  pub schedule: Option<jiff::Timestamp>,
+  /// Add the post to one of your collections, by name or id
+  #[arg(long, value_name = "COLLECTION")]
+  pub collection: Option<String>,
+  /// Background music, by the id the platform's music list shows
+  #[arg(long, value_name = "MUSIC")]
+  pub music: Option<String>,
+  /// Skip the confirmation question (needed in scripts)
+  #[arg(short, long)]
+  pub yes: bool,
+}
+
+impl PublishArgs {
+  /// The first option given that the platform does not offer.
+  fn unsupported(&self, info: &PlatformInfo) -> Option<&'static str> {
+    let given = [
+      (self.video.is_some(), Cap::PostVideo, "post --video"),
+      (self.article.is_some(), Cap::PostArticle, "post --article"),
+      (
+        self.visibility.is_some(),
+        Cap::PostVisibility,
+        "post --visibility",
+      ),
+      (self.ai, Cap::PostAiLabel, "post --ai"),
+      (
+        self.schedule.is_some(),
+        Cap::PostSchedule,
+        "post --schedule",
+      ),
+      (
+        self.collection.is_some(),
+        Cap::PostCollection,
+        "post --collection",
+      ),
+      (self.music.is_some(), Cap::PostMusic, "post --music"),
+    ];
+    if let Some((_, _, name)) = given
+      .iter()
+      .find(|(on, cap, _)| *on && !info.supports(*cap))
+    {
+      return Some(name);
+    }
+    let covers = info.supports(Cap::PostVideo) || info.supports(Cap::PostArticle);
+    (self.cover.is_some() && !covers).then_some("post --cover")
+  }
 }
 
 #[derive(Debug, Subcommand)]
@@ -104,7 +166,7 @@ pub enum WriteCommand {
   },
   /// Publish a post
   #[command(name = "post", after_long_help = EX_POST)]
-  Publish(PublishArgs),
+  Publish(Box<PublishArgs>),
   /// Delete one of your posts
   Delete {
     /// Post: an id, a link, or #N from the last list
@@ -113,6 +175,30 @@ pub enum WriteCommand {
     #[arg(short, long)]
     yes: bool,
   },
+}
+
+/// Options of `post` and the capabilities that show them (any of them).
+const POST_OPTIONS: &[(&str, &[Cap])] = &[
+  ("video", &[Cap::PostVideo]),
+  ("article", &[Cap::PostArticle]),
+  ("cover", &[Cap::PostVideo, Cap::PostArticle]),
+  ("visibility", &[Cap::PostVisibility]),
+  ("ai", &[Cap::PostAiLabel]),
+  ("schedule", &[Cap::PostSchedule]),
+  ("collection", &[Cap::PostCollection]),
+  ("music", &[Cap::PostMusic]),
+  ("yes", &[Cap::PostVideo, Cap::PostArticle]),
+];
+
+/// `post` without the options the platform does not offer.
+pub(super) fn post_options(cmd: clap::Command, info: &PlatformInfo) -> clap::Command {
+  POST_OPTIONS.iter().fold(cmd, |c, (arg, caps)| {
+    if caps.iter().any(|cap| info.supports(*cap)) {
+      c
+    } else {
+      c.mut_arg(*arg, |a| a.hide(true))
+    }
+  })
 }
 
 pub(super) async fn run<P: Platform>(p: &P, cmd: WriteCommand) -> Result<Data> {
@@ -142,7 +228,7 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: WriteCommand) -> Result<Data> {
     }
     WriteCommand::Follow { user, undo } => p.follow(&p.follow_ref(&user)?, undo).await?,
     WriteCommand::Unfollow { user } => p.follow(&p.follow_ref(&user)?, true).await?,
-    WriteCommand::Publish(args) => publish(p, args).await?,
+    WriteCommand::Publish(args) => publish(p, *args).await?,
     WriteCommand::Delete { post, yes } => {
       let post = ctx.post_ref(&post)?;
       confirm(yes, &format!("delete {post}"))?;
@@ -175,6 +261,9 @@ async fn comment<P: Platform>(
 }
 
 async fn publish<P: Platform>(p: &P, args: PublishArgs) -> Result<crate::model::Action> {
+  if let Some(option) = args.unsupported(&P::INFO) {
+    return Err(Error::unsupported(option));
+  }
   let ctx = p.ctx();
   let draft = Draft {
     title: args.title,
@@ -183,13 +272,29 @@ async fn publish<P: Platform>(p: &P, args: PublishArgs) -> Result<crate::model::
     reply_to: args.reply_to.map(|r| ctx.post_ref(&r)).transpose()?,
     quote: args.quote.map(|q| ctx.post_ref(&q)).transpose()?,
     topics: args.topics,
+    video: args.video,
+    article: args.article,
+    cover: args.cover,
+    visibility: args.visibility,
+    ai_generated: args.ai,
+    schedule: args.schedule,
+    collection: args.collection,
+    music: args.music,
+    yes: args.yes,
   };
-  if draft.text.is_empty() && draft.title.is_none() && draft.images.is_empty() {
+  let media = draft.video.is_some() || draft.article.is_some() || !draft.images.is_empty();
+  if draft.text.is_empty() && draft.title.is_none() && !media {
     return Err(Error::input(
       "nothing to publish: give a text, --title or --image",
     ));
   }
   check_images(&draft.images)?;
+  let files: Vec<PathBuf> = [&draft.video, &draft.article, &draft.cover]
+    .into_iter()
+    .flatten()
+    .cloned()
+    .collect();
+  check_files(&files)?;
   p.publish(&draft).await
 }
 
@@ -208,6 +313,7 @@ Examples:
   atp zhihu post \"今天的想法\" -i a.png -i b.png
   atp xhs post \"正文 #话题\" --title 标题 -i cover.jpg
   atp reddit post \"Body text\" --title Title --topic r/test
+  atp douyin post --video clip.mp4 --title 标题 --visibility private
   cat draft.md | atp bili post -
 
 What `post` creates differs per platform: see `atp guide interact`.";

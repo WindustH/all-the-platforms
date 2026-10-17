@@ -85,6 +85,17 @@ impl Guard {
     })
   }
 
+  /// Headers of a write the creator platform's consumer SDK guards
+  /// (publishing, deleting), signed at `timestamp`.
+  pub fn consumer_headers(
+    &self,
+    path: &str,
+    timestamp: i64,
+    trusted: bool,
+  ) -> Result<Vec<(&'static str, String)>> {
+    ticket_guard::consumer_headers(&self.key, &self.ticket, path, timestamp, trusted)
+  }
+
   /// Headers of a write: signed over the path for comments, naming the key
   /// for the rest.
   pub fn headers(&self, path: &str, signed: bool) -> Result<Vec<(&'static str, String)>> {

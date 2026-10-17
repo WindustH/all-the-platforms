@@ -35,6 +35,20 @@ pub enum Cap {
   DeleteComment,
   Follow,
   Publish,
+  /// `post --video` (and `--cover`).
+  PostVideo,
+  /// `post --article` (and `--cover`).
+  PostArticle,
+  /// `post --visibility`.
+  PostVisibility,
+  /// `post --schedule`.
+  PostSchedule,
+  /// `post --ai`: the declaration that the content is AI-generated.
+  PostAiLabel,
+  /// `post --collection`.
+  PostCollection,
+  /// `post --music`.
+  PostMusic,
   Delete,
   Download,
   AccountInsights,
@@ -82,6 +96,13 @@ impl Cap {
     Cap::DeleteComment,
     Cap::Follow,
     Cap::Publish,
+    Cap::PostVideo,
+    Cap::PostArticle,
+    Cap::PostVisibility,
+    Cap::PostSchedule,
+    Cap::PostAiLabel,
+    Cap::PostCollection,
+    Cap::PostMusic,
     Cap::Delete,
     Cap::Download,
     Cap::AccountInsights,
@@ -127,6 +148,13 @@ impl Cap {
       Cap::DeleteComment => "delete-comment",
       Cap::Follow => "follow",
       Cap::Publish => "post",
+      Cap::PostVideo => "post-video",
+      Cap::PostArticle => "post-article",
+      Cap::PostVisibility => "post-visibility",
+      Cap::PostSchedule => "post-schedule",
+      Cap::PostAiLabel => "post-ai-label",
+      Cap::PostCollection => "post-collection",
+      Cap::PostMusic => "post-music",
       Cap::Delete => "delete",
       Cap::Download => "download",
       Cap::AccountInsights => "insights",

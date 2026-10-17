@@ -182,7 +182,7 @@ fn describe(a: &Arg) -> String {
   if matches!(a.get_action(), ArgAction::Append) {
     parts.push("Repeatable".into());
   }
-  if let Some(aliases) = a.get_visible_aliases() {
+  if let Some(aliases) = a.get_visible_aliases().filter(|v| !v.is_empty()) {
     let list: Vec<String> = aliases.iter().map(|x| format!("`--{x}`")).collect();
     parts.push(format!("Also {}", list.join(", ")));
   }

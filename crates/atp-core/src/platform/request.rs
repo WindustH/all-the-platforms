@@ -49,6 +49,24 @@ pub struct Draft {
   /// Post to quote / repost with comment.
   pub quote: Option<String>,
   pub topics: Vec<String>,
+  /// A video to publish ([`Cap::PostVideo`](super::Cap::PostVideo)).
+  pub video: Option<PathBuf>,
+  /// A Markdown or text file to publish as an article ([`Cap::PostArticle`](super::Cap::PostArticle)).
+  pub article: Option<PathBuf>,
+  /// Cover image of a video or an article.
+  pub cover: Option<PathBuf>,
+  /// `public`, `friends` or `private` ([`Cap::PostVisibility`](super::Cap::PostVisibility)).
+  pub visibility: Option<String>,
+  /// Declared AI-generated ([`Cap::PostAiLabel`](super::Cap::PostAiLabel)).
+  pub ai_generated: bool,
+  /// Publish later ([`Cap::PostSchedule`](super::Cap::PostSchedule)).
+  pub schedule: Option<jiff::Timestamp>,
+  /// A collection of the account to add the post to, by name or id ([`Cap::PostCollection`](super::Cap::PostCollection)).
+  pub collection: Option<String>,
+  /// Background music, by the platform's id ([`Cap::PostMusic`](super::Cap::PostMusic)).
+  pub music: Option<String>,
+  /// The person said yes ahead (`--yes`); platforms that upload files ask first otherwise.
+  pub yes: bool,
 }
 
 /// A comment to send. `images` stay empty unless the platform declares
