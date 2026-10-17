@@ -30,8 +30,9 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Error, Insights, Message, Notification,
-  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Edit, Error, Insights, Message,
+  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result,
+  User,
 };
 use atp_meta::graph::{self, host_for};
 
@@ -72,6 +73,7 @@ impl Platform for Instagram {
       Cap::DeleteComment,
       Cap::Follow,
       Cap::Delete,
+      Cap::Edit,
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
@@ -223,6 +225,10 @@ impl Platform for Instagram {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     posts::delete(&self.api, post).await
+  }
+
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    posts::edit(&self.api, post, edit).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {

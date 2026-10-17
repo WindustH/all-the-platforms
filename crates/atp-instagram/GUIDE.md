@@ -90,6 +90,23 @@ and liked posts.
 
 `--reply-to` answers a comment; `comment --image` is not supported.
 
+### edit
+
+`edit POST TEXT` replaces the caption of one of your posts (photos,
+carousels, reels), as the web app's post editor does; it needs the
+browser session. It loads the post first, prints the change (the caption
+as old → new, with what it keeps) and asks (`-y` in scripts).
+
+- Hashtags and mentions are written in the caption.
+- Only the caption changes: the location, tagged people, collaborators
+  and alt texts are not sent, so they stay as they are.
+- Posts promoted with ads running cannot change until the promotion
+  ends (`permission_denied`).
+
+```
+atp instagram edit https://www.instagram.com/p/C1a2b3c4d5e/ 'New caption #travel'
+```
+
 ### send, react
 
 `send THREAD TEXT [--reply-to THREAD/ITEM]`: text only (`--attach` is not
