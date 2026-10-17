@@ -7,7 +7,7 @@ use atp_core::{Action, Data, Result, ValueExt, json};
 
 use crate::api::Api;
 use crate::posts::{self, StatusOptions};
-use crate::search;
+use crate::{relations, search};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -60,6 +60,60 @@ pub enum Command {
   },
   /// The instance: name, version, limits and rules
   Instance,
+  #[command(flatten)]
+  Relations(RelationCommand),
+}
+
+/// Mutes, follow requests and followed hashtags.
+#[derive(Debug, clap::Subcommand)]
+pub enum RelationCommand {
+  /// Mute accounts (or unmute them with --undo): their statuses and notifications leave your view
+  Mute {
+    /// Accounts: @user@host, ids, profile links, or #N from the last user list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
+    /// Unmute instead
+    #[arg(long)]
+    undo: bool,
+  },
+  /// Accounts you mute
+  Muted {
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Accounts asking to follow your locked account
+  #[command(after_long_help = EX_FOLLOW_REQUESTS)]
+  FollowRequests {
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Accept follow requests: let the accounts follow you
+  AcceptFollower {
+    /// Accounts: @user@host, ids, profile links, or #N from the last user list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
+  },
+  /// Decline follow requests
+  DenyFollower {
+    /// Accounts: @user@host, ids, profile links, or #N from the last user list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
+  },
+  /// Hashtags you follow
+  FollowedTags {
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Follow hashtags: their statuses join your home timeline (--undo unfollows)
+  #[command(after_long_help = EX_FOLLOW_TAG)]
+  FollowTag {
+    /// Hashtags, with or without the `#`
+    #[arg(required = true, value_name = "TAG")]
+    tags: Vec<String>,
+    /// Unfollow them
+    #[arg(long)]
+    undo: bool,
+  },
 }
 
 const EX_COMPOSE: &str = "\
@@ -69,6 +123,20 @@ Examples:
   atp mastodon compose 'Same here' --reply-to '#2' -i photo.jpg
 
 More: atp guide mastodon compose";
+
+const EX_FOLLOW_REQUESTS: &str = "\
+Examples:
+  atp mastodon follow-requests
+  atp mastodon accept-follower '#1' '#2'
+  atp mastodon deny-follower @spam@example.social
+
+More: atp guide mastodon follow-requests";
+
+const EX_FOLLOW_TAG: &str = "\
+Examples:
+  atp mastodon follow-tag rust '#fediverse'
+  atp mastodon followed-tags
+  atp mastodon follow-tag rust --undo";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
@@ -108,6 +176,39 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
         .await?,
     ),
     Command::Instance => instance(api).await?,
+    Command::Relations(command) => run_relations(api, command).await?,
+  })
+}
+
+async fn run_relations(api: &Api, command: RelationCommand) -> Result<Data> {
+  use RelationCommand as R;
+  let users =
+    |list: &[String]| -> Result<Vec<String>> { list.iter().map(|u| api.ctx.user_ref(u)).collect() };
+  let accounts = async |path: &str, page: PageArgs| -> Result<Data> {
+    Ok(Data::Users(
+      page
+        .collect(async |req| relations::accounts(api, path, &req).await)
+        .await?,
+    ))
+  };
+  Ok(match command {
+    R::Mute { users: list, undo } => {
+      Data::actions(relations::mute(api, &users(&list)?, undo).await?)
+    }
+    R::Muted { page } => accounts("v1/mutes", page).await?,
+    R::FollowRequests { page } => accounts("v1/follow_requests", page).await?,
+    R::AcceptFollower { users: list } => {
+      Data::actions(relations::answer(api, &users(&list)?, true).await?)
+    }
+    R::DenyFollower { users: list } => {
+      Data::actions(relations::answer(api, &users(&list)?, false).await?)
+    }
+    R::FollowedTags { page } => Data::Collections(
+      page
+        .collect(async |req| search::followed_tags(api, &req).await)
+        .await?,
+    ),
+    R::FollowTag { tags, undo } => Data::actions(search::follow_tags(api, &tags, undo).await?),
   })
 }
 

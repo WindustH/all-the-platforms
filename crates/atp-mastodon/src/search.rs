@@ -1,7 +1,11 @@
 //! Searches (`/api/v2/search`): statuses, accounts and hashtags; statuses
-//! with a hashtag; trending hashtags.
+//! with a hashtag; trending hashtags; the hashtags you follow.
 
-use atp_core::{Collection, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt};
+use atp_core::bulk;
+use atp_core::http::Method;
+use atp_core::{
+  Action, Collection, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt,
+};
 
 use crate::api::Api;
 use crate::parse;
@@ -98,4 +102,33 @@ pub async fn trends(api: &Api, page: &PageReq) -> Result<Page<Collection>> {
   api
     .list("v1/trends/tags", Vec::new(), page, parse::tag)
     .await
+}
+
+/// The hashtags you follow.
+pub async fn followed_tags(api: &Api, page: &PageReq) -> Result<Page<Collection>> {
+  api.require()?;
+  api
+    .list("v1/followed_tags", Vec::new(), page, parse::tag)
+    .await
+}
+
+/// Follow hashtags (their statuses join your home timeline), or unfollow
+/// them with `undo`, one call each.
+pub async fn follow_tags(api: &Api, tags: &[String], undo: bool) -> Result<Vec<Action>> {
+  api.require()?;
+  let (verb, action) = if undo {
+    ("unfollow", "unfollow-tag")
+  } else {
+    ("follow", "follow-tag")
+  };
+  bulk::each(action, tags, async |tag| {
+    let name = refs::tag(tag)?;
+    let path = format!("v1/tags/{name}/{verb}");
+    api.write(Method::POST, &path, Vec::new()).await?;
+    Ok(
+      Action::done(action, format!("#{name}"))
+        .with_url(format!("https://{}/tags/{name}", api.instance())),
+    )
+  })
+  .await
 }

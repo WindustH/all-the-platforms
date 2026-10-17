@@ -39,8 +39,9 @@ timelines (`tag`, `search '#tag'`), statuses and their threads (`read`,
 follows, and account and hashtag search. Many instances (mastodon.social
 among them) close the local and public timelines to visitors; those
 fail with `not_authenticated`. Searching statuses, links to other
-servers, the home timeline, notifications, likes and bookmarks, and
-every write need an account.
+servers, the home timeline, notifications, likes and bookmarks, lists,
+blocks, mutes, follow requests, followed hashtags and every write need
+an account.
 
 ### How long a login lasts
 
@@ -60,6 +61,7 @@ and requests are spaced at least half a second apart.
   instance (`resolve`, needs an account).
 - Accounts: `@user` (this instance), `@user@host`, a profile link, an id,
   or `me`.
+- Lists: the id, a `/lists/<id>` link, or `#N` after `follow-groups`.
 
 ## Commands
 
@@ -138,6 +140,43 @@ or the status is yours; `-i` attaches files.
 Following a locked account sends a follow request, which the result
 says.
 
+### remove-follower, block, unblock, blocked
+
+`remove-follower USER… [-y]` (asks first), `block USER…` and `unblock
+USER…` go one call per account; `blocked` lists the accounts you block.
+
+### mute, muted
+
+`mute USER… [--undo]` mutes accounts with their notifications, with no
+end (or unmutes them); `muted` lists the accounts you mute.
+
+### follow-requests, accept-follower, deny-follower
+
+For a locked account: `follow-requests` lists who asks to follow you,
+`accept-follower USER…` authorizes them and `deny-follower USER…`
+rejects them, one call per account.
+
+### follow-groups, follow-group, follow-group-create, follow-group-rename, follow-group-delete, follow-group-add, follow-group-remove
+
+Your lists are the follow groups, each with its own timeline.
+
+- `follow-groups` lists them all at once, with `extra.replies_policy`
+  and `extra.exclusive` (whether its accounts leave the home timeline);
+  `follow-group LIST` lists the accounts on one.
+- `follow-group-create NAME`, `follow-group-rename LIST NAME` (how
+  replies show and exclusiveness stay), `follow-group-delete LIST [-y]`
+  (asks first; its accounts stay followed).
+- `follow-group-add LIST USER…` / `follow-group-remove LIST USER…`, one
+  call per account, so an account Mastodon refuses does not stop the
+  rest: it adds only accounts you follow, and refuses one already on the
+  list.
+
+### followed-tags, follow-tag
+
+`followed-tags` lists the hashtags you follow; `follow-tag TAG…
+[--undo]` follows hashtags (their statuses join your home timeline) or
+unfollows them.
+
 ### notifications
 
 `--type mention|status|reblog|follow|follow_request|favourite|poll|update|quote`.
@@ -176,6 +215,6 @@ sign-ups are open, monthly active users, contact and rules.
 
 ## Limits
 
-Edits change a status's text only. No polls, lists, filters, scheduled
+Edits change a status's text only. No polls, filters, scheduled
 statuses or direct-message conversations yet (a `compose --visibility
 direct` status reaches the accounts it mentions). Trends are what the instance itself counts.
