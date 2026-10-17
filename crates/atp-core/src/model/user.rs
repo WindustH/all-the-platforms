@@ -56,6 +56,12 @@ pub struct User {
   pub followed: Option<bool>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub created_at: Option<Timestamp>,
+  /// Platform fields. Rows of the logged-in account's own `following` /
+  /// `followers` use these keys for the relation, where the platform
+  /// tells it: `mutual` (bool: you follow each other), `followed_at`
+  /// (when the follow began), `groups` (ids of the follow groups the user
+  /// is in), `special` (bool: a special follow) and `remark` (the name
+  /// you gave them).
   #[serde(skip_serializing_if = "Extra::is_empty")]
   pub extra: Extra,
   #[serde(skip_serializing_if = "Option::is_none")]
