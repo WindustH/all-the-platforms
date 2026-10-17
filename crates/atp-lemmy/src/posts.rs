@@ -237,7 +237,7 @@ pub async fn vote(api: &Api, arg: &str, score: i8) -> Result<Action> {
 }
 
 /// A post argument, never a comment (writes that act on posts only).
-async fn own_post(api: &Api, arg: &str) -> Result<u64> {
+pub async fn own_post(api: &Api, arg: &str) -> Result<u64> {
   match target(api, arg).await? {
     Target::Post(id) => Ok(id),
     _ => Err(

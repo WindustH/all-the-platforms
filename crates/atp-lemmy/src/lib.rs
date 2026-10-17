@@ -1,12 +1,13 @@
 //! Lemmy for all-the-platforms (any instance; lemmy.world by default),
 //! through the HTTP API v3 ([`api`]): posts and listings ([`posts`]),
-//! comment threads ([`comments`]), communities ([`communities`]), users,
+//! editing posts ([`edits`]), comment threads ([`comments`]), communities ([`communities`]), users,
 //! replies and mentions ([`users`]), search ([`search`]), and logging in
 //! with a token or a password ([`login`]).
 
 mod api;
 mod comments;
 mod communities;
+mod edits;
 mod extra;
 mod login;
 mod parse;
@@ -22,7 +23,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Notification, Page, PageReq,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Notification, Page, PageReq,
   Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
@@ -62,6 +63,8 @@ impl Platform for Lemmy {
       Cap::DeleteComment,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
+      Cap::EditTitle,
     ],
     choices: Choices {
       search_sort: search::SORTS,
@@ -185,6 +188,10 @@ impl Platform for Lemmy {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     posts::delete(&self.api, post).await
+  }
+
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    edits::edit(&self.api, post, edit).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

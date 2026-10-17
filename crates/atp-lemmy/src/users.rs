@@ -13,7 +13,8 @@ use crate::refs;
 pub const NOTIFICATION_KINDS: &[&str] = &["reply", "mention"];
 const PAGE_MAX: usize = 50;
 
-pub async fn whoami(api: &Api) -> Result<User> {
+/// Your account as `site` gives it (`my_user.local_user_view`).
+async fn me(api: &Api) -> Result<Value> {
   api.require()?;
   let v = api.get("site", Vec::new()).await?;
   let me = v.at("my_user.local_user_view");
@@ -23,9 +24,22 @@ pub async fn whoami(api: &Api) -> Result<User> {
         .with_hint("log in again: `atp guide login lemmy`"),
     );
   }
+  Ok(me.clone())
+}
+
+pub async fn whoami(api: &Api) -> Result<User> {
+  let me = me(api).await?;
   let mut user = parse::person(me.at("person"));
   user.stats.posts = me.u64("counts.post_count");
   Ok(user)
+}
+
+/// Your person id on the instance.
+pub async fn my_id(api: &Api) -> Result<u64> {
+  me(api)
+    .await?
+    .u64("person.id")
+    .ok_or_else(|| Error::upstream("Lemmy: `site` named no person for the token"))
 }
 
 /// `(page, limit)` of a numbered listing.

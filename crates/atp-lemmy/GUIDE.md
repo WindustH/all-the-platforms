@@ -120,6 +120,25 @@ what you saved (yours only).
 `submit COMMUNITY --title TITLE [--url LINK] [--body TEXT] [--nsfw]`
 also takes a link. Images cannot be uploaded; link to them with `--url`.
 
+### edit
+
+`edit POST [TEXT] [--title TITLE]` changes the text (Markdown), the title
+or both of one of your posts. It loads the post first, prints the change
+(each field as old → new) and asks (`-y` in scripts).
+
+- What is not given stays as it was, and so do the link, the NSFW mark
+  and the language. An empty TEXT with `--title` empties the text.
+- Lemmy fetches a link's preview again on every edit; ATP sends the
+  post's thumbnail back so a custom one stays.
+- Only the author can edit a post, at any time; communities and
+  comments are not edited here. The post shows as edited, and other
+  instances get the new version.
+
+```
+atp lemmy edit https://lemmy.world/post/123456 'Updated: the fix is in 0.4.2'
+atp lemmy edit '#1' --title 'Release notes for 0.4.2' -y
+```
+
 ### delete, delete-comment
 
 Delete one of your posts or comments, after a confirmation (`-y` in
@@ -150,6 +169,6 @@ on, and its counts.
 
 ## Limits
 
-No private messages, image uploads, editing, reporting, blocking or
+No private messages, image uploads, editing of comments, reporting, blocking or
 moderation, and no two-factor setup. Threads longer than 300 comments
 show only their first 300 (use `replies` for deeper branches).
