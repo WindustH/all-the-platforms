@@ -31,8 +31,8 @@ needs the permissions `pages_show_list`, `pages_read_engagement`,
 `read_insights`; `ads` needs `ads_read` / `ads_management`. A call the token has no permission for fails with
 `permission_denied` (check its scopes and the app's review status).
 
-The token serves `pages`, `use-page`, `page-posts`, `post`, `delete`,
-`comment`, `delete-comment`, `comments` and `replies` of Page posts,
+The token serves `pages`, `use-page`, `page-posts`, `post`, `edit`,
+`delete`, `comment`, `delete-comment`, `comments` and `replies` of Page posts,
 `insights`, `chats`, `messages`, `send` and `ads`. With a user token,
 ATP acts on a Page with that Page's own token, looked up with yours.
 
@@ -111,6 +111,25 @@ above the text, and several images become one post. `--reply-to` and
 
 On Page posts, by Graph id: `comment POST TEXT [--reply-to COMMENT]`
 (`-i` attaches a photo), `delete-comment POST COMMENT`.
+
+### edit
+
+`edit POST TEXT` replaces the text of a Page post, by Graph id
+(`PAGE_POST`, as `page-posts` lists them), through the Graph API as the
+Page. It loads the post first, prints the change (the text as old → new)
+and asks (`-y` in scripts). Photos, links and the post's other settings
+stay as they are.
+
+The Graph API lets an app edit only the Page posts that app published:
+posts made with `atp facebook post` under the same token's app can
+change; posts written on facebook.com, in the Meta Business Suite or with
+another app's token cannot, and fail with `permission_denied` or
+`invalid_input` and a hint saying so. The token needs
+`pages_manage_posts`. Posts on a personal profile cannot be edited here.
+
+```
+atp facebook edit 1234567890_9876543210 'Opening hours: 9 to 5 from Monday'
+```
 
 ### delete
 

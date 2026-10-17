@@ -33,8 +33,9 @@ pub use extra::Command;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Message, Notification,
-  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Insights, Message,
+  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result,
+  User,
 };
 
 use atp_meta::graph::FACEBOOK;
@@ -70,6 +71,7 @@ impl Platform for Facebook {
       Cap::DeleteComment,
       Cap::Publish,
       Cap::Delete,
+      Cap::Edit,
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
@@ -177,6 +179,10 @@ impl Platform for Facebook {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     posts::delete(&self.api, post).await
+  }
+
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    posts::edit(&self.api, post, edit).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {

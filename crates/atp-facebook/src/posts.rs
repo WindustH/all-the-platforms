@@ -1,10 +1,11 @@
 //! Posts: reading a facebook.com permalink or a Page post of the Graph API,
-//! and publishing to and deleting from a Page.
+//! and publishing to, editing on and deleting from a Page.
 
 use std::path::PathBuf;
 
+use atp_core::cli::Change;
 use atp_core::http::Part;
-use atp_core::{Action, Draft, Error, Post, Result, ValueExt, json};
+use atp_core::{Action, Draft, Edit, Error, ErrorCode, Post, Result, ValueExt, json};
 use atp_meta::graph::{Graph, Params, fields};
 
 use crate::api::{Api, photo_part};
@@ -130,6 +131,56 @@ async fn album(
     ));
   }
   graph.post(&format!("{page}/feed"), &form).await
+}
+
+/// A Page post's new text: `POST /{page-post-id}` with `message`, as its
+/// Page; the photos, link and other settings stay. The Graph API changes
+/// only posts the token's own app published.
+pub async fn edit(api: &Api, arg: &str, edit: &Edit) -> Result<Action> {
+  let Some(text) = edit.text.as_deref() else {
+    return Err(Error::input("give the new text"));
+  };
+  let id = graph_id(arg)?;
+  if refs::owner_of(&id).is_none() {
+    return Err(Error::input(format!(
+      "`{id}` is not a Page post id (PAGE_POST, as `page-posts` lists them)"
+    )));
+  }
+  let graph = api.graph_for(&id).await?;
+  let post = graph
+    .get(
+      &id,
+      &fields("id,message,permalink_url,attachments{media_type}"),
+    )
+    .await?;
+  let mut change = Change::new(format!("Facebook post {id}:"));
+  change.field("text", &post.str("message").unwrap_or_default(), text);
+  let attachments = post.list("attachments.data").len();
+  if attachments > 0 {
+    change.row("media", &format!("{attachments} (kept)"));
+  }
+  change.confirm(edit.yes, "change this post on Facebook")?;
+  let form = vec![("message".to_owned(), text.to_owned())];
+  graph.post(&id, &form).await.map_err(other_app)?;
+  let url = post
+    .str("permalink_url")
+    .unwrap_or_else(|| format!("https://www.facebook.com/{id}"));
+  Ok(Action::done("edit", &id).with_id(&id).with_url(url))
+}
+
+/// A refused update, with the likeliest reason.
+fn other_app(e: Error) -> Error {
+  if !matches!(
+    e.code,
+    ErrorCode::PermissionDenied | ErrorCode::InvalidInput
+  ) {
+    return e;
+  }
+  e.with_hint(
+    "the Graph API lets an app edit only the Page posts it published: posts made with this \
+     token's app (such as `atp facebook post`) can change, posts written on facebook.com or \
+     with other tools cannot; the token also needs pages_manage_posts",
+  )
 }
 
 pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
