@@ -27,5 +27,9 @@ them out. All need a login.
 - On some platforms the special-follow list (特别关注) or the default
   group are groups too, with ids of their own; the platform's notes say
   which.
+- On X, Bluesky and Mastodon the follow groups are your lists. X and
+  Bluesky lists may hold people you do not follow, and others can see
+  them unless they are private; Mastodon lists hold only people you
+  follow.
 
 More: `atp guide interact`
