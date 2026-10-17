@@ -275,6 +275,16 @@ pub trait Platform: Sized {
     unsupported!("edit")
   }
 
+  /// Change one of your posts: its text, title, topics, cover or
+  /// visibility, as far as its capabilities (`Edit*`) say. By default a
+  /// new text alone goes to [`edit`](Self::edit).
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    match edit.text_only() {
+      Some(text) => self.edit(post, text).await,
+      None => unsupported!("edit"),
+    }
+  }
+
   /// Hand every incoming message (of `chats`, or of all chats when empty) to
   /// `out` as it arrives, until the connection ends or the user interrupts.
   /// Other events (edits, deletions, reactions ...) are `Post`s too, with

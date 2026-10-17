@@ -7,7 +7,7 @@ use clap::Subcommand;
 use super::input::{check_files, check_images, confirm, read_text};
 use crate::error::{Error, Result};
 use crate::model::Data;
-use crate::platform::{Cap, Draft, Platform, PlatformInfo, Reply};
+use crate::platform::{Cap, Draft, Edit, Platform, PlatformInfo, Reply};
 
 #[derive(Debug, clap::Args)]
 pub struct PublishArgs {
@@ -89,6 +89,56 @@ impl PublishArgs {
     }
     let covers = info.supports(Cap::PostVideo) || info.supports(Cap::PostArticle);
     (self.cover.is_some() && !covers).then_some("post --cover")
+  }
+}
+
+#[derive(Debug, clap::Args)]
+pub struct EditArgs {
+  /// Message or post: `CHAT/MESSAGE`, an id, a link, or #N from the last list
+  pub post: String,
+  /// New text; `-` reads it from stdin
+  pub text: Option<String>,
+  /// New title
+  #[arg(long)]
+  pub title: Option<String>,
+  /// Topic / hashtag replacing the post's own (repeatable)
+  #[arg(long = "topic", alias = "tag", value_name = "TOPIC")]
+  pub topics: Vec<String>,
+  /// Remove the post's topics / hashtags
+  #[arg(long, conflicts_with = "topics")]
+  pub no_topics: bool,
+  /// New cover image
+  #[arg(long, value_name = "PATH")]
+  pub cover: Option<PathBuf>,
+  /// Who can see the post
+  #[arg(long, value_parser = ["public", "friends", "private"])]
+  pub visibility: Option<String>,
+  /// Skip the confirmation question (needed in scripts)
+  #[arg(short, long)]
+  pub yes: bool,
+}
+
+impl EditArgs {
+  /// The first option given that the platform does not offer.
+  fn unsupported(&self, info: &PlatformInfo) -> Option<&'static str> {
+    let given = [
+      (self.title.is_some(), Cap::EditTitle, "edit --title"),
+      (
+        !self.topics.is_empty() || self.no_topics,
+        Cap::EditTopics,
+        "edit --topic",
+      ),
+      (self.cover.is_some(), Cap::EditCover, "edit --cover"),
+      (
+        self.visibility.is_some(),
+        Cap::EditVisibility,
+        "edit --visibility",
+      ),
+    ];
+    given
+      .iter()
+      .find(|(on, cap, _)| *on && !info.supports(*cap))
+      .map(|(_, _, name)| *name)
   }
 }
 
@@ -175,6 +225,9 @@ pub enum WriteCommand {
     #[arg(short, long)]
     yes: bool,
   },
+  /// Change one of your messages or posts: its text, title, topics, cover or visibility
+  #[command(after_long_help = EX_EDIT)]
+  Edit(Box<EditArgs>),
 }
 
 /// Options of `post` and the capabilities that show them (any of them).
@@ -190,9 +243,38 @@ const POST_OPTIONS: &[(&str, &[Cap])] = &[
   ("yes", &[Cap::PostVideo, Cap::PostArticle]),
 ];
 
+/// Options of `edit` and the capabilities that show them (any of them).
+const EDIT_OPTIONS: &[(&str, &[Cap])] = &[
+  ("title", &[Cap::EditTitle]),
+  ("topics", &[Cap::EditTopics]),
+  ("no_topics", &[Cap::EditTopics]),
+  ("cover", &[Cap::EditCover]),
+  ("visibility", &[Cap::EditVisibility]),
+  (
+    "yes",
+    &[
+      Cap::EditTitle,
+      Cap::EditTopics,
+      Cap::EditCover,
+      Cap::EditVisibility,
+    ],
+  ),
+];
+
 /// `post` without the options the platform does not offer.
 pub(super) fn post_options(cmd: clap::Command, info: &PlatformInfo) -> clap::Command {
   POST_OPTIONS.iter().fold(cmd, |c, (arg, caps)| {
+    if caps.iter().any(|cap| info.supports(*cap)) {
+      c
+    } else {
+      c.mut_arg(*arg, |a| a.hide(true))
+    }
+  })
+}
+
+/// `edit` without the options the platform does not offer.
+pub(super) fn edit_options(cmd: clap::Command, info: &PlatformInfo) -> clap::Command {
+  EDIT_OPTIONS.iter().fold(cmd, |c, (arg, caps)| {
     if caps.iter().any(|cap| info.supports(*cap)) {
       c
     } else {
@@ -234,6 +316,7 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: WriteCommand) -> Result<Data> {
       confirm(yes, &format!("delete {post}"))?;
       p.delete(&post).await?
     }
+    WriteCommand::Edit(args) => edit(p, *args).await?,
   };
   Ok(Data::Action(action))
 }
@@ -298,6 +381,41 @@ async fn publish<P: Platform>(p: &P, args: PublishArgs) -> Result<crate::model::
   p.publish(&draft).await
 }
 
+async fn edit<P: Platform>(p: &P, args: EditArgs) -> Result<crate::model::Action> {
+  if let Some(option) = args.unsupported(&P::INFO) {
+    return Err(Error::unsupported(option));
+  }
+  let topics = if args.no_topics {
+    Some(Vec::new())
+  } else {
+    Some(args.topics).filter(|t| !t.is_empty())
+  };
+  let edit = Edit {
+    text: args.text.map(|t| read_text(Some(t))).transpose()?,
+    title: args.title,
+    topics,
+    cover: args.cover,
+    visibility: args.visibility,
+    yes: args.yes,
+  };
+  let others = edit.title.is_some()
+    || edit.topics.is_some()
+    || edit.cover.is_some()
+    || edit.visibility.is_some();
+  if edit.text.is_none() && !others {
+    return Err(Error::input(
+      "nothing to change: give a new text, --title, --topic, --cover or --visibility",
+    ));
+  }
+  if edit.text_only() == Some("") {
+    return Err(Error::input("the new text is empty"));
+  }
+  if let Some(cover) = &edit.cover {
+    check_images(std::slice::from_ref(cover))?;
+  }
+  p.edit_post(&p.ctx().post_ref(&args.post)?, &edit).await
+}
+
 const EX_COMMENT: &str = "\
 Examples:
   atp bili comment BV1xx411c7mD '好耶'
@@ -317,3 +435,13 @@ Examples:
   cat draft.md | atp bili post -
 
 What `post` creates differs per platform: see `atp guide interact`.";
+
+const EX_EDIT: &str = "\
+Examples:
+  atp tg edit '#1' 'Fixed the link: https://example.com'
+  atp douyin edit 7697611474302225714 --topic 操作系统 --topic 计算机
+  atp douyin edit '#2' --title '新标题' --visibility private
+
+Options other than the text show where the platform can change them
+(edit-title, edit-topics, edit-cover, edit-visibility in `atp platforms`).
+More: atp guide edit";

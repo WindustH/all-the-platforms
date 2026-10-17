@@ -236,6 +236,35 @@ atp douyin post -i a.jpg -i b.jpg -i c.jpg --title 测试 '正文' --topic 摄�
 atp douyin post --article notes.md --title 读书笔记 --cover head.jpg '一句话摘要'
 ```
 
+### edit
+
+Changes one of your published videos or image posts the way the creator
+platform's edit page (作品管理 → 修改作品) does. It loads the work first,
+prints the change (each field as old → new) and asks (`-y` in scripts).
+
+- TEXT replaces the description; the hashtags stay unless `--topic` is
+  given.
+- `--title` replaces the title (30 characters for videos, 20 for image
+  posts).
+- `--topic NAME` (repeatable) replaces the hashtags, which go after the
+  text as they do on `post`; `--no-topics` removes them. Without TEXT the
+  description stays and only its hashtags change.
+- `--cover IMAGE` uploads a new cover.
+- `--visibility public|friends|private` goes through the manage page's
+  permission setting; it does not count as an edit.
+- Douyin limits how often a work's text, title and cover may change; the
+  summary shows the edits used, and a work that can no longer change
+  fails with `permission_denied` and Douyin's reason. Changed works may be
+  reviewed again.
+- Works whose text @-mentions people or joins an activity are refused
+  (ATP cannot write those back), as are articles.
+
+```
+atp douyin edit 7697611474302225714 --topic 操作系统 --topic 计算机
+atp douyin edit https://www.douyin.com/video/7697611474302225714 --title '『操作系统 Ep.02』硬件视角'
+atp douyin edit '#1' --visibility private
+```
+
 ### delete
 
 Deletes one of your works through the creator platform (the id, a link,

@@ -9,7 +9,8 @@ mod text;
 
 use atp_core::{Value, json};
 
-use self::text::{article_extra, image_text, video_text};
+pub use self::text::{Editor, image_editor, video_editor};
+use self::text::{Text, article_extra, image_fields, image_text, video_fields, video_text};
 
 /// `media_type` of each format.
 pub const VIDEO: i64 = 4;
@@ -50,7 +51,7 @@ pub struct Words<'a> {
 }
 
 /// An uploaded image.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Picture {
   pub uri: String,
   pub width: u64,
@@ -158,6 +159,98 @@ pub fn article(s: &Settings, words: Words, summary: &str, cover: &Picture) -> Va
     "upload_poster": cover.uri,
   });
   json!({ "item": { "common": common, "cover": cover } })
+}
+
+/// A form of `update/desc/`, as `qs.stringify` sends it.
+pub type Form = Vec<(String, String)>;
+
+/// The covers of a published video: its cover and, when it has one, its
+/// horizontal cover.
+#[derive(Debug, Clone, Default)]
+pub struct Covers {
+  pub cover: Picture,
+  pub horizontal: Option<Picture>,
+}
+
+/// The `update/desc/` form of a video (the edit page's `beforeModify`):
+/// the item, its text as the editor holds it, and its covers, `new` in
+/// place of the cover when one was uploaded.
+pub fn video_modify(
+  item_id: &str,
+  vid: &str,
+  title: &str,
+  editor: &Editor,
+  covers: &Covers,
+  new: Option<&Picture>,
+) -> Form {
+  let text = video_fields(title, editor);
+  let mut form = modify_head(item_id);
+  form.push(("video_id".into(), vid.to_owned()));
+  push_text(&mut form, &text, true);
+  let cover = new.unwrap_or(&covers.cover);
+  form.push(("croppedUri".into(), cover.uri.clone()));
+  push_size(&mut form, "custom_cover_image", cover);
+  // The page keeps a landscape cover as the horizontal one too.
+  let old = &covers.cover;
+  let horizontal = match (&covers.horizontal, new) {
+    (_, Some(new)) if new.width > new.height => Some(new),
+    (Some(h), _) => Some(h),
+    (None, _) if old.width > old.height => Some(old),
+    _ => None,
+  };
+  if let Some(h) = horizontal {
+    form.push(("horizontal_custom_cover_image_uri".into(), h.uri.clone()));
+    push_size(&mut form, "horizontal_custom_cover_image", h);
+  }
+  form
+}
+
+/// The `update/desc/` form of an image post: the text when it changed and
+/// the cover when one was uploaded.
+pub fn images_modify(
+  item_id: &str,
+  words: Option<(&str, &Editor)>,
+  cover: Option<&Picture>,
+) -> Form {
+  let mut form = modify_head(item_id);
+  if let Some((title, editor)) = words {
+    push_text(&mut form, &image_fields(title, editor), false);
+  }
+  if let Some(cover) = cover {
+    form.push(("croppedUri".into(), cover.uri.clone()));
+    push_size(&mut form, "custom_cover_image", cover);
+  }
+  form
+}
+
+fn modify_head(item_id: &str) -> Form {
+  vec![
+    ("item_id".into(), item_id.to_owned()),
+    ("is_new_update".into(), "1".into()),
+  ]
+}
+
+/// The text fields of `update/desc/`; a video's carry its caption and title.
+fn push_text(form: &mut Form, text: &Text, video: bool) {
+  form.push(("text".into(), text.text.clone()));
+  if video {
+    form.push(("caption".into(), text.caption.clone()));
+    form.push(("item_title".into(), text.title.clone()));
+  }
+  form.push(("activity".into(), "[]".into()));
+  form.push(("text_extra".into(), text.extra.to_string()));
+  form.push(("challenges".into(), text.challenges.to_string()));
+  form.push(("mentions".into(), "[]".into()));
+  if video {
+    form.push(("title_permission".into(), "1".into()));
+  }
+}
+
+fn push_size(form: &mut Form, prefix: &str, picture: &Picture) {
+  if picture.width > 0 && picture.height > 0 {
+    form.push((format!("{prefix}_width"), picture.width.to_string()));
+    form.push((format!("{prefix}_height"), picture.height.to_string()));
+  }
 }
 
 /// `timing` when scheduled and the music of image posts and articles.

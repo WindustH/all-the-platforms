@@ -29,7 +29,8 @@ one of them.
   site), `hn` (Hacker News), `lobsters`, `v2ex`, `juejin` (Juejin 掘金).
 
 Chat apps share `chats`, `messages`, `send`, `members`, `react`, `edit` and
-`listen` (see `atp guide interact`).
+`listen` (see `atp guide interact`); `edit` also changes published posts
+where the platform allows it (`atp guide edit`).
 
 ## First steps
 

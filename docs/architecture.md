@@ -23,7 +23,7 @@ line in `src/main.rs`.
 
 | Module | Role |
 | --- | --- |
-| `platform` | `Platform` trait; `cap` (capabilities), `info` (`PlatformInfo`, `Choices`, login ways), `request` (`PageReq`, `Query`, `Draft`, `Reply`, `Message`, `QrTicket`) |
+| `platform` | `Platform` trait; `cap` (capabilities), `info` (`PlatformInfo`, `Choices`, login ways), `request` (`PageReq`, `Query`, `Draft`, `Edit`, `Reply`, `Message`, `QrTicket`) |
 | `ctx` | `Ctx`: what a platform works with (HTTP client with the session cookies, files, session extras, login hints, `#N` resolution) |
 | `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `FileEntry` (drives), `Page<T>`, `Action`, `AuthStatus`, `Insights`, `Transcript`, and `Data` (everything a command can print), one file per type |
 | `cli` | the shared commands, one module per area (`account`, `read`, `library`, `write`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options; questions on the terminal (`prompt`) |
@@ -69,6 +69,11 @@ A platform crate exports one type implementing `atp_core::Platform`:
   `publish`, ...). Each has a default body returning `unsupported_operation`,
   so a platform implements only what it supports and lists it in `caps`;
   unsupported commands are hidden from its `--help`.
+- `edit` serves messages and posts alike: `edit_post` takes an `Edit` (text,
+  title, topics, cover, visibility; `None` keeps a field) and by default
+  sends a text-only change to the chat-style `edit(post, text)`. `Cap::Edit`
+  shows the command; `EditTitle`, `EditTopics`, `EditCover` and
+  `EditVisibility` show its options.
 - Listing methods return one `Page<T>` per call for a `PageReq { cursor, size }`;
   the core follows `next_cursor` until `--limit` is reached. Cursors are opaque
   strings owned by the platform (offset, page number, upstream cursor ...).

@@ -1,9 +1,11 @@
-//! Publishing and deleting works (作品) as the creator platform's web
-//! uploader does: videos, image posts (图文) and articles (文章), their
-//! files sent through [`uploads`](crate::uploads), then `create_v2`.
-//! Nothing goes out before the person has seen a summary and said yes.
+//! Publishing, changing and deleting works (作品) as the creator
+//! platform's web uploader does: videos, image posts (图文) and articles
+//! (文章), their files sent through [`uploads`](crate::uploads), then
+//! `create_v2`; changes in [`edit`]. Nothing goes out before the person
+//! has seen a summary and said yes.
 
 mod draft;
+mod edit;
 
 use std::path::Path;
 use std::time::Duration;
@@ -13,6 +15,7 @@ use atp_core::{Action, Draft, Error, Result, Value, ValueExt};
 use rand::Rng;
 
 use self::draft::{Kind, article_body, ask, check};
+pub use self::edit::edit;
 
 use crate::api::Api;
 use crate::creator::Creator;

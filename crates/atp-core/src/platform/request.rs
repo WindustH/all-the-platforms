@@ -69,6 +69,36 @@ pub struct Draft {
   pub yes: bool,
 }
 
+/// Changes to one of your posts (`edit`); what is `None` stays as it is.
+#[derive(Debug, Clone, Default)]
+pub struct Edit {
+  /// The new text: a message, a description, a body.
+  pub text: Option<String>,
+  /// The new title ([`Cap::EditTitle`](super::Cap::EditTitle)).
+  pub title: Option<String>,
+  /// Topics / hashtags replacing the post's own; empty removes them
+  /// ([`Cap::EditTopics`](super::Cap::EditTopics)).
+  pub topics: Option<Vec<String>>,
+  /// A new cover image ([`Cap::EditCover`](super::Cap::EditCover)).
+  pub cover: Option<PathBuf>,
+  /// `public`, `friends` or `private` ([`Cap::EditVisibility`](super::Cap::EditVisibility)).
+  pub visibility: Option<String>,
+  /// The person said yes ahead (`--yes`); platforms that show the change
+  /// before sending it ask otherwise.
+  pub yes: bool,
+}
+
+impl Edit {
+  /// The new text when nothing else changes: what a message edit takes.
+  pub fn text_only(&self) -> Option<&str> {
+    let others = self.title.is_some()
+      || self.topics.is_some()
+      || self.cover.is_some()
+      || self.visibility.is_some();
+    self.text.as_deref().filter(|_| !others)
+  }
+}
+
 /// A comment to send. `images` stay empty unless the platform declares
 /// [`Cap::CommentImages`].
 #[derive(Debug, Clone, Default)]

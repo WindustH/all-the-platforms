@@ -5,8 +5,8 @@
 //! `a_bogus` (see [`sign`]). Writes carry ticket-guard headers signed with
 //! the key ATP registers when it logs in (QR code or texted code), so a
 //! session copied from a browser reads but does not write. `listen` follows
-//! live rooms over the webcast websocket. Publishing and deleting go
-//! through the creator platform ([`creator`]), as its web uploader does.
+//! live rooms over the webcast websocket. Publishing, editing and deleting
+//! go through the creator platform ([`creator`]), as its web pages do.
 
 mod api;
 mod comments;
@@ -31,8 +31,9 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Media, Notification, Page, PageReq,
-  Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Media, Notification, Page,
+  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
+  User,
 };
 
 use crate::api::Api;
@@ -82,6 +83,11 @@ impl Platform for Douyin {
       Cap::PostCollection,
       Cap::PostMusic,
       Cap::Delete,
+      Cap::Edit,
+      Cap::EditTitle,
+      Cap::EditTopics,
+      Cap::EditCover,
+      Cap::EditVisibility,
       Cap::Listen,
       Cap::Download,
     ],
@@ -234,6 +240,10 @@ impl Platform for Douyin {
 
   async fn delete(&self, post: &str) -> Result<Action> {
     works::delete(&self.api, post).await
+  }
+
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    works::edit(&self.api, post, edit).await
   }
 
   async fn listen(&self, chats: &[String], out: &Stream) -> Result<()> {

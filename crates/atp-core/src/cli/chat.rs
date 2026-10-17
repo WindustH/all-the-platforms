@@ -59,13 +59,6 @@ pub enum ChatCommand {
     #[arg(long)]
     undo: bool,
   },
-  /// Replace the text of one of your messages
-  Edit {
-    /// Message: `CHAT/MESSAGE`, a link, or #N from the last list
-    post: String,
-    /// New text; `-` reads it from stdin
-    text: String,
-  },
   /// Print messages as they arrive, until interrupted
   #[command(after_long_help = EX_LISTEN)]
   Listen {
@@ -108,13 +101,6 @@ pub(super) async fn run<P: Platform>(
     }
     ChatCommand::React { post, emoji, undo } => {
       Data::Action(p.react(&ctx.post_ref(&post)?, &emoji, undo).await?)
-    }
-    ChatCommand::Edit { post, text } => {
-      let text = read_text(Some(text))?;
-      if text.is_empty() {
-        return Err(Error::input("the new text is empty"));
-      }
-      Data::Action(p.edit(&ctx.post_ref(&post)?, &text).await?)
     }
     ChatCommand::Listen { chats } => {
       listen(p, &chats, &Stream::new(format, P::INFO.id, raw)).await?

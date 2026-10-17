@@ -10,11 +10,11 @@ use atp_core::{Draft, Error, Result};
 use super::POST_PAGE;
 
 /// The limits the web form holds a post to (JavaScript string lengths).
-const VIDEO_TITLE_MAX: usize = 30;
-const IMAGE_TITLE_MAX: usize = 20;
+pub(super) const VIDEO_TITLE_MAX: usize = 30;
+pub(super) const IMAGE_TITLE_MAX: usize = 20;
 const ARTICLE_TITLE_MAX: usize = 30;
 const ARTICLE_SUMMARY_MAX: usize = 30;
-const TEXT_MAX: usize = 1000;
+pub(super) const TEXT_MAX: usize = 1000;
 const ARTICLE_MIN: usize = 100;
 /// Scheduled posts go out 2 hours to 14 days ahead.
 const SCHEDULE_MIN: i64 = 2 * 3600;
@@ -175,6 +175,6 @@ fn size_of(path: &Path) -> String {
   }
 }
 
-fn utf16(s: &str) -> usize {
+pub(super) fn utf16(s: &str) -> usize {
   s.encode_utf16().count()
 }

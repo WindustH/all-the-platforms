@@ -59,7 +59,16 @@ pub enum Cap {
   Send,
   Members,
   React,
+  /// `edit`: a new text for a message or a post.
   Edit,
+  /// `edit --title`.
+  EditTitle,
+  /// `edit --topic`: replacing a post's topics / hashtags.
+  EditTopics,
+  /// `edit --cover`.
+  EditCover,
+  /// `edit --visibility`.
+  EditVisibility,
   Listen,
   /// A drive: `search`, `read` and `download` work on files and folders.
   Files,
@@ -113,6 +122,10 @@ impl Cap {
     Cap::Members,
     Cap::React,
     Cap::Edit,
+    Cap::EditTitle,
+    Cap::EditTopics,
+    Cap::EditCover,
+    Cap::EditVisibility,
     Cap::Listen,
     Cap::Files,
   ];
@@ -165,6 +178,10 @@ impl Cap {
       Cap::Members => "members",
       Cap::React => "react",
       Cap::Edit => "edit",
+      Cap::EditTitle => "edit-title",
+      Cap::EditTopics => "edit-topics",
+      Cap::EditCover => "edit-cover",
+      Cap::EditVisibility => "edit-visibility",
       Cap::Listen => "listen",
       Cap::Files => "files",
     }
