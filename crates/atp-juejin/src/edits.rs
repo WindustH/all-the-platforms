@@ -14,9 +14,8 @@ use atp_core::{Action, Edit, Error, ErrorCode, Result, Value, ValueExt, json};
 use regex::Regex;
 
 use crate::api::{AID, Api, SITE};
-use crate::markdown;
 use crate::refs::{self, Item};
-use crate::users;
+use crate::{markdown, tags, users};
 
 /// `edit_type` of drafts written in Markdown (0 is the rich-text editor).
 const MARKDOWN: i64 = 10;
@@ -209,34 +208,14 @@ fn uri(link: &str) -> Option<String> {
     .then(|| path.to_owned())
 }
 
-/// The ids of tags named as on Juejin (`query_tag_list`, the editor's tag
-/// search); a name without an exact match is refused with the closest ones.
+/// The ids of an article's tags, by their names on Juejin.
 async fn tag_ids(api: &Api, names: &[String]) -> Result<Vec<String>> {
   if names.is_empty() {
     return Err(Error::input("a Juejin article needs at least one tag"));
   }
   let mut ids = Vec::new();
   for name in names {
-    let name = name.trim_start_matches('#').trim();
-    let body = json!({ "cursor": "0", "key_word": name, "limit": 10, "sort_type": 1 });
-    let v = api.editor("/tag_api/v1/query_tag_list", &body).await?;
-    let tags: Vec<(String, String)> = v
-      .list("data")
-      .iter()
-      .filter_map(|t| Some((t.str("tag.tag_id")?, t.str("tag.tag_name")?)))
-      .collect();
-    let Some((id, _)) = tags.iter().find(|(_, n)| n.eq_ignore_ascii_case(name)) else {
-      let close: Vec<&str> = tags.iter().map(|(_, n)| n.as_str()).collect();
-      return Err(Error::not_found(format!(
-        "no Juejin tag named {name} (close: {})",
-        if close.is_empty() {
-          "none".to_owned()
-        } else {
-          close.join(", ")
-        }
-      )));
-    };
-    ids.push(id.clone());
+    ids.push(tags::id(api, name).await?);
   }
   Ok(ids)
 }

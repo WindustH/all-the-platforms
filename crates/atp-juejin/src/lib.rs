@@ -3,8 +3,9 @@
 //! Markdown as text, pins (沸点), the hot ranking and home feeds, search,
 //! comments with their replies, users, their articles, followers and
 //! followings, without an account. With a login: 点赞, collecting into
-//! collection sets, comments and replies, following, the daily check-in,
-//! and editing your articles ([`edits`]).
+//! collection sets and moving articles between them ([`library`]),
+//! comments and replies, following people, collection sets and tags
+//! ([`tags`]), the daily check-in, and editing your articles ([`edits`]).
 
 mod api;
 mod comments;
@@ -17,6 +18,7 @@ mod parse;
 mod posts;
 mod refs;
 mod search;
+mod tags;
 mod users;
 
 /// The commands only this platform has, for [`Platform::run_extra`](atp_core::Platform::run_extra).
@@ -65,6 +67,9 @@ impl Platform for Juejin {
       Cap::EditTitle,
       Cap::EditTopics,
       Cap::Download,
+      Cap::FolderAdd,
+      Cap::FolderRemove,
+      Cap::FolderMove,
     ],
     choices: Choices {
       search_sort: search::SORTS,
@@ -165,6 +170,26 @@ impl Platform for Juejin {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     users::follow(&self.api, user, undo).await
+  }
+
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    library::file(&self.api, folder, posts, true).await
+  }
+
+  async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    library::file(&self.api, folder, posts, false).await
+  }
+
+  /// Natively: one `add_article` call per article, selecting TO and
+  /// unselecting FROM.
+  async fn folder_move(
+    &self,
+    from: &str,
+    to: &str,
+    posts: &[String],
+    copy: bool,
+  ) -> Result<Vec<Action>> {
+    library::shift(&self.api, from, to, posts, copy).await
   }
 
   async fn run_extra(&self, command: Self::Extra) -> Result<Data> {

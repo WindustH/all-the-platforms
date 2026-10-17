@@ -1,11 +1,11 @@
-//! Juejin commands beyond the shared set: a user's pins and the daily
-//! check-in (签到).
+//! Juejin commands beyond the shared set: a user's pins, the daily
+//! check-in (签到), and following collection sets and tags.
 
 use atp_core::cli::PageArgs;
 use atp_core::{Action, Data, ErrorCode, Result, ValueExt, json};
 
 use crate::api::Api;
-use crate::posts;
+use crate::{library, posts, tags};
 
 /// `err_no` of a check-in done earlier today.
 const ALREADY: &str = "15001";
@@ -23,7 +23,31 @@ pub enum Command {
   /// The daily check-in (签到) for 矿石 points (needs a login)
   #[command(name = "check-in", after_long_help = EX_CHECK_IN)]
   CheckIn,
+  /// Follow someone's collection set (收藏集)
+  FollowFolder {
+    /// Collection set: id, juejin.cn/collection/ link or #N
+    folder: String,
+    /// Unfollow instead
+    #[arg(long)]
+    undo: bool,
+  },
+  /// Follow a tag (标签)
+  #[command(after_long_help = EX_FOLLOW_TAG)]
+  FollowTag {
+    /// Tag: its name as Juejin shows it, or its id
+    tag: String,
+    /// Unfollow instead
+    #[arg(long)]
+    undo: bool,
+  },
 }
+
+const EX_FOLLOW_TAG: &str = "\
+Examples:
+  atp juejin follow-tag Rust
+  atp juejin follow-tag 前端 --undo
+
+More: atp guide juejin follow-tag";
 
 const EX_PINS: &str = "\
 Examples:
@@ -49,6 +73,11 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       )
     }
     Command::CheckIn => Data::Action(check_in(api).await?),
+    Command::FollowFolder { folder, undo } => {
+      let folder = api.ctx.collection_ref(&folder)?;
+      Data::Action(library::follow(api, &folder, undo).await?)
+    }
+    Command::FollowTag { tag, undo } => Data::Action(tags::follow(api, &tag, undo).await?),
   })
 }
 

@@ -3,7 +3,8 @@
 //! - articles: `https://juejin.cn/post/<id>` (also juejin.im), `article:<id>`
 //!   or a bare id;
 //! - pins (沸点): `https://juejin.cn/pin/<id>` or `pin:<id>`;
-//! - users: `https://juejin.cn/user/<id>` (and its sub-pages) or the id.
+//! - users: `https://juejin.cn/user/<id>` (and its sub-pages) or the id;
+//! - collection sets (收藏集): `https://juejin.cn/collection/<id>` or the id.
 
 use atp_core::{Error, Result};
 use url::Url;
@@ -63,6 +64,23 @@ pub fn item(arg: &str) -> Result<Item> {
     _ => Err(Error::input(format!(
       "not a Juejin article or pin: {arg} (give a juejin.cn/post/ or /pin/ link, or an id)"
     ))),
+  }
+}
+
+/// A collection set (收藏集): `https://juejin.cn/collection/<id>` or the id.
+pub fn collection(arg: &str) -> Result<String> {
+  let arg = arg.trim();
+  let id = match link(arg) {
+    Some((word, id)) if word == "collection" => id,
+    Some(_) => String::new(),
+    None => arg.to_owned(),
+  };
+  if is_id(&id) {
+    Ok(id)
+  } else {
+    Err(Error::input(format!(
+      "not a Juejin collection set: {arg} (give a juejin.cn/collection/ link or the id)"
+    )))
   }
 }
 

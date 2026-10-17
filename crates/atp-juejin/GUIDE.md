@@ -67,7 +67,9 @@ again.
 - Pins: `https://juejin.cn/pin/<id>` or `pin:<id>`.
 - Users: `https://juejin.cn/user/<id>` (any of its tabs) or the id.
 - Comments: the `id` that `comments` lists, for `replies` and `--reply-to`.
-- Collection sets: the `id` that `collections` lists, for `--folder`.
+- Collection sets: `https://juejin.cn/collection/<id>` or the `id` that
+  `collections` lists, for `--folder`, the folder commands and
+  `follow-folder`.
 - `#N` works after any list.
 
 ## Commands
@@ -122,6 +124,21 @@ A user's collection sets (收藏集), yours without USER.
 set: your first one (the default 收藏集) unless `--folder` names another;
 `unfavorite` takes it out again.
 
+### folder-add, folder-remove, folder-move
+
+Collection sets are Juejin's folders; only articles go into them.
+`folder-add SET ARTICLE…` and `folder-remove SET ARTICLE…` work as
+`favorite --folder` does, one call per article. `folder-move FROM TO
+ARTICLE… [--copy]` uses the collect dialog's own call, which selects TO
+and unselects FROM in one go; `--copy` keeps FROM. Creating, renaming and
+deleting sets is not supported.
+
+### follow-folder, follow-tag
+
+`follow-folder SET [--undo]` follows someone's collection set as its page
+does; `follow-tag TAG [--undo]` follows a tag, given by its name (looked
+up as the editor's tag search does) or its id.
+
 ### comment
 
 `comment POST TEXT` comments on an article or pin; `--reply-to COMMENT`
@@ -172,3 +189,6 @@ that today's check-in was already done.
 No QR login, no publishing new articles or pins, no deleting, no
 notifications, no booklets (小册), courses or the lottery, no comment
 images, and no following feed (it needs a login ATP has not verified).
+Collection sets cannot be created, edited or deleted, their articles are
+not listed, and columns (专栏) are not followed: the site's calls for
+them carry bodies ATP has not seen.
