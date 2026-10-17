@@ -65,8 +65,6 @@ pub enum Command {
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Your watch-later list
-  WatchLater,
   /// Your videos side by side with creator-center numbers (3-second bounce,
   /// share watched, follows, click-through rank ...)
   #[command(visible_alias = "my-videos", after_long_help = EX_VIDEO_STATS)]
@@ -156,7 +154,6 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
     E::Explore(c) => explore::run(api, c).await?,
     E::Library(c) => library::run(api, c).await?,
     E::Interact(c) => interact::run(api, c).await?,
-    E::WatchLater => Data::Posts(videos::watch_later(api).await?),
     E::VideoStats { videos, limit } => {
       let mut refs = Vec::new();
       for v in &videos {

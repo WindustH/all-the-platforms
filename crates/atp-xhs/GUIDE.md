@@ -168,9 +168,11 @@ warns that this cannot be undone).
 
 ### history, history-count, history-delete, history-clear
 
-`history` is your browsing history (浏览记录), with `extra.read_at`;
-`history-count`, `history-delete NOTE…` and `history-clear [-y]` (asks
-first; `-y` in scripts) manage it.
+`history` is your browsing history (浏览记录) of notes, with
+`extra.read_at`; `history-count` says how many notes it holds.
+`history-delete NOTE…` removes notes from it in one call (an Action per
+note) and `history-clear` empties it; both ask first (`-y` in scripts).
+Live rooms in the history are left alone.
 
 ### search-saved
 

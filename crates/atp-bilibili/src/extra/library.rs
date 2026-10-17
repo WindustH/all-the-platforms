@@ -1,12 +1,11 @@
-//! Your library: history and watch-later management, cleaning and saving
+//! Your library: searching and pausing the history, cleaning and saving
 //! favorites folders, special follows and followings shared with others.
-//! Creating and editing folders, follow groups and blocks are shared
-//! commands.
+//! Creating and editing folders, follow groups, blocks, watch later and
+//! deleting from the history are shared commands.
 
-use atp_core::cli::{PageArgs, confirm};
+use atp_core::cli::PageArgs;
 use atp_core::{Data, Result};
 
-use super::video_ref;
 use crate::api::Api;
 use crate::{folders, history, relations};
 
@@ -28,7 +27,8 @@ pub async fn run(api: &Api, command: LibraryCommand) -> Result<Data> {
   }
 }
 
-/// Watch history and watch later.
+/// Searching the watch history and pausing it; deleting from it, clearing
+/// it and watch later are shared commands.
 #[derive(Debug, clap::Subcommand)]
 pub enum HistoryCommand {
   /// Search your watch history
@@ -38,41 +38,11 @@ pub enum HistoryCommand {
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Remove a video from your watch history
-  HistoryDelete {
-    /// Video: BV… or av… id, link, b23.tv short link or #N
-    video: String,
-  },
-  /// Erase your whole watch history
-  HistoryClear {
-    /// Skip the confirmation question (needed in scripts)
-    #[arg(short, long)]
-    yes: bool,
-  },
   /// Stop recording the watch history (--undo resumes)
   HistoryPause {
     /// Resume recording
     #[arg(long)]
     undo: bool,
-  },
-  /// Add a video to watch later
-  LaterAdd {
-    /// Video: BV… or av… id, link, b23.tv short link or #N
-    video: String,
-  },
-  /// Remove a video from watch later
-  LaterRemove {
-    /// Video: BV… or av… id, link, b23.tv short link or #N
-    video: String,
-  },
-  /// Empty watch later, or only the videos already watched
-  LaterClear {
-    /// Only remove the videos already watched (no confirmation needed)
-    #[arg(long)]
-    watched: bool,
-    /// Skip the confirmation question (needed in scripts)
-    #[arg(short, long)]
-    yes: bool,
   },
 }
 
@@ -84,26 +54,7 @@ async fn run_history(api: &Api, command: HistoryCommand) -> Result<Data> {
         .collect_dated(async |r| history::search(api, &keyword, &r).await)
         .await?,
     ),
-    L::HistoryDelete { video } => {
-      Data::Action(history::delete(api, &video_ref(api, &video).await?).await?)
-    }
-    L::HistoryClear { yes } => {
-      confirm(yes, "erase your whole watch history")?;
-      Data::Action(history::clear(api).await?)
-    }
     L::HistoryPause { undo } => Data::Action(history::pause(api, undo).await?),
-    L::LaterAdd { video } => {
-      Data::Action(history::later_add(api, &video_ref(api, &video).await?).await?)
-    }
-    L::LaterRemove { video } => {
-      Data::Action(history::later_remove(api, &video_ref(api, &video).await?).await?)
-    }
-    L::LaterClear { watched, yes } => {
-      if !watched {
-        confirm(yes, "empty your whole watch-later list")?;
-      }
-      Data::Action(history::later_clear(api, watched).await?)
-    }
   })
 }
 

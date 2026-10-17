@@ -50,6 +50,9 @@ Organizing what you follow and save, where the platform offers it:
     atp <platform> folder-add FOLDER POST...
     atp <platform> folder-remove FOLDER POST...
     atp <platform> folder-move FROM TO POST... [--copy]
+    atp <platform> later-add POST...           # watch later; later-remove POST...
+    atp <platform> later-clear [--watched] [-y]
+    atp <platform> history-delete POST... [-y] # history-clear [-y] erases all
 
 GROUP and FOLDER take ids or `#N` after `follow-groups` / `collections`;
 USER and POST take `#N` of the last user or post list. A failed user or

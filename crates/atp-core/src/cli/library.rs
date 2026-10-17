@@ -1,8 +1,10 @@
-//! Your library: folders, saved and liked posts, history, notifications.
+//! Your library: folders, saved and liked posts, history, watch later,
+//! notifications.
 
 use clap::Subcommand;
 
 use super::args::PageArgs;
+use super::history::{self, HistoryCommand};
 use crate::error::Result;
 use crate::model::Data;
 use crate::platform::Platform;
@@ -38,6 +40,8 @@ pub enum LibraryCommand {
     #[command(flatten)]
     page: PageArgs,
   },
+  #[command(flatten)]
+  Viewing(HistoryCommand),
   /// Your notifications
   Notifications {
     /// Only this kind (values differ per platform)
@@ -85,6 +89,7 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: LibraryCommand) -> Result<Data>
     LibraryCommand::History { page } => {
       Data::Posts(page.collect_dated(async |r| p.history(&r).await).await?)
     }
+    LibraryCommand::Viewing(cmd) => return history::run(p, cmd).await,
     LibraryCommand::Notifications { kind, page } => {
       let kind = kind.as_deref();
       Data::Notifications(

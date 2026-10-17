@@ -106,6 +106,8 @@ impl Platform for Xhs {
       Cap::FolderDelete,
       Cap::FolderAdd,
       Cap::FolderMove,
+      Cap::HistoryDelete,
+      Cap::HistoryClear,
     ],
     choices: Choices {
       search_sort: search::SEARCH_SORTS,
@@ -315,6 +317,14 @@ impl Platform for Xhs {
     copy: bool,
   ) -> Result<Vec<Action>> {
     boards::shift(&self.api, from, to, posts, copy).await
+  }
+
+  async fn history_delete(&self, posts: &[String]) -> Result<Vec<Action>> {
+    history::delete(&self.api, posts).await
+  }
+
+  async fn history_clear(&self) -> Result<Action> {
+    history::clear(&self.api).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {

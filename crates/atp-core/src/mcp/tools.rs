@@ -36,6 +36,7 @@ const READS: &[&str] = &[
   "favorites",
   "likes",
   "history",
+  "watch-later",
   "notifications",
   "unread",
   "chats",

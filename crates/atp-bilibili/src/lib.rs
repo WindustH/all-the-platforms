@@ -146,6 +146,12 @@ impl Platform for Bilibili {
       Cap::FolderAdd,
       Cap::FolderRemove,
       Cap::FolderMove,
+      Cap::WatchLater,
+      Cap::LaterAdd,
+      Cap::LaterClear,
+      Cap::LaterClearWatched,
+      Cap::HistoryDelete,
+      Cap::HistoryClear,
     ],
     choices: Choices {
       search_sort: &["totalrank", "click", "pubdate", "dm", "stow", "scores"],
@@ -413,6 +419,31 @@ impl Platform for Bilibili {
     copy: bool,
   ) -> Result<Vec<Action>> {
     folders::shift(&self.api, from, to, posts, copy).await
+  }
+
+  /// The whole list in one page (`x/v2/history/toview`).
+  async fn watch_later(&self, _page: &PageReq) -> Result<Page<Post>> {
+    videos::watch_later(&self.api).await
+  }
+
+  async fn later_add(&self, posts: &[String]) -> Result<Vec<Action>> {
+    history::later_add(&self.api, posts).await
+  }
+
+  async fn later_remove(&self, posts: &[String]) -> Result<Vec<Action>> {
+    history::later_remove(&self.api, posts).await
+  }
+
+  async fn later_clear(&self, watched: bool) -> Result<Action> {
+    history::later_clear(&self.api, watched).await
+  }
+
+  async fn history_delete(&self, posts: &[String]) -> Result<Vec<Action>> {
+    history::delete(&self.api, posts).await
+  }
+
+  async fn history_clear(&self) -> Result<Action> {
+    history::clear(&self.api).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {

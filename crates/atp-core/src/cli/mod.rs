@@ -11,6 +11,7 @@ mod chat;
 mod command;
 mod folders;
 mod follows;
+mod history;
 mod input;
 mod library;
 mod media;
@@ -30,6 +31,7 @@ pub use self::command::CommonCommand;
 use self::command::{Outcome, Run};
 pub use self::folders::FolderCommand;
 pub use self::follows::{FollowCommand, GroupCommand};
+pub use self::history::HistoryCommand;
 pub use self::input::{Change, check_files, check_images, confirm, read_text};
 pub use self::library::LibraryCommand;
 pub use self::media::{DownloadArgs, MediaCommand};
@@ -67,6 +69,11 @@ fn required_cap(name: &str) -> Option<&'static [Cap]> {
     "favorites" => &[Cap::Favorites],
     "likes" => &[Cap::Likes],
     "history" => &[Cap::History],
+    "history-delete" => &[Cap::HistoryDelete],
+    "history-clear" => &[Cap::HistoryClear],
+    "watch-later" => &[Cap::WatchLater],
+    "later-add" | "later-remove" => &[Cap::LaterAdd],
+    "later-clear" => &[Cap::LaterClear],
     "notifications" => &[Cap::Notifications],
     "unread" => &[Cap::Unread],
     "like" | "unlike" => &[Cap::Like],
@@ -190,8 +197,9 @@ pub fn command<P: Platform>() -> clap::Command {
   cmd
 }
 
-/// `following --search` / `--mutual` and the options of `folder-create` /
-/// `folder-edit`, hidden where the platform does not offer them.
+/// `following --search` / `--mutual`, the options of `folder-create` /
+/// `folder-edit` and `later-clear --watched`, hidden where the platform
+/// does not offer them.
 fn manage_options(cmd: clap::Command, info: &PlatformInfo) -> clap::Command {
   let following = [
     ("search", Cap::FollowingSearch),
@@ -214,6 +222,9 @@ fn manage_options(cmd: clap::Command, info: &PlatformInfo) -> clap::Command {
       }
       c
     });
+  }
+  if !info.supports(Cap::LaterClearWatched) {
+    cmd = cmd.mut_subcommand("later-clear", |c| hide_arg(c, "watched"));
   }
   cmd
 }

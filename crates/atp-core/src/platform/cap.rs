@@ -100,6 +100,16 @@ pub enum Cap {
   FolderRemove,
   /// `folder-move` (and `--copy`): natively, or by adding and removing.
   FolderMove,
+  /// `watch-later`: the watch-later list.
+  WatchLater,
+  /// `later-add`, `later-remove`.
+  LaterAdd,
+  LaterClear,
+  /// `later-clear --watched`: only the posts already watched.
+  LaterClearWatched,
+  /// `history-delete`: single entries of the history.
+  HistoryDelete,
+  HistoryClear,
 }
 
 impl Cap {
@@ -173,6 +183,12 @@ impl Cap {
     Cap::FolderAdd,
     Cap::FolderRemove,
     Cap::FolderMove,
+    Cap::WatchLater,
+    Cap::LaterAdd,
+    Cap::LaterClear,
+    Cap::LaterClearWatched,
+    Cap::HistoryDelete,
+    Cap::HistoryClear,
   ];
 
   pub fn name(self) -> &'static str {
@@ -246,6 +262,12 @@ impl Cap {
       Cap::FolderAdd => "folder-add",
       Cap::FolderRemove => "folder-remove",
       Cap::FolderMove => "folder-move",
+      Cap::WatchLater => "watch-later",
+      Cap::LaterAdd => "later-add",
+      Cap::LaterClear => "later-clear",
+      Cap::LaterClearWatched => "later-clear-watched",
+      Cap::HistoryDelete => "history-delete",
+      Cap::HistoryClear => "history-clear",
     }
   }
 }

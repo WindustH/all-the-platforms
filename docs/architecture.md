@@ -36,7 +36,7 @@ one. Each platform crate re-exports its `Command` enum for `run_extra`.
 | `platform` | `Platform` trait; `cap` (capabilities), `info` (`PlatformInfo`, `Choices`, login ways), `request` (`PageReq`, `Query`, `Draft`, `Edit`, `Reply`, `Message`, `QrTicket`) |
 | `ctx` | `Ctx`: what a platform works with (HTTP client with the session cookies, files, session extras, login hints, `#N` resolution) |
 | `model` | normalized `Post`, `User`, `Comment`, `Collection`, `Notification`, `FileEntry` (drives), `Page<T>`, `Action`, `AuthStatus`, `Insights`, `Transcript`, and `Data` (everything a command can print), one file per type |
-| `cli` | the shared commands, one module per area (`account`, `read`, `library`, `write`, `follows`, `folders`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options; questions on the terminal (`prompt`) |
+| `cli` | the shared commands, one module per area (`account`, `read`, `library`, `history`, `write`, `follows`, `folders`, `media`, `chat`) flattened into `CommonCommand`; per-platform clap command; global and paging options; questions on the terminal (`prompt`) |
 | `app` | top-level program, multi-call (`bili` symlink) |
 | `open` | platforms in Rust code: `open`, `Open` (cookies, proxy, timeout), `save_session` |
 | `platforms` | `atp platforms`: one row per platform grouped by kind, `atp platforms <id>` in detail, the same data as JSON |
@@ -123,6 +123,13 @@ A platform crate exports one type implementing `atp_core::Platform`:
   per item (`Data::Actions`; one item prints a single Action). Each
   command has its `Cap`; `FolderDescription`, `FolderPrivacy` and
   `FolderCover` show the options of `folder-create` / `folder-edit`.
+- Watch later and the history: `watch_later` (a listing like `history`),
+  `later_add` / `later_remove` (one Action per post), `later_clear`
+  (`Cap::LaterClearWatched` shows `--watched`, only the posts already
+  watched), `history_delete` (one Action per post) and `history_clear`,
+  behind `WatchLater`, `LaterAdd`, `LaterClear`, `HistoryDelete` and
+  `HistoryClear`. The CLI asks before `history-delete`, `history-clear`
+  and a `later-clear` without `--watched`.
 
 ### Chat platforms
 

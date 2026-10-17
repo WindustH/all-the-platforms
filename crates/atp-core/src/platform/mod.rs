@@ -391,6 +391,43 @@ pub trait Platform: Sized {
     crate::bulk::move_by_adding(self, from, to, posts, copy).await
   }
 
+  // ── watch later and history ──────────────────────────────────────────
+  //
+  // The watch-later list (稍后再看, Watch later) and the viewing history
+  // `history` lists. Methods on several posts return one Action per post,
+  // as those of the follows do.
+
+  /// Your watch-later list.
+  async fn watch_later(&self, page: &PageReq) -> Result<Page<Post>> {
+    unsupported!("watch-later")
+  }
+
+  /// Put posts on the watch-later list.
+  async fn later_add(&self, posts: &[String]) -> Result<Vec<Action>> {
+    unsupported!("later-add")
+  }
+
+  /// Take posts off the watch-later list.
+  async fn later_remove(&self, posts: &[String]) -> Result<Vec<Action>> {
+    unsupported!("later-remove")
+  }
+
+  /// Empty the watch-later list, or with `watched`
+  /// ([`Cap::LaterClearWatched`]) drop only the posts already watched.
+  async fn later_clear(&self, watched: bool) -> Result<Action> {
+    unsupported!("later-clear")
+  }
+
+  /// Remove posts from the viewing history.
+  async fn history_delete(&self, posts: &[String]) -> Result<Vec<Action>> {
+    unsupported!("history-delete")
+  }
+
+  /// Erase the whole viewing history.
+  async fn history_clear(&self) -> Result<Action> {
+    unsupported!("history-clear")
+  }
+
   // ── analytics ────────────────────────────────────────────────────────
 
   /// Creator-center analytics of the logged-in account (`post` = `None`) or of

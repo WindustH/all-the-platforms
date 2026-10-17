@@ -1,20 +1,17 @@
 //! Your library beyond the shared commands: the mixes (合集), short dramas
-//! (短剧) and music you saved, watch later (稍后再看), clearing the
-//! history, and follow requests.
+//! (短剧) and music you saved, and follow requests.
 
-use atp_core::cli::{PageArgs, confirm};
+use atp_core::cli::PageArgs;
 use atp_core::{Data, Result};
 
 use crate::api::Api;
+use crate::relations;
 use crate::saves::{self, Saved};
-use crate::{history, relations};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum LibraryCommand {
   #[command(flatten)]
   Saved(SavedCommand),
-  #[command(flatten)]
-  Later(LaterCommand),
   /// Approve requests to follow your private account (关注请求)
   ApproveFollower {
     /// Users: sec_uid, douyin.com/user/… link, @douyin_id or #N
@@ -26,7 +23,6 @@ pub enum LibraryCommand {
 pub async fn run(api: &Api, command: LibraryCommand) -> Result<Data> {
   match command {
     LibraryCommand::Saved(c) => run_saved(api, c).await,
-    LibraryCommand::Later(c) => run_later(api, c).await,
     LibraryCommand::ApproveFollower { users } => {
       let users = users
         .iter()
@@ -111,71 +107,6 @@ async fn run_saved(api: &Api, command: SavedCommand) -> Result<Data> {
   }
 }
 
-/// Watch later and the viewing history.
-#[derive(Debug, clap::Subcommand)]
-pub enum LaterCommand {
-  /// Your watch-later list (稍后再看)
-  WatchLater {
-    #[command(flatten)]
-    page: PageArgs,
-  },
-  /// Add posts to watch later
-  #[command(after_long_help = EX_LATER)]
-  LaterAdd {
-    /// Posts: aweme id, douyin.com link, v.douyin.com short link or #N
-    #[arg(required = true, value_name = "POST")]
-    posts: Vec<String>,
-  },
-  /// Remove posts from watch later
-  LaterRemove {
-    /// Posts: aweme id, douyin.com link, v.douyin.com short link or #N
-    #[arg(required = true, value_name = "POST")]
-    posts: Vec<String>,
-  },
-  /// Empty watch later, or only the posts already watched
-  LaterClear {
-    /// Only remove the posts already watched (no confirmation needed)
-    #[arg(long)]
-    watched: bool,
-    /// Skip the confirmation question (needed in scripts)
-    #[arg(short, long)]
-    yes: bool,
-  },
-  /// Erase your whole viewing history
-  HistoryClear {
-    /// Skip the confirmation question (needed in scripts)
-    #[arg(short, long)]
-    yes: bool,
-  },
-}
-
-async fn run_later(api: &Api, command: LaterCommand) -> Result<Data> {
-  use LaterCommand as L;
-  let posts =
-    |list: &[String]| -> Result<Vec<String>> { list.iter().map(|p| api.ctx.post_ref(p)).collect() };
-  Ok(match command {
-    L::WatchLater { page } => Data::Posts(
-      page
-        .collect(async |r| history::later(api, &r).await)
-        .await?,
-    ),
-    L::LaterAdd { posts: list } => Data::actions(history::later_add(api, &posts(&list)?).await?),
-    L::LaterRemove { posts: list } => {
-      Data::actions(history::later_remove(api, &posts(&list)?).await?)
-    }
-    L::LaterClear { watched, yes } => {
-      if !watched {
-        confirm(yes, "empty your whole watch-later list")?;
-      }
-      Data::Action(history::later_clear(api, watched).await?)
-    }
-    L::HistoryClear { yes } => {
-      confirm(yes, "erase your whole viewing history")?;
-      Data::Action(history::clear(api).await?)
-    }
-  })
-}
-
 const EX_SAVE: &str = "\
 Examples:
   atp douyin saved-mixes
@@ -185,12 +116,3 @@ Examples:
 `save-drama` and `save-music` do the same for short dramas (after
 `saved-dramas`) and music (after `saved-music`).
 More: atp guide douyin save";
-
-const EX_LATER: &str = "\
-Examples:
-  atp douyin later-add '#1' '#4'
-  atp douyin watch-later
-  atp douyin later-remove '#2'
-  atp douyin later-clear --watched
-
-More: atp guide douyin watch-later";

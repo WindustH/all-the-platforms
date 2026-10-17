@@ -290,15 +290,23 @@ Includes the private message counters `dm_followed`, `dm_others` and
 `listen live:ROOM …` streams danmaku, super chats, gifts, memberships and
 live start / end as they happen (names are hidden from logged-out viewers).
 
-### history-search, history-delete, history-pause, history-clear
+### history-search, history-pause
 
-`history-search Q`, `history-delete VIDEO`, `history-pause [--undo]`,
-`history-clear [-y]` (asks first; `-y` in scripts).
+`history-search Q` searches the titles of your watch history;
+`history-pause [--undo]` stops recording it (and starts again).
+
+### history-delete, history-clear
+
+Videos only. `history-delete VIDEO…` removes them from the watch history
+one call each; `history-clear` erases all of it. Both ask first (`-y` in
+scripts).
 
 ### watch-later, later-add, later-remove, later-clear
 
-`watch-later`, `later-add VIDEO`, `later-remove VIDEO`, `later-clear
-[--watched] [-y]` (emptying the whole list asks first; `-y` in scripts).
+Videos only. `watch-later` reads the whole list in one request (`-n`
+cuts it, `--cursor` goes on); `later-add VIDEO…` and `later-remove VIDEO…`
+go one call each. `later-clear` empties the list after asking (`-y` in
+scripts); `later-clear --watched` drops only the videos already watched.
 
 ### folder-create, folder-edit, folder-delete
 

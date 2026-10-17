@@ -101,6 +101,10 @@ impl Platform for YouTube {
       Cap::FolderAdd,
       Cap::FolderRemove,
       Cap::FolderMove,
+      Cap::WatchLater,
+      Cap::LaterAdd,
+      Cap::HistoryDelete,
+      Cap::HistoryClear,
     ],
     choices: Choices {
       search_sort: search::SORTS,
@@ -275,6 +279,28 @@ impl Platform for YouTube {
 
   async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
     playlists::file(&self.api, folder, posts, true).await
+  }
+
+  /// The `WL` playlist.
+  async fn watch_later(&self, page: &PageReq) -> Result<Page<Post>> {
+    library::watch_later(&self.api, page).await
+  }
+
+  async fn later_add(&self, posts: &[String]) -> Result<Vec<Action>> {
+    playlists::later(&self.api, posts, false).await
+  }
+
+  async fn later_remove(&self, posts: &[String]) -> Result<Vec<Action>> {
+    playlists::later(&self.api, posts, true).await
+  }
+
+  async fn history_delete(&self, posts: &[String]) -> Result<Vec<Action>> {
+    library::forget(&self.api, posts).await
+  }
+
+  /// The watch history; `search-history-clear` clears the search history.
+  async fn history_clear(&self) -> Result<Action> {
+    library::clear(&self.api, false).await
   }
 
   async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {

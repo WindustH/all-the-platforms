@@ -2,7 +2,7 @@
 //! order, privacy and saving them; creating and filling them are the shared
 //! `folder-*` commands), a channel's other tabs and search, feeds with exact
 //! times, related videos, hashtags, search suggestions, live chat, YouTube
-//! Music, ratings of videos and comments, the bell, clearing and removing
+//! Music, ratings of videos and comments, the bell, clearing the search
 //! history, the account's channels and the one-time OAuth grant for
 //! analytics.
 
@@ -196,23 +196,12 @@ pub enum Command {
     #[arg(long)]
     undo: bool,
   },
-  /// Clear your whole watch history, or your search history
-  #[command(after_long_help = EX_HISTORY_CLEAR)]
-  HistoryClear {
-    /// Which history to clear
-    #[arg(value_parser = clap::builder::PossibleValuesParser::new(["watch", "search"]))]
-    which: String,
+  /// Clear your whole search history (`history-clear` clears the watch history)
+  #[command(after_long_help = EX_SEARCH_HISTORY_CLEAR)]
+  SearchHistoryClear {
     /// Skip the confirmation question (needed in scripts)
     #[arg(short, long)]
     yes: bool,
-  },
-  /// Remove a video from your watch history
-  HistoryRemove {
-    /// Video: id, link or #N
-    video: String,
-    /// History pages to look through
-    #[arg(long, default_value_t = 5)]
-    pages: usize,
   },
 }
 
@@ -270,12 +259,13 @@ Examples:
 
 `folder-edit --private` / `--public` do the same without unlisted.";
 
-const EX_HISTORY_CLEAR: &str = "\
+const EX_SEARCH_HISTORY_CLEAR: &str = "\
 Examples:
-  atp yt history-clear watch
-  atp yt history-clear search -y
+  atp yt search-history-clear
+  atp yt search-history-clear -y
+  atp yt history-clear -y              # the watch history
 
-It cannot be undone. More: atp guide yt history-clear";
+It cannot be undone. More: atp guide yt search-history-clear";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   use Command as C;
@@ -315,7 +305,6 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       manage::playlist_privacy(api, &playlist, &level).await
     }
     C::PlaylistSave { playlist, undo } => manage::save_playlist(api, &playlist, undo).await,
-    C::HistoryClear { which, yes } => manage::clear_history(api, which == "search", yes).await,
-    C::HistoryRemove { video, pages } => manage::forget(api, &video, pages).await,
+    C::SearchHistoryClear { yes } => manage::clear_search_history(api, yes).await,
   }
 }

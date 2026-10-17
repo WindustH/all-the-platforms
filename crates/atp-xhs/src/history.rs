@@ -2,6 +2,7 @@
 //! removing them. The web app's history page calls `common/dual_feed` with
 //! `scene=browse_history`; entries are flat notes with `browse_time`.
 
+use atp_core::bulk;
 use atp_core::text::from_millis;
 use atp_core::{Action, Page, PageReq, Post, Result, Value, ValueExt, json};
 
@@ -74,17 +75,31 @@ fn entry(row: &Value) -> Option<Post> {
   Some(post)
 }
 
-/// Remove notes from the history.
-pub async fn delete(api: &Api, notes: &[String]) -> Result<Action> {
+/// Remove notes from the history, all in one call; an Action per note.
+pub async fn delete(api: &Api, notes: &[String]) -> Result<Vec<Action>> {
   api.require_login()?;
   let mut ids = Vec::new();
   for arg in notes {
     ids.push(refs::note_ref(api, arg).await?.id);
   }
-  api
-    .post(DELETE, &json!({"item_ids": ids, "type": NOTES}))
-    .await?;
-  Ok(Action::done("history-delete", ids.join(",")))
+  bulk::batches(
+    "history-delete",
+    &ids,
+    ids.len(),
+    String::clone,
+    async |chunk| {
+      api
+        .post(DELETE, &json!({"item_ids": chunk, "type": NOTES}))
+        .await?;
+      Ok(
+        chunk
+          .iter()
+          .map(|id| Action::done("history-delete", id))
+          .collect(),
+      )
+    },
+  )
+  .await
 }
 
 /// Empty the history of notes.

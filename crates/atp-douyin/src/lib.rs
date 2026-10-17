@@ -110,6 +110,11 @@ impl Platform for Douyin {
       Cap::FolderAdd,
       Cap::FolderRemove,
       Cap::FolderMove,
+      Cap::WatchLater,
+      Cap::LaterAdd,
+      Cap::LaterClear,
+      Cap::LaterClearWatched,
+      Cap::HistoryClear,
     ],
     choices: Choices {
       search_sort: discover::SEARCH_SORTS,
@@ -306,6 +311,26 @@ impl Platform for Douyin {
 
   async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
     folders::remove(&self.api, folder, posts).await
+  }
+
+  async fn watch_later(&self, page: &PageReq) -> Result<Page<Post>> {
+    history::later(&self.api, page).await
+  }
+
+  async fn later_add(&self, posts: &[String]) -> Result<Vec<Action>> {
+    history::later_add(&self.api, posts).await
+  }
+
+  async fn later_remove(&self, posts: &[String]) -> Result<Vec<Action>> {
+    history::later_remove(&self.api, posts).await
+  }
+
+  async fn later_clear(&self, watched: bool) -> Result<Action> {
+    history::later_clear(&self.api, watched).await
+  }
+
+  async fn history_clear(&self) -> Result<Action> {
+    history::clear(&self.api).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {

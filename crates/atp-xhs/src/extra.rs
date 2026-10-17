@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use atp_core::cli::{PageArgs, check_images, confirm, read_text};
+use atp_core::cli::{PageArgs, check_images, read_text};
 use atp_core::{Action, Data, Draft, Result};
 
 use crate::api::Api;
@@ -108,18 +108,6 @@ pub enum Command {
   },
   /// How many notes the browsing history holds
   HistoryCount,
-  /// Remove notes from the browsing history
-  HistoryDelete {
-    /// Notes: links, #N or ids
-    #[arg(required = true)]
-    notes: Vec<String>,
-  },
-  /// Empty the browsing history of notes
-  HistoryClear {
-    /// Skip the confirmation question (needed in scripts)
-    #[arg(short, long)]
-    yes: bool,
-  },
   /// Your fans who interacted most (data center)
   ActiveFans {
     /// Window in days: up to 7 means the last 7, otherwise the last 30
@@ -186,8 +174,6 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       Data::Action(notifications::mark_read(api, kind.as_deref()).await?)
     }
     Command::HistoryCount => Data::Value(history::count(api).await?),
-    Command::HistoryDelete { notes } => Data::Action(history_delete(api, &notes).await?),
-    Command::HistoryClear { yes } => Data::Action(history_clear(api, yes).await?),
     Command::ActiveFans { days } => Data::Users(insights::active_fans(api, days).await?),
   })
 }
@@ -209,19 +195,6 @@ async fn join_event(
     ..Draft::default()
   };
   events::join(api, event, &draft).await
-}
-
-async fn history_delete(api: &Api, notes: &[String]) -> Result<Action> {
-  let notes = notes
-    .iter()
-    .map(|n| api.ctx.post_ref(n))
-    .collect::<Result<Vec<_>>>()?;
-  history::delete(api, &notes).await
-}
-
-async fn history_clear(api: &Api, yes: bool) -> Result<Action> {
-  confirm(yes, "clear the browsing history")?;
-  history::clear(api).await
 }
 
 const EX_EVENTS: &str = "\

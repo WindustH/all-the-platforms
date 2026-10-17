@@ -62,7 +62,7 @@ Write, analyse, download:
 | Discover | `search`, `hot`, `feed` |
 | Content | `read` (`show`), `comments`, `replies`, `likers`, `reposts`, `download` |
 | People | `user`, `user-posts` (`posts`), `followers`, `following` |
-| Your library | `collections`, `favorites` (`bookmarks`), `likes`, `history`, `notifications`, `unread` |
+| Your library | `collections`, `favorites` (`bookmarks`), `likes`, `history`, `history-delete`, `history-clear`, `watch-later`, `later-add` / `-remove` / `-clear`, `notifications`, `unread` |
 | Interact | `like` / `unlike`, `favorite` / `unfavorite`, `comment`, `delete-comment`, `follow` / `unfollow`, `post` (`publish`), `delete` |
 | Follows | `remove-follower`, `block` / `unblock`, `blocked`, `follow-groups`, `follow-group`, `follow-group-create` / `-rename` / `-delete` / `-add` / `-remove` |
 | Folders | `folder-create`, `folder-edit`, `folder-delete`, `folder-add`, `folder-remove`, `folder-move` |

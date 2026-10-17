@@ -34,8 +34,12 @@ const SHARED: &[(&[&str], &str)] = &[
   ),
   (&["likes"], include_str!("../../guide/commands/likes.md")),
   (
-    &["history"],
+    &["history", "history-delete", "history-clear"],
     include_str!("../../guide/commands/history.md"),
+  ),
+  (
+    &["watch-later", "later-add", "later-remove", "later-clear"],
+    include_str!("../../guide/commands/watch-later.md"),
   ),
   (
     &["notifications", "unread"],

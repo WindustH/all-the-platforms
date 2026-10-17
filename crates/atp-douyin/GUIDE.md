@@ -214,14 +214,15 @@ douyin.com/collection/… link or `#N`; DRAMA an id or `#N` after
 
 `history` is what you watched on this account. `history-clear` erases
 all of it after asking (`-y` in scripts); the web offers no way to remove
-single posts.
+single posts, so there is no `history-delete`.
 
 ### watch-later, later-add, later-remove, later-clear
 
-Your watch-later list (稍后再看): `watch-later` lists it, `later-add
-POST…` adds posts (one call each), `later-remove POST…` takes them out
-(50 per call), `later-clear` empties it after asking (`-y` in scripts)
-and `later-clear --watched` drops only what you watched.
+Your watch-later list (稍后再看): `watch-later` lists it, latest added
+first; `later-add POST…` adds posts (one call each), `later-remove POST…`
+takes them out (50 per call), `later-clear` empties it after asking (`-y`
+in scripts) and `later-clear --watched` drops only what you watched. The
+result of `later-clear` says how many posts went.
 
 ### notifications
 

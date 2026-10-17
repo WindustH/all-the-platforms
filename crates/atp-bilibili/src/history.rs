@@ -1,11 +1,12 @@
 //! Managing the watch history and the watch-later list.
 
+use atp_core::bulk;
 use atp_core::{Action, Page, PageReq, Post, Result, ValueExt, json};
 
 use crate::api::Api;
 use crate::paging::Pn;
 use crate::parse;
-use crate::refs::Video;
+use crate::refs::{self, Video};
 
 const DELETE: &str = "https://api.bilibili.com/x/v2/history/delete";
 const CLEAR: &str = "https://api.bilibili.com/x/v2/history/clear";
@@ -15,15 +16,31 @@ const LATER_ADD: &str = "https://api.bilibili.com/x/v2/history/toview/add";
 const LATER_DEL: &str = "https://api.bilibili.com/x/v2/history/toview/v2/dels";
 const LATER_CLEAR: &str = "https://api.bilibili.com/x/v2/history/toview/clear";
 
-/// Remove one video from the history.
-pub async fn delete(api: &Api, v: &Video) -> Result<Action> {
-  api
-    .post(DELETE)
-    .arg("kid", format!("archive_{}", v.aid))
-    .arg("jsonp", "jsonp")
-    .send()
-    .await?;
-  Ok(Action::done("history-delete", &v.bvid).with_url(v.url()))
+/// Videos given as posts, each through `op`, one call each.
+async fn each_video(
+  api: &Api,
+  action: &str,
+  posts: &[String],
+  op: impl AsyncFn(&Video) -> Result<Action>,
+) -> Result<Vec<Action>> {
+  bulk::each(action, posts, async |post| {
+    op(&refs::video(api, post).await?).await
+  })
+  .await
+}
+
+/// Remove videos from the history.
+pub async fn delete(api: &Api, posts: &[String]) -> Result<Vec<Action>> {
+  each_video(api, "history-delete", posts, async |v| {
+    api
+      .post(DELETE)
+      .arg("kid", format!("archive_{}", v.aid))
+      .arg("jsonp", "jsonp")
+      .send()
+      .await?;
+    Ok(Action::done("history-delete", &v.bvid).with_url(v.url()))
+  })
+  .await
 }
 
 pub async fn clear(api: &Api) -> Result<Action> {
@@ -74,14 +91,22 @@ pub async fn search(api: &Api, keyword: &str, page: &PageReq) -> Result<Page<Pos
   Ok(pn.page(posts, more))
 }
 
-pub async fn later_add(api: &Api, v: &Video) -> Result<Action> {
-  api.post(LATER_ADD).arg("aid", v.aid).send().await?;
-  Ok(Action::done("watch-later", &v.bvid).with_url(v.url()))
+/// Put videos on the watch-later list.
+pub async fn later_add(api: &Api, posts: &[String]) -> Result<Vec<Action>> {
+  each_video(api, "watch-later", posts, async |v| {
+    api.post(LATER_ADD).arg("aid", v.aid).send().await?;
+    Ok(Action::done("watch-later", &v.bvid).with_url(v.url()))
+  })
+  .await
 }
 
-pub async fn later_remove(api: &Api, v: &Video) -> Result<Action> {
-  api.post(LATER_DEL).arg("resources", v.aid).send().await?;
-  Ok(Action::done("watch-later-remove", &v.bvid).with_url(v.url()))
+/// Take videos off the watch-later list.
+pub async fn later_remove(api: &Api, posts: &[String]) -> Result<Vec<Action>> {
+  each_video(api, "watch-later-remove", posts, async |v| {
+    api.post(LATER_DEL).arg("resources", v.aid).send().await?;
+    Ok(Action::done("watch-later-remove", &v.bvid).with_url(v.url()))
+  })
+  .await
 }
 
 /// Empty the list, or with `watched` only drop the videos already watched.

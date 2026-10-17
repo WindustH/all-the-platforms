@@ -3,6 +3,9 @@
 //! any public playlist. Saving a video to Watch later or a playlist uses the
 //! body of YouTube.js `PlaylistManager` / the web app's `playlistEditEndpoint`.
 
+use std::collections::HashMap;
+
+use atp_core::bulk;
 use atp_core::{
   Action, Collection, Error, Page, PageReq, Post, Result, User, Value, ValueExt, json,
 };
@@ -82,6 +85,12 @@ pub async fn favorites(
   }
 }
 
+/// Watch later (the `WL` playlist), in playlist order.
+pub async fn watch_later(api: &Api, req: &PageReq) -> Result<Page<Post>> {
+  api.require_login()?;
+  playlist(api, "WL", req).await
+}
+
 /// Liked videos (the `LL` playlist).
 pub async fn likes(api: &Api, user: Option<&str>, req: &PageReq) -> Result<Page<Post>> {
   own_only(api, user, "liked videos").await?;
@@ -94,47 +103,76 @@ pub async fn history(api: &Api, req: &PageReq) -> Result<Page<Post>> {
   Ok(Page::new(l.posts, l.next))
 }
 
-/// Remove a video from the watch history: its history entry carries the
-/// feedback token of "Remove from watch history" (YouTube.js
-/// `History.removeVideo`). Looks through the first `pages` pages.
-pub async fn forget(api: &Api, arg: &str, pages: usize) -> Result<Action> {
+/// Pages of the watch history `history-delete` looks through for the
+/// entries of the videos it removes.
+const HISTORY_PAGES: usize = 10;
+
+/// Remove videos from the watch history, one call each: a history entry
+/// carries the feedback token of "Remove from watch history" (YouTube.js
+/// `History.removeVideo`). The entries are looked for in the first
+/// [`HISTORY_PAGES`] pages.
+pub async fn forget(api: &Api, posts: &[String]) -> Result<Vec<Action>> {
   api.require_login()?;
-  let id = refs::video(arg)?;
-  let mut req = PageReq::default();
-  for _ in 0..pages.max(1) {
-    let l = parse::listing(&api.browse("FEhistory", None, &req).await?);
-    let token = l.posts.iter().filter(|p| p.id == id).find_map(|p| {
-      let raw = p.raw.as_ref()?;
-      crate::parse::find(raw, "feedbackEndpoint")
-        .into_iter()
-        .find_map(|f| f.str("feedbackToken"))
+  let ids = posts
+    .iter()
+    .map(|p| refs::video(p))
+    .collect::<Result<Vec<_>>>()?;
+  let tokens = history_tokens(api, &ids).await?;
+  bulk::each("history-delete", &ids, async |id| {
+    let token = tokens.get(id).ok_or_else(|| {
+      Error::not_found(format!(
+        "{id} is not in the first {HISTORY_PAGES} pages of your watch history"
+      ))
+    })?;
+    let body = json!({
+      "feedbackTokens": [token],
+      "isFeedbackTokenUnencrypted": false,
+      "shouldMerge": false,
     });
-    if let Some(token) = token {
-      let body = json!({
-        "feedbackTokens": [token],
-        "isFeedbackTokenUnencrypted": false,
-        "shouldMerge": false,
-      });
-      let v = api.write("feedback", body).await?;
-      let ok = v
-        .list("feedbackResponses")
-        .iter()
-        .all(|r| r.bool("isProcessed") != Some(false));
-      if !ok {
-        return Err(Error::upstream(
-          "YouTube did not remove the video from history",
-        ));
+    let v = api.write("feedback", body).await?;
+    let ok = v
+      .list("feedbackResponses")
+      .iter()
+      .all(|r| r.bool("isProcessed") != Some(false));
+    if !ok {
+      return Err(Error::upstream(
+        "YouTube did not remove the video from history",
+      ));
+    }
+    Ok(Action::done("history-delete", id).with_url(refs::video_url(id)))
+  })
+  .await
+}
+
+/// The removal tokens of the history entries of `ids`, page by page until
+/// every one turned up or [`HISTORY_PAGES`] pages were read.
+async fn history_tokens(api: &Api, ids: &[String]) -> Result<HashMap<String, String>> {
+  let mut tokens = HashMap::new();
+  let mut req = PageReq::default();
+  for _ in 0..HISTORY_PAGES {
+    let l = parse::listing(&api.browse("FEhistory", None, &req).await?);
+    for post in l.posts.iter().filter(|p| ids.contains(&p.id)) {
+      if let Some(token) = feedback_token(post) {
+        tokens.entry(post.id.clone()).or_insert(token);
       }
-      return Ok(Action::done("history_remove", &id).with_url(refs::video_url(&id)));
+    }
+    if ids.iter().all(|id| tokens.contains_key(id)) {
+      break;
     }
     match l.next {
       Some(next) => req.cursor = Some(next),
       None => break,
     }
   }
-  Err(Error::not_found(format!(
-    "{id} is not in the first {pages} pages of your watch history"
-  )))
+  Ok(tokens)
+}
+
+/// The token of "Remove from watch history" in a history entry.
+fn feedback_token(post: &Post) -> Option<String> {
+  let raw = post.raw.as_ref()?;
+  crate::parse::find(raw, "feedbackEndpoint")
+    .into_iter()
+    .find_map(|f| f.str("feedbackToken"))
 }
 
 /// Clear the whole watch history, or with `search` the search history, as

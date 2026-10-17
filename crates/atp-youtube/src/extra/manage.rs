@@ -1,5 +1,5 @@
 //! Managing the account: dislikes, comment ratings, the bell, the order
-//! and privacy of playlists, saved playlists, watch and search history, the
+//! and privacy of playlists, saved playlists, the search history, the
 //! account's channels and the one-time OAuth grant.
 
 use atp_core::cli::confirm;
@@ -74,14 +74,8 @@ pub async fn save_playlist(api: &Api, playlist: &str, undo: bool) -> Result<Data
   Ok(Data::Action(playlists::save(api, &playlist, undo).await?))
 }
 
-/// Clear the watch history (`search`: the search history), after asking.
-pub async fn clear_history(api: &Api, search: bool, yes: bool) -> Result<Data> {
-  let what = if search { "search" } else { "watch" };
-  confirm(yes, &format!("clear your whole {what} history"))?;
-  Ok(Data::Action(library::clear(api, search).await?))
-}
-
-pub async fn forget(api: &Api, video: &str, pages: usize) -> Result<Data> {
-  let video = api.ctx.post_ref(video)?;
-  Ok(Data::Action(library::forget(api, &video, pages).await?))
+/// Clear the search history, after asking.
+pub async fn clear_search_history(api: &Api, yes: bool) -> Result<Data> {
+  confirm(yes, "clear your whole search history")?;
+  Ok(Data::Action(library::clear(api, true).await?))
 }

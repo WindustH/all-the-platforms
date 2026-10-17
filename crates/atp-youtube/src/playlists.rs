@@ -1,5 +1,6 @@
 //! Managing the account's playlists, the favorites folders of the shared
-//! `folder-*` commands, with the endpoints YouTube.js `PlaylistManager`
+//! `folder-*` commands, and Watch later (`WL`) of `later-add` /
+//! `later-remove`, with the endpoints YouTube.js `PlaylistManager`
 //! calls: `playlist/create`, `playlist/delete`, `browse/edit_playlist`
 //! (videos, their order, title, description, privacy) and `like/like` /
 //! `like/removelike` on a playlist (saving it to the library).
@@ -83,9 +84,27 @@ async fn apply(api: &Api, id: &str, actions: Vec<Value>) -> Result<()> {
 /// Add videos to a playlist (`undo`: take them out by video id), 50 per
 /// call; an Action per video.
 pub async fn file(api: &Api, folder: &str, posts: &[String], undo: bool) -> Result<Vec<Action>> {
-  let id = refs::playlist(folder)?;
-  let ids = videos(posts)?;
   let name = if undo { "folder-remove" } else { "folder-add" };
+  edit_videos(api, &refs::playlist(folder)?, posts, undo, name).await
+}
+
+/// Add videos to Watch later (`WL`), or with `undo` take them out, as
+/// [`file`] does with a playlist.
+pub async fn later(api: &Api, posts: &[String], undo: bool) -> Result<Vec<Action>> {
+  let name = if undo { "later-remove" } else { "later-add" };
+  edit_videos(api, "WL", posts, undo, name).await
+}
+
+/// Add videos to the playlist `id` (`undo`: take them out by video id),
+/// 50 per call; an Action named `name` per video.
+async fn edit_videos(
+  api: &Api,
+  id: &str,
+  posts: &[String],
+  undo: bool,
+  name: &str,
+) -> Result<Vec<Action>> {
+  let ids = videos(posts)?;
   bulk::batches(name, &ids, BATCH, String::clone, async |chunk| {
     let actions = chunk
       .iter()
@@ -97,7 +116,7 @@ pub async fn file(api: &Api, folder: &str, posts: &[String], undo: bool) -> Resu
         }
       })
       .collect();
-    apply(api, &id, actions).await?;
+    apply(api, id, actions).await?;
     Ok(
       chunk
         .iter()

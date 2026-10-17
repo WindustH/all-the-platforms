@@ -143,6 +143,13 @@ dislikes.
 `favorite` adds a video to Watch later, or to one of your playlists with
 `--folder PLAYLIST`; `unfavorite` takes it out again.
 
+### watch-later, later-add, later-remove
+
+Watch later is the `WL` playlist: `watch-later` lists it in playlist
+order (as `favorites` does), `later-add VIDEO…` and `later-remove VIDEO…`
+add and remove videos 50 per call, as `folder-add WL` does. There is no
+`later-clear`.
+
 ### comment, delete-comment
 
 Comments go on videos. `--reply-to COMMENT` replies in that comment's
@@ -261,16 +268,17 @@ both entries; a video in it twice moves its first entry.
 
 Saves someone's playlist to your library; `--undo` removes it.
 
-### history-clear
+### history-clear, search-history-clear
 
-`history-clear watch` empties your whole watch history, `history-clear
-search` your search history, as the buttons of the history page do. It
-asks first (`-y` in scripts) and cannot be undone.
+`history-clear` empties your whole watch history, `search-history-clear`
+your search history, as the buttons of the history page do. Both ask
+first (`-y` in scripts) and cannot be undone.
 
-### history-remove
+### history-delete
 
-Takes a video out of your watch history. It looks through the first
-`--pages` pages of the history (5 by default).
+Takes videos out of your watch history, one call each, as "Remove from
+watch history" does. Their entries are looked for in the first 10 pages
+of the history; a video further back fails with `not_found`.
 
 ### insights
 
