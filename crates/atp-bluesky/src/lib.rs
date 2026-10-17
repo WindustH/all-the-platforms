@@ -1,14 +1,17 @@
 //! Bluesky for all-the-platforms, through AT Protocol XRPC ([`api`]):
 //! feeds, posts and threads ([`posts`]), accounts and notifications
 //! ([`users`]), search and trends ([`search`]), and everything written to
-//! your repository ([`records`], with rich-text [`facets`]). Public reads
-//! go to the public AppView; logging in with an app password
+//! your repository ([`records`], with rich-text [`facets`]), blocks and
+//! mutes ([`blocks`]) and curation lists as follow groups ([`lists`]).
+//! Public reads go to the public AppView; logging in with an app password
 //! ([`login`]) moves everything to your PDS ([`identity`] finds it).
 
 mod api;
+mod blocks;
 mod extra;
 mod facets;
 mod identity;
+mod lists;
 mod login;
 mod parse;
 mod posts;
@@ -24,8 +27,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use atp_core::{
-  Action, Cap, Choices, Comment, Ctx, Data, Draft, Media, Notification, Page, PageReq, Platform,
-  PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Media, Notification, Page, PageReq,
+  Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -68,6 +71,11 @@ impl Platform for Bluesky {
       Cap::CommentImages,
       Cap::DeleteComment,
       Cap::Follow,
+      Cap::Block,
+      Cap::Blocked,
+      Cap::FollowGroups,
+      Cap::FollowGroupEdit,
+      Cap::FollowGroupMembers,
       Cap::Publish,
       Cap::Delete,
       Cap::Download,
@@ -206,6 +214,48 @@ impl Platform for Bluesky {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     records::follow(&self.api, user, undo).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    blocks::block(&self.api, users, undo).await
+  }
+
+  async fn blocked(&self, page: &PageReq) -> Result<Page<User>> {
+    blocks::blocked(&self.api, page).await
+  }
+
+  /// Your curation lists.
+  async fn follow_groups(&self, page: &PageReq) -> Result<Page<Collection>> {
+    lists::groups(&self.api, page).await
+  }
+
+  async fn follow_group(
+    &self,
+    group: &str,
+    _sort: Option<&str>,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    lists::members(&self.api, group, page).await
+  }
+
+  async fn follow_group_create(&self, name: &str) -> Result<Action> {
+    lists::create(&self.api, name).await
+  }
+
+  async fn follow_group_rename(&self, group: &str, name: &str) -> Result<Action> {
+    lists::rename(&self.api, group, name).await
+  }
+
+  async fn follow_group_delete(&self, group: &str) -> Result<Action> {
+    lists::delete(&self.api, group).await
+  }
+
+  async fn follow_group_add(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    lists::add(&self.api, group, users).await
+  }
+
+  async fn follow_group_remove(&self, group: &str, users: &[String]) -> Result<Vec<Action>> {
+    lists::remove(&self.api, group, users).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {

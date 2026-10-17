@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use atp_core::file::Image;
 use atp_core::{Action, Draft, Error, Reply, Result, Value, ValueExt, json};
 
-use crate::api::Api;
+use crate::api::{self, Api};
 use crate::facets::{self, Kind};
 use crate::refs::{self, ActorRef, AtUri};
 use crate::{identity, posts};
@@ -19,34 +19,6 @@ const FOLLOW: &str = "app.bsky.graph.follow";
 const MAX_IMAGES: usize = 4;
 /// The largest image blob a post takes.
 const MAX_IMAGE_BYTES: usize = 1_000_000;
-
-/// Now, as records date themselves.
-fn now() -> String {
-  jiff::Timestamp::now()
-    .strftime("%Y-%m-%dT%H:%M:%S%.3fZ")
-    .to_string()
-}
-
-/// Create a record in your repository; its `uri` and `cid`.
-async fn create(api: &Api, collection: &str, record: Value) -> Result<Value> {
-  let body = json!({"repo": api.did()?, "collection": collection, "record": record});
-  api.call("com.atproto.repo.createRecord", body).await
-}
-
-/// Delete one of your records by its URI.
-async fn delete_record(api: &Api, uri: &str) -> Result<()> {
-  let did = api.did()?;
-  let at = AtUri::parse(uri).ok_or_else(|| Error::input(format!("not a record: {uri}")))?;
-  if at.repo != did {
-    return Err(Error::new(
-      atp_core::ErrorCode::PermissionDenied,
-      format!("{uri} is not yours"),
-    ));
-  }
-  let body = json!({"repo": did, "collection": at.collection, "rkey": at.rkey});
-  api.call("com.atproto.repo.deleteRecord", body).await?;
-  Ok(())
-}
 
 /// `{uri, cid}` of a post view.
 fn strong_ref(view: &Value) -> Value {
@@ -97,7 +69,7 @@ pub async fn comment(api: &Api, post_arg: &str, reply: &Reply) -> Result<Action>
 
 async fn post(api: &Api, text: &str, compose: &Compose) -> Result<Action> {
   api.did()?;
-  let mut record = json!({"$type": refs::POST, "text": text, "createdAt": now()});
+  let mut record = json!({"$type": refs::POST, "text": text, "createdAt": api::now()});
   let facets = facets(api, text).await;
   if !facets.is_empty() {
     record["facets"] = json!(facets);
@@ -112,7 +84,7 @@ async fn post(api: &Api, text: &str, compose: &Compose) -> Result<Action> {
   if let Some(embed) = embed(api, compose).await? {
     record["embed"] = embed;
   }
-  let v = create(api, refs::POST, record).await?;
+  let v = api.create_record(refs::POST, record).await?;
   let uri = v.str("uri").unwrap_or_default();
   let mut done = Action::done(action, &uri).with_id(&uri);
   if let Some(at) = AtUri::parse(&uri) {
@@ -226,11 +198,11 @@ pub async fn mark(api: &Api, arg: &str, repost: bool, undo: bool) -> Result<Acti
     let record = view
       .str(key)
       .ok_or_else(|| Error::input(format!("you have not done `{verb}` on {uri}")))?;
-    delete_record(api, &record).await?;
+    api.delete_record(&record).await?;
     return Ok(Action::done(format!("un{verb}"), &uri));
   }
-  let record = json!({"$type": collection, "subject": strong_ref(&view), "createdAt": now()});
-  let v = create(api, collection, record).await?;
+  let record = json!({"$type": collection, "subject": strong_ref(&view), "createdAt": api::now()});
+  let v = api.create_record(collection, record).await?;
   Ok(Action::done(verb, &uri).with_id(v.str("uri").unwrap_or_default()))
 }
 
@@ -247,11 +219,11 @@ pub async fn follow(api: &Api, arg: &str, undo: bool) -> Result<Action> {
     let record = profile
       .str("viewer.following")
       .ok_or_else(|| Error::input(format!("you do not follow {did}")))?;
-    delete_record(api, &record).await?;
+    api.delete_record(&record).await?;
     return Ok(Action::done("unfollow", &did));
   }
-  let record = json!({"$type": FOLLOW, "subject": did, "createdAt": now()});
-  create(api, FOLLOW, record).await?;
+  let record = json!({"$type": FOLLOW, "subject": did, "createdAt": api::now()});
+  api.create_record(FOLLOW, record).await?;
   Ok(Action::done("follow", &did))
 }
 
@@ -275,6 +247,6 @@ pub async fn bookmark(api: &Api, arg: &str, undo: bool) -> Result<Action> {
 /// Delete one of your posts.
 pub async fn delete(api: &Api, arg: &str) -> Result<Action> {
   let uri = posts::uri(api, arg).await?;
-  delete_record(api, &uri).await?;
+  api.delete_record(&uri).await?;
   Ok(Action::done("delete", &uri))
 }

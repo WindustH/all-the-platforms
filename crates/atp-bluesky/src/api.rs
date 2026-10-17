@@ -13,9 +13,10 @@ use std::time::Duration;
 
 use atp_core::http::{Method, Resp, TOOL_USER_AGENT};
 use atp_core::oauth::{self, Tokens};
-use atp_core::{Ctx, Error, ErrorCode, Page, PageReq, Result, Value, ValueExt};
+use atp_core::{Ctx, Error, ErrorCode, Page, PageReq, Result, Value, ValueExt, json};
 
 use crate::login;
+use crate::refs::AtUri;
 
 pub const PUBLIC: &str = "https://public.api.bsky.app";
 pub const PDS_KEY: &str = "pds";
@@ -26,6 +27,13 @@ const PAGE_MAX: usize = 100;
 
 /// Query parameters.
 pub type Query = Vec<(&'static str, String)>;
+
+/// Now, as records date themselves.
+pub fn now() -> String {
+  jiff::Timestamp::now()
+    .strftime("%Y-%m-%dT%H:%M:%S%.3fZ")
+    .to_string()
+}
 
 pub struct Api {
   pub ctx: Ctx,
@@ -107,6 +115,27 @@ impl Api {
       )
       .await?;
     check(&resp)
+  }
+
+  /// Create a record in your repository; its `uri` and `cid`.
+  pub async fn create_record(&self, collection: &str, record: Value) -> Result<Value> {
+    let body = json!({"repo": self.did()?, "collection": collection, "record": record});
+    self.call("com.atproto.repo.createRecord", body).await
+  }
+
+  /// Delete one of your records by its URI.
+  pub async fn delete_record(&self, uri: &str) -> Result<()> {
+    let did = self.did()?;
+    let at = AtUri::parse(uri).ok_or_else(|| Error::input(format!("not a record: {uri}")))?;
+    if at.repo != did {
+      return Err(Error::new(
+        ErrorCode::PermissionDenied,
+        format!("{uri} is not yours"),
+      ));
+    }
+    let body = json!({"repo": did, "collection": at.collection, "rkey": at.rkey});
+    self.call("com.atproto.repo.deleteRecord", body).await?;
+    Ok(())
   }
 
   /// One page of a cursor listing: rows under `key`, each through `item`.

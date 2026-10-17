@@ -4,13 +4,16 @@
 //!   `https://bsky.app/profile/<handle or did>/post/<rkey>`;
 //! - accounts: `@handle`, `handle`, a DID, a profile link, or `me`;
 //! - feeds: `at://<did>/app.bsky.feed.generator/<rkey>` or a link
-//!   `https://bsky.app/profile/<handle or did>/feed/<rkey>`.
+//!   `https://bsky.app/profile/<handle or did>/feed/<rkey>`;
+//! - lists: `at://<did>/app.bsky.graph.list/<rkey>` or a link
+//!   `https://bsky.app/profile/<handle or did>/lists/<rkey>`.
 
 use atp_core::{Error, Result};
 use url::Url;
 
 pub const POST: &str = "app.bsky.feed.post";
 pub const GENERATOR: &str = "app.bsky.feed.generator";
+pub const LIST: &str = "app.bsky.graph.list";
 
 /// A record in someone's repository: `at://<repo>/<collection>/<rkey>`,
 /// where `repo` may still be a handle.
@@ -41,18 +44,19 @@ impl AtUri {
   }
 }
 
-/// A post or feed link on bsky.app as an [`AtUri`] of `collection`.
-fn record(arg: &str, collection: &str, segment: &str) -> Result<AtUri> {
+/// A post, feed or list link on bsky.app (`…/<segment>/<rkey>`) as an
+/// [`AtUri`] of `collection`; `what` names it in errors.
+fn record(arg: &str, collection: &str, segment: &str, what: &str) -> Result<AtUri> {
   let arg = arg.trim();
   if let Some(uri) = AtUri::parse(arg) {
     if uri.collection != collection {
-      return Err(Error::input(format!("not a {segment}: {arg}")));
+      return Err(Error::input(format!("not a {what}: {arg}")));
     }
     return Ok(uri);
   }
   let url = Url::parse(arg).map_err(|_| {
     Error::input(format!(
-      "not a {segment}: {arg} (expected an at:// URI or a bsky.app link)"
+      "not a {what}: {arg} (expected an at:// URI or a bsky.app link)"
     ))
   })?;
   let segments: Vec<&str> = url
@@ -65,16 +69,20 @@ fn record(arg: &str, collection: &str, segment: &str) -> Result<AtUri> {
       collection: collection.to_owned(),
       rkey: rkey.to_string(),
     }),
-    _ => Err(Error::input(format!("not a {segment} link: {arg}"))),
+    _ => Err(Error::input(format!("not a {what} link: {arg}"))),
   }
 }
 
 pub fn post(arg: &str) -> Result<AtUri> {
-  record(arg, POST, "post")
+  record(arg, POST, "post", "post")
 }
 
 pub fn feed(arg: &str) -> Result<AtUri> {
-  record(arg, GENERATOR, "feed")
+  record(arg, GENERATOR, "feed", "feed")
+}
+
+pub fn list(arg: &str) -> Result<AtUri> {
+  record(arg, LIST, "lists", "list")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,4 +131,9 @@ pub fn post_url(repo: &str, rkey: &str) -> String {
 
 pub fn profile_url(actor: &str) -> String {
   format!("https://bsky.app/profile/{actor}")
+}
+
+/// The bsky.app link of a list.
+pub fn list_url(repo: &str, rkey: &str) -> String {
+  format!("https://bsky.app/profile/{repo}/lists/{rkey}")
 }

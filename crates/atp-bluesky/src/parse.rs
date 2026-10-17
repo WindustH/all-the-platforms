@@ -1,7 +1,7 @@
 //! Bluesky views → the shared model: post views are posts (a quote embed
 //! is the quoted post, a repost in a feed is marked in `extra`),
 //! profiles are users, thread replies are comments with their own
-//! replies, trending topics are collections.
+//! replies, trending topics and lists are collections.
 
 use std::collections::BTreeMap;
 
@@ -312,4 +312,29 @@ pub fn trend(v: &Value) -> Collection {
     raw: Some(v.clone()),
     ..Collection::default()
   }
+}
+
+/// A list view (`app.bsky.graph.defs#listView`) as a follow group; its
+/// purpose (`curatelist`, `modlist` ...) in `extra.purpose`.
+pub fn list(v: &Value) -> Collection {
+  let uri = v.str("uri").unwrap_or_default();
+  let url = AtUri::parse(&uri).map(|at| {
+    let owner = v.str("creator.handle").unwrap_or(at.repo);
+    refs::list_url(&owner, &at.rkey)
+  });
+  let mut list = Collection {
+    kind: "group".into(),
+    name: v.str("name").unwrap_or_default(),
+    description: v.str("description").filter(|d| !d.is_empty()),
+    url,
+    items: v.u64("listItemCount"),
+    raw: Some(v.clone()),
+    id: uri,
+    ..Collection::default()
+  };
+  if let Some(purpose) = v.str("purpose") {
+    let short = purpose.rsplit('#').next().unwrap_or_default().to_owned();
+    list.extra.insert("purpose".into(), short.into());
+  }
+  list
 }

@@ -4,7 +4,7 @@ use atp_core::cli::PageArgs;
 use atp_core::{Data, Result};
 
 use crate::api::Api;
-use crate::{posts, records, search};
+use crate::{blocks, posts, records, search};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -20,6 +20,20 @@ pub enum Command {
   RepostedBy {
     /// Post: at:// URI, bsky.app link or #N
     post: String,
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Mute users (or unmute them with --undo): their posts leave your feeds, only you know
+  Mute {
+    /// Users: @handles, DIDs, profile links, or #N from the last user list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
+    /// Unmute instead
+    #[arg(long)]
+    undo: bool,
+  },
+  /// Accounts you mute
+  Muted {
     #[command(flatten)]
     page: PageArgs,
   },
@@ -57,6 +71,18 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
           .await?,
       )
     }
+    Command::Mute { users, undo } => {
+      let users = users
+        .iter()
+        .map(|u| api.ctx.user_ref(u))
+        .collect::<Result<Vec<_>>>()?;
+      Data::actions(blocks::mute(api, &users, undo).await?)
+    }
+    Command::Muted { page } => Data::Users(
+      page
+        .collect(async |req| blocks::muted(api, &req).await)
+        .await?,
+    ),
     Command::Trends => Data::Collections(search::trends(api).await?),
     Command::Feedgen { feed, page } => {
       let feed = api.ctx.collection_ref(&feed)?;

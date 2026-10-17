@@ -39,11 +39,11 @@ renew the session.
 The public AppView answers `hot` (the Discover feed), `feed --type
 discover`, `feedgen`, `trends`, `read`, `comments`, `replies`, `likers`,
 `reposts`, `reposted-by`, `user`, `user-posts`, `followers`,
-`following` and `search -t user`. It refuses post search
+`following`, `follow-group` (anyone's list) and `search -t user`. It refuses post search
 (`not_authenticated`). Accounts that asked to be hidden from logged-out
 visitors are still served by the API; respect their wish. Your timeline,
-notifications, unread counts, likes, bookmarks and every write need an
-account.
+notifications, unread counts, likes, bookmarks, your lists, blocks and
+mutes and every write need an account.
 
 ### Risk control
 
@@ -59,6 +59,9 @@ requests are spaced at least 0.3 seconds apart.
 - Accounts: `@handle`, `handle`, a DID, a profile link, or `me`.
 - Feeds: an `at://<did>/app.bsky.feed.generator/<rkey>` URI, a link
   `https://bsky.app/profile/<handle>/feed/<rkey>`, or `#N` after `trends`.
+- Lists: an `at://<did>/app.bsky.graph.list/<rkey>` URI, a link
+  `https://bsky.app/profile/<handle>/lists/<rkey>`, or `#N` after
+  `follow-groups`.
 
 ## Commands
 
@@ -129,6 +132,35 @@ thread, with images too.
 
 `follow USER [--undo]`.
 
+### block, unblock, blocked
+
+`block USER…` writes a block record for each (blocks are public on
+Bluesky); a user already blocked is left as is. `unblock USER…` deletes
+the block record your view of the profile names. `blocked` lists the
+accounts you block.
+
+### mute, muted
+
+`mute USER… [--undo]` mutes accounts (private: only you know) or unmutes
+them; `muted` lists the accounts you mute fully.
+
+### follow-groups, follow-group, follow-group-create, follow-group-rename, follow-group-delete, follow-group-add, follow-group-remove
+
+Your curation lists (user lists, not moderation lists) are the follow
+groups. A list may hold accounts you do not follow, and anyone can see
+it.
+
+- `follow-groups` lists yours, `follow-group LIST` the accounts on any
+  list, each with its entry record in `extra.list_item`.
+- `follow-group-create NAME` makes a list (64 bytes of name at most);
+  `follow-group-rename LIST NAME` puts its record back with the new name,
+  keeping the description and picture.
+- `follow-group-delete LIST [-y]` asks first, then deletes the list with
+  its entries, ten records per `applyWrites` call.
+- `follow-group-add LIST USER…` writes an entry per account (one already
+  on the list is left); `follow-group-remove LIST USER…` deletes their
+  entries. Both read the list's entries first.
+
 ### notifications
 
 `--type like|repost|follow|mention|reply|quote|starterpack-joined`.
@@ -139,6 +171,6 @@ Deletes one of your posts or replies.
 
 ## Limits
 
-No chat (direct messages), lists, starter packs, muting or blocking,
-video uploads, alt text or languages on new posts, and no link cards
-for links in new posts.
+No chat (direct messages), moderation lists, starter packs, video
+uploads, alt text or languages on new posts, and no link cards for links
+in new posts.
