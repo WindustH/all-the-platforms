@@ -89,6 +89,7 @@ impl Platform for Reddit {
       Cap::Listen,
       Cap::AccountInsights,
       Cap::PostInsights,
+      Cap::Block,
     ],
     choices: Choices {
       search_sort: posts::SEARCH_SORTS,
@@ -256,6 +257,10 @@ impl Platform for Reddit {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     subreddits::subscribe(&self.api, user, undo).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    users::block_all(&self.api, users, undo).await
   }
 
   fn follow_ref(&self, arg: &str) -> Result<String> {

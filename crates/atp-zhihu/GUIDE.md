@@ -121,9 +121,14 @@ or `neutral` only.
 Saves to the account's first folder, or to `--folder ID`. Questions cannot
 be saved (use `follow-question`).
 
-### like-comment, block
+### like-comment
 
-`like-comment COMMENT [--undo]`; `block USER [--undo]` (屏蔽).
+`like-comment COMMENT [--undo]`.
+
+### block, unblock
+
+`block USER…` / `unblock USER…` (屏蔽), one call per user. Zhihu's list
+of blocked users is not read.
 
 ### follow, unfollow
 
@@ -226,11 +231,17 @@ feeds are not offered: their API endpoints need the `x-zse-96` signature.
 `hot-search` lists trending searches (热搜); `daily [--date YYYYMMDD]`
 reads Zhihu Daily (知乎日报), no login needed.
 
-### create-folder, delete-folder
+### folder-create, folder-delete, folder-add, folder-remove, folder-move
 
-`create-folder TITLE [-d TEXT] [--private]` and `delete-folder FOLDER
-[-y]` (asks first; `-y` in scripts) manage favorites folders
-(`collections` lists them). The default folder cannot be deleted.
+- `folder-create NAME [--desc TEXT] [--private]` creates a favorites
+  folder; `folder-delete FOLDER… [-y]` deletes folders (asks first; `-y`
+  in scripts). The default folder cannot be deleted. Folders are not
+  edited here.
+- `folder-add FOLDER POST…` saves answers, articles, pins and videos into
+  a folder and `folder-remove` takes them out, one call per post, as
+  `favorite --folder` does; questions cannot be saved.
+- `folder-move FROM TO POST… [--copy]` saves them into TO, then takes
+  them out of FROM.
 
 ## Limits
 

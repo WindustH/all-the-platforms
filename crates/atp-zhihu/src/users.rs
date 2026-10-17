@@ -1,10 +1,11 @@
 //! Users: profiles, their posts and follow lists, who liked a post, and
 //! following or blocking them.
 
+use atp_core::bulk;
 use atp_core::{Action, Error, Page, PageReq, Post, Result, User, ValueExt};
 
 use crate::api::{Api, V4};
-use crate::refs::Target;
+use crate::refs::{self, Target};
 use crate::{api, parse};
 
 pub async fn whoami(api: &Api) -> Result<User> {
@@ -120,7 +121,16 @@ pub async fn follow(api: &Api, resource: &str, id: &str, undo: bool) -> Result<A
 }
 
 /// Block a user (屏蔽 / 拉黑), or unblock.
-pub async fn block(api: &Api, token: &str, undo: bool) -> Result<Action> {
+/// Block (屏蔽) users, or with `undo` unblock them, one call each.
+pub async fn block_all(api: &Api, users: &[String], undo: bool) -> Result<Vec<Action>> {
+  let name = if undo { "unblock" } else { "block" };
+  bulk::each(name, users, async |u| {
+    block(api, &refs::user(u)?, undo).await
+  })
+  .await
+}
+
+async fn block(api: &Api, token: &str, undo: bool) -> Result<Action> {
   api.prepare_write().await?;
   let url = format!("{V4}/members/{token}/actions/block");
   let req = if undo {

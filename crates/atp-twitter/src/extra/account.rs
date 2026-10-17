@@ -1,4 +1,5 @@
-//! Your account: blocks and mutes, the pinned tweet, scheduled posts.
+//! Your account: mutes, the pinned tweet, scheduled posts. Blocks are the
+//! shared `block` / `unblock` / `blocked`.
 
 use std::path::PathBuf;
 
@@ -18,14 +19,6 @@ More: atp guide x schedule";
 
 #[derive(Debug, clap::Subcommand)]
 pub enum AccountCommand {
-  /// Block a user (or unblock with --undo)
-  Block {
-    /// User: handle, @handle, link, id or #N
-    user: String,
-    /// Unblock instead
-    #[arg(long)]
-    undo: bool,
-  },
   /// Mute a user (or unmute with --undo)
   Mute {
     /// User: handle, @handle, link, id or #N
@@ -33,11 +26,6 @@ pub enum AccountCommand {
     /// Unmute instead
     #[arg(long)]
     undo: bool,
-  },
-  /// Accounts you block
-  Blocked {
-    #[command(flatten)]
-    page: PageArgs,
   },
   /// Accounts you mute
   Muted {
@@ -76,17 +64,9 @@ pub enum AccountCommand {
 pub(super) async fn run(api: &Api, command: AccountCommand) -> Result<Data> {
   let ctx = &api.ctx;
   Ok(match command {
-    AccountCommand::Block { user, undo } => {
-      Data::Action(account::block(api, &ctx.user_ref(&user)?, false, undo).await?)
-    }
     AccountCommand::Mute { user, undo } => {
       Data::Action(account::block(api, &ctx.user_ref(&user)?, true, undo).await?)
     }
-    AccountCommand::Blocked { page } => Data::Users(
-      page
-        .collect(async |r| account::blocked(api, false, &r).await)
-        .await?,
-    ),
     AccountCommand::Muted { page } => Data::Users(
       page
         .collect(async |r| account::blocked(api, true, &r).await)

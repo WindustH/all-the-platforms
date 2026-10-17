@@ -239,10 +239,14 @@ THING [--spam]`.
 
 Your other lists, beside `favorites` (saved posts) and `likes`.
 
-### hide, block
+### hide
 
-`hide POST [--undo]` hides a post from your listings; `block USER
-[--undo]`.
+`hide POST [--undo]` hides a post from your listings.
+
+### block, unblock
+
+`block USER…` / `unblock USER…` take users (`u/name`, names, profile
+links), one call each; the list of blocked users is not read.
 
 ### user-comments, trophies, moderated
 

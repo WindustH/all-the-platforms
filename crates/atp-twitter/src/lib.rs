@@ -38,8 +38,9 @@ use std::collections::BTreeMap;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Insights, Message, Notification,
-  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, FolderSpec, Insights, Message,
+  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result,
+  User,
 };
 
 use crate::api::Api;
@@ -95,6 +96,14 @@ impl Platform for Twitter {
       Cap::Members,
       Cap::React,
       Cap::Listen,
+      Cap::Block,
+      Cap::Blocked,
+      Cap::FolderCreate,
+      Cap::FolderEdit,
+      Cap::FolderDelete,
+      Cap::FolderAdd,
+      Cap::FolderRemove,
+      Cap::FolderMove,
     ],
     choices: Choices {
       search_sort: &["top", "latest", "media"],
@@ -254,6 +263,35 @@ impl Platform for Twitter {
 
   async fn edit(&self, post: &str, text: &str) -> Result<Action> {
     write::edit(&self.api, post, text).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    account::block_all(&self.api, users, undo).await
+  }
+
+  async fn blocked(&self, page: &PageReq) -> Result<Page<User>> {
+    account::blocked(&self.api, false, page).await
+  }
+
+  async fn folder_create(&self, folder: &FolderSpec) -> Result<Action> {
+    let name = folder.name.as_deref().unwrap_or_default();
+    account::create_folder(&self.api, name).await
+  }
+
+  async fn folder_edit(&self, folder: &str, change: &FolderSpec) -> Result<Action> {
+    account::edit_folder(&self.api, folder, change).await
+  }
+
+  async fn folder_delete(&self, folders: &[String]) -> Result<Vec<Action>> {
+    account::delete_folders(&self.api, folders).await
+  }
+
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    account::file_all(&self.api, folder, posts, false).await
+  }
+
+  async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    account::file_all(&self.api, folder, posts, true).await
   }
 
   /// Direct-message conversations.

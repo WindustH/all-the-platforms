@@ -1,6 +1,7 @@
 //! Accounts: the logged-in user, profiles, people search, a user's comments
 //! and blocking.
 
+use atp_core::bulk;
 use atp_core::{Action, Comment, Error, Page, PageReq, Query, Result, User, ValueExt};
 
 use crate::api::Api;
@@ -41,9 +42,14 @@ pub async fn comments(api: &Api, arg: &str, req: &PageReq) -> Result<Page<Commen
   .await
 }
 
-/// Block a user, or unblock them.
+/// Block users, or unblock them with `undo`, one call each.
+pub async fn block_all(api: &Api, users: &[String], undo: bool) -> Result<Vec<Action>> {
+  let name = if undo { "unblock" } else { "block" };
+  bulk::each(name, users, async |user| block(api, user, undo).await).await
+}
+
 /// Block a user, or unblock with `undo`.
-pub async fn block(api: &Api, arg: &str, undo: bool) -> Result<Action> {
+async fn block(api: &Api, arg: &str, undo: bool) -> Result<Action> {
   let name = refs::user(arg)?;
   if undo {
     let me = api.me().await?;

@@ -1,67 +1,38 @@
-//! Bookmark folders.
+//! Bookmark folders. Creating, renaming and deleting them and filing
+//! bookmarks are the shared `folder-*` commands.
 
-use atp_core::cli::{PageArgs, confirm};
+use atp_core::cli::PageArgs;
 use atp_core::{Data, Result};
 
-use super::one;
 use crate::api::Api;
-use crate::{account, users};
+use crate::users;
 
 const EX_FOLDERS: &str = "\
 Examples:
   atp x folders                        # numbered
   atp x favorites --folder '#1'
   atp x favorite 1849213456789012345   # bookmark it first
-  atp x favorite 1849213456789012345 --folder '#1'
+  atp x folder-add '#1' 1849213456789012345
+  atp x folder-create Reading
 
 More: atp guide x favorites";
 
 #[derive(Debug, clap::Subcommand)]
 pub enum FolderCommand {
-  /// Your bookmark folders (ids for `favorites --folder` and `favorite --folder`)
+  /// Your bookmark folders (ids for `favorites --folder` and the `folder-*` commands)
   #[command(after_long_help = EX_FOLDERS)]
   Folders {
     #[command(flatten)]
     page: PageArgs,
   },
-  /// Create a bookmark folder
-  FolderCreate {
-    /// Name of the folder
-    name: String,
-  },
-  /// Rename a bookmark folder
-  FolderRename {
-    /// Folder: id or #N, from `folders`
-    folder: String,
-    /// New name
-    name: String,
-  },
-  /// Delete a bookmark folder (its bookmarks stay bookmarked)
-  FolderDelete {
-    /// Folder: id or #N, from `folders`
-    folder: String,
-    /// Skip the confirmation question (needed in scripts)
-    #[arg(short, long)]
-    yes: bool,
-  },
 }
 
 pub(super) async fn run(api: &Api, command: FolderCommand) -> Result<Data> {
-  let ctx = &api.ctx;
   Ok(match command {
     FolderCommand::Folders { page } => Data::Collections(
       page
         .collect(async |r| users::folders(api, &r).await)
         .await?,
     ),
-    FolderCommand::FolderCreate { name } => one(account::create_folder(api, &name).await?),
-    FolderCommand::FolderRename { folder, name } => {
-      Data::Action(account::rename_folder(api, &ctx.collection_ref(&folder)?, &name).await?)
-    }
-    FolderCommand::FolderDelete { folder, yes } => {
-      let folder = ctx.collection_ref(&folder)?;
-      confirm(yes, &format!("delete bookmark folder {folder}"))?;
-      Data::Action(account::delete_folder(api, &folder).await?)
-    }
   })
 }

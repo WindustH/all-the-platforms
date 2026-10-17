@@ -92,12 +92,21 @@ Favorites are bookmarks, which only you see: `favorites` takes no USER;
 `favorite POST --folder ID` files a bookmarked tweet into a folder
 (`unfavorite POST --folder ID` takes it out).
 
-### folders, folder-create, folder-rename, folder-delete
+### folders, folder-create, folder-edit, folder-delete, folder-add, folder-remove, folder-move
 
-Bookmark folders (an X Premium feature): `folders` lists their ids for
-`--folder`, `folder-create NAME`, `folder-rename FOLDER NAME`,
-`folder-delete FOLDER [-y]` (asks first; `-y` in scripts; its bookmarks
-stay bookmarked).
+Bookmark folders (an X Premium feature). `folders` lists them: FOLDER
+of the `folder-*` commands and `--folder` take their ids or `#N` after
+`folders` (`collections` lists your lists, not folders).
+
+- `folder-create NAME`; `folder-edit FOLDER --name NAME` renames (a
+  folder has no description, privacy or cover).
+- `folder-delete FOLDER… [-y]` asks first; the bookmarks stay
+  bookmarked.
+- `folder-add FOLDER POST…` files bookmarked tweets into a folder and
+  `folder-remove` takes them out, one call per tweet; bookmark a tweet
+  first with `favorite`.
+- `folder-move FROM TO POST… [--copy]` files them into TO, then takes
+  them out of FROM.
 
 ### notifications, unread
 
@@ -139,10 +148,15 @@ lists the earlier versions of an edited tweet.
 `'2026-10-20 09:30'` or an RFC 3339 time, in the future. `scheduled`
 lists your scheduled posts, soonest first; `unschedule ID` cancels one.
 
-### pin, block, mute, blocked, muted
+### pin, mute, muted
 
-`pin POST [--undo]`, `block` / `mute USER [--undo]`; `blocked` and
-`muted` list the accounts.
+`pin POST [--undo]`, `mute USER [--undo]`; `muted` lists the accounts
+you mute.
+
+### block, unblock, blocked
+
+`block USER…` / `unblock USER…` one call per user; `blocked` lists the
+accounts you block.
 
 ### list, list-info, list-members, list-memberships
 

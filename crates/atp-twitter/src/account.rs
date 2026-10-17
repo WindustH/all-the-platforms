@@ -3,8 +3,9 @@
 
 use std::collections::BTreeMap;
 
+use atp_core::bulk;
 use atp_core::text::from_secs;
-use atp_core::{Action, Collection, Error, Page, PageReq, Post, Result, User, ValueExt, json};
+use atp_core::{Action, Error, FolderSpec, Page, PageReq, Post, Result, User, ValueExt, json};
 
 use crate::api::{Api, REST};
 use crate::graphql::{
@@ -34,6 +35,15 @@ pub async fn block(api: &Api, user: &str, mute: bool, undo: bool) -> Result<Acti
     action = action.with_url(user_url(&handle));
   }
   Ok(action)
+}
+
+/// Block (or with `undo` unblock) users, one call each.
+pub async fn block_all(api: &Api, users: &[String], undo: bool) -> Result<Vec<Action>> {
+  let name = if undo { "unblock" } else { "block" };
+  bulk::each(name, users, async |user| {
+    block(api, user, false, undo).await
+  })
+  .await
 }
 
 /// Accounts you block, or with `muted` the ones you mute.
@@ -140,17 +150,48 @@ pub async fn file(api: &Api, post: &str, folder: &str, undo: bool) -> Result<Act
   Ok(Action::done(name, &id).with_message(format!("folder {folder}")))
 }
 
-pub async fn create_folder(api: &Api, name: &str) -> Result<Collection> {
-  let data = api.mutate(&FOLDER_CREATE, json!({ "name": name })).await?;
-  let f = data.at("data.bookmark_collection_create");
-  Ok(Collection {
-    id: f
-      .str("id")
-      .ok_or_else(|| Error::upstream("X did not create the folder"))?,
-    kind: "folder".into(),
-    name: f.str("name").unwrap_or_else(|| name.to_owned()),
-    ..Collection::default()
+/// File bookmarked tweets into a folder (or take them out with `undo`),
+/// one call each.
+pub async fn file_all(
+  api: &Api,
+  folder: &str,
+  posts: &[String],
+  undo: bool,
+) -> Result<Vec<Action>> {
+  let name = if undo { "folder-remove" } else { "folder-add" };
+  bulk::each(name, posts, async |post| {
+    let filed = file(api, post, folder, undo).await?;
+    Ok(Action {
+      action: name.to_owned(),
+      ..filed
+    })
   })
+  .await
+}
+
+pub async fn create_folder(api: &Api, name: &str) -> Result<Action> {
+  let data = api.mutate(&FOLDER_CREATE, json!({ "name": name })).await?;
+  let id = data
+    .str("data.bookmark_collection_create.id")
+    .ok_or_else(|| Error::upstream("X did not create the folder"))?;
+  Ok(Action::done("folder-create", name).with_id(id))
+}
+
+/// `folder-edit`: X folders change only their name.
+pub async fn edit_folder(api: &Api, folder: &str, change: &FolderSpec) -> Result<Action> {
+  let name = change
+    .name
+    .as_deref()
+    .ok_or_else(|| Error::input("X bookmark folders change only their name: give --name"))?;
+  rename_folder(api, folder, name).await
+}
+
+/// Delete bookmark folders, one call each; their bookmarks stay.
+pub async fn delete_folders(api: &Api, folders: &[String]) -> Result<Vec<Action>> {
+  bulk::each("folder-delete", folders, async |f| {
+    delete_folder(api, f).await
+  })
+  .await
 }
 
 pub async fn rename_folder(api: &Api, folder: &str, name: &str) -> Result<Action> {
@@ -160,14 +201,14 @@ pub async fn rename_folder(api: &Api, folder: &str, name: &str) -> Result<Action
       json!({ "bookmark_collection_id": folder, "name": name }),
     )
     .await?;
-  Ok(Action::done("rename-folder", folder).with_message(name.to_owned()))
+  Ok(Action::done("folder-edit", folder).with_message(name.to_owned()))
 }
 
 pub async fn delete_folder(api: &Api, folder: &str) -> Result<Action> {
   api
     .mutate(&FOLDER_DELETE, json!({ "bookmark_collection_id": folder }))
     .await?;
-  Ok(Action::done("delete-folder", folder))
+  Ok(Action::done("folder-delete", folder))
 }
 
 /// Unread notifications and direct messages.

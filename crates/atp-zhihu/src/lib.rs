@@ -34,9 +34,9 @@ use std::time::Duration;
 
 use api::Api;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, Insights, Notification,
-  Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply,
-  Result, User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, FolderSpec, Insights,
+  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket,
+  Query, Reply, Result, User,
 };
 use refs::Target;
 
@@ -85,6 +85,14 @@ impl Platform for Zhihu {
       Cap::Download,
       Cap::AccountInsights,
       Cap::PostInsights,
+      Cap::Block,
+      Cap::FolderCreate,
+      Cap::FolderDescription,
+      Cap::FolderPrivacy,
+      Cap::FolderDelete,
+      Cap::FolderAdd,
+      Cap::FolderRemove,
+      Cap::FolderMove,
     ],
     choices: Choices {
       search_sort: &["default", "upvoted", "newest"],
@@ -261,6 +269,26 @@ impl Platform for Zhihu {
   /// Answers and pins, through their editors.
   async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
     publish::edit(&self.api, &Target::parse(post)?, edit).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    users::block_all(&self.api, users, undo).await
+  }
+
+  async fn folder_create(&self, folder: &FolderSpec) -> Result<Action> {
+    library::create_folder(&self.api, folder).await
+  }
+
+  async fn folder_delete(&self, folders: &[String]) -> Result<Vec<Action>> {
+    library::delete_folders(&self.api, folders).await
+  }
+
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    library::file_all(&self.api, folder, posts, false).await
+  }
+
+  async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    library::file_all(&self.api, folder, posts, true).await
   }
 
   async fn insights(&self, post: Option<&str>, days: u32) -> Result<Insights> {

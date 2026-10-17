@@ -1,6 +1,6 @@
 //! Twitter-only commands: retweets and quotes, profile tabs, lists,
-//! communities, Spaces, trends by place, blocks and mutes, the pinned tweet,
-//! scheduled posts and bookmark folders.
+//! communities, Spaces, trends by place, mutes, the pinned tweet, scheduled
+//! posts and the list of bookmark folders.
 
 mod account;
 mod communities;

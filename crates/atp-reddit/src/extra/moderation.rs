@@ -1,10 +1,9 @@
-//! Post flags, moderator actions and blocking.
+//! Post flags and moderator actions. Blocking is the shared `block`.
 
 use atp_core::{Data, Result};
 
 use crate::api::Api;
 use crate::moderation::{self, Flag};
-use crate::users;
 
 #[derive(Debug, clap::Subcommand)]
 pub enum ModerationCommand {
@@ -33,14 +32,6 @@ pub enum ModerationCommand {
     #[arg(long)]
     spam: bool,
   },
-  /// Block a user (or unblock with --undo)
-  Block {
-    /// User: name, `u/name` or profile link
-    user: String,
-    /// Unblock instead
-    #[arg(long)]
-    undo: bool,
-  },
 }
 
 const EX_FLAG: &str = "\
@@ -62,9 +53,6 @@ pub(super) async fn run(api: &Api, command: ModerationCommand) -> Result<Data> {
     }
     ModerationCommand::Remove { thing, spam } => {
       Data::Action(moderation::remove(api, &ctx.post_ref(&thing)?, spam).await?)
-    }
-    ModerationCommand::Block { user, undo } => {
-      Data::Action(users::block(api, &ctx.user_ref(&user)?, undo).await?)
     }
   })
 }

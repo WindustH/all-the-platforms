@@ -1,7 +1,10 @@
-//! Your library: favorites folders and their posts, saving posts, and the
-//! reading history.
+//! Your library: favorites folders and their posts, saving posts into
+//! folders and creating or deleting folders, and the reading history.
 
-use atp_core::{Action, Collection, Error, Page, PageReq, Post, Result, ValueExt, json};
+use atp_core::bulk;
+use atp_core::{
+  Action, Collection, Error, FolderSpec, Page, PageReq, Post, Result, ValueExt, json,
+};
 
 use crate::api::{Api, V4};
 use crate::refs::Target;
@@ -84,19 +87,37 @@ pub async fn favorite(
   Ok(Action::done(action, target.url()).with_message(format!("folder {folder}")))
 }
 
-/// Create a favorites folder; it is public unless `private`.
-pub async fn create_folder(
+/// Save posts into a folder (or with `undo` take them out), one call each.
+pub async fn file_all(
   api: &Api,
-  title: &str,
-  description: &str,
-  private: bool,
-) -> Result<Action> {
+  folder: &str,
+  posts: &[String],
+  undo: bool,
+) -> Result<Vec<Action>> {
+  let name = if undo { "folder-remove" } else { "folder-add" };
+  bulk::each(name, posts, async |post| {
+    let saved = favorite(api, &Target::parse(post)?, Some(folder), undo).await?;
+    Ok(Action {
+      action: name.to_owned(),
+      ..saved
+    })
+  })
+  .await
+}
+
+/// Create a favorites folder; it is public unless `private`.
+pub async fn create_folder(api: &Api, spec: &FolderSpec) -> Result<Action> {
   api.prepare_write().await?;
-  let body = json!({ "title": title, "description": description, "is_public": !private });
+  let title = spec.name.as_deref().unwrap_or_default();
+  let body = json!({
+    "title": title,
+    "description": spec.description.as_deref().unwrap_or_default(),
+    "is_public": !spec.private.unwrap_or(false),
+  });
   let v = api
     .call(api.post(&format!("{V4}/collections")).json(&body))
     .await?;
-  let mut done = Action::done("create_folder", title);
+  let mut done = Action::done("folder-create", title);
   if let Some(id) = v.first_str(&["collection.id", "id"]) {
     done = done
       .with_url(format!("https://www.zhihu.com/collection/{id}"))
@@ -105,8 +126,15 @@ pub async fn create_folder(
   Ok(done)
 }
 
-/// Delete one of your favorites folders (not the default one).
-pub async fn delete_folder(api: &Api, folder: &str) -> Result<Action> {
+/// Delete favorites folders (not the default one), one call each.
+pub async fn delete_folders(api: &Api, folders: &[String]) -> Result<Vec<Action>> {
+  bulk::each("folder-delete", folders, async |f| {
+    delete_folder(api, f).await
+  })
+  .await
+}
+
+async fn delete_folder(api: &Api, folder: &str) -> Result<Action> {
   api.prepare_write().await?;
   let v = api
     .call(api.delete(&format!("{V4}/collections/{folder}")))
@@ -117,7 +145,7 @@ pub async fn delete_folder(api: &Api, folder: &str) -> Result<Action> {
       "folder {folder} not deleted: {why}"
     )));
   }
-  Ok(Action::done("delete_folder", folder).with_id(folder))
+  Ok(Action::done("folder-delete", folder).with_id(folder))
 }
 
 /// Content you read, newest first, with `extra.read_at`.

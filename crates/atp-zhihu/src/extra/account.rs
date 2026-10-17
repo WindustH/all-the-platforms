@@ -1,13 +1,12 @@
-//! Your account: votes, comment likes, blocks, favorites folders and the
-//! creator center's list of your posts.
+//! Your account: votes, comment likes and the creator center's list of
+//! your posts. Blocks and favorites folders are shared commands.
 
-use atp_core::cli::{PageArgs, confirm};
+use atp_core::cli::PageArgs;
 use atp_core::{Data, Result};
 
-use super::title_and_images;
 use crate::api::Api;
 use crate::refs::Target;
-use crate::{comments, insights, library, posts, refs, users};
+use crate::{comments, insights, posts};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum AccountCommand {
@@ -27,33 +26,6 @@ pub enum AccountCommand {
     /// Take the like back instead
     #[arg(long)]
     undo: bool,
-  },
-  /// Block a user (屏蔽), or unblock with --undo
-  Block {
-    /// User: url_token, @token or profile link
-    user: String,
-    /// Unblock instead
-    #[arg(long)]
-    undo: bool,
-  },
-  /// Create a favorites folder (收藏夹)
-  CreateFolder {
-    /// Folder name
-    title: String,
-    /// Folder description
-    #[arg(short, long, default_value = "")]
-    description: String,
-    /// Only you can see it
-    #[arg(long)]
-    private: bool,
-  },
-  /// Delete one of your favorites folders
-  DeleteFolder {
-    /// Folder id (see `collections`) or #N after it
-    folder: String,
-    /// Skip the confirmation question (needed in scripts)
-    #[arg(short, long)]
-    yes: bool,
   },
   /// Your own posts with their lifetime numbers from the creator center (内容分析)
   Creations {
@@ -82,24 +54,6 @@ pub async fn run(api: &Api, command: AccountCommand) -> Result<Data> {
     AccountCommand::LikeComment { comment, undo } => Ok(Data::Action(
       comments::like_comment(api, comment.trim(), undo).await?,
     )),
-    AccountCommand::Block { user, undo } => {
-      let token = refs::user(&api.ctx.user_ref(&user)?)?;
-      Ok(Data::Action(users::block(api, &token, undo).await?))
-    }
-    AccountCommand::CreateFolder {
-      title,
-      description,
-      private,
-    } => {
-      title_and_images(&title, &[])?;
-      let done = library::create_folder(api, title.trim(), &description, private);
-      Ok(Data::Action(done.await?))
-    }
-    AccountCommand::DeleteFolder { folder, yes } => {
-      let folder = api.ctx.collection_ref(&folder)?;
-      confirm(yes, &format!("delete folder {folder}"))?;
-      Ok(Data::Action(library::delete_folder(api, &folder).await?))
-    }
     AccountCommand::Creations { kind, page } => {
       let posts = page.collect_dated(async |r| insights::creations(api, &kind, &r).await);
       Ok(Data::Posts(posts.await?))
