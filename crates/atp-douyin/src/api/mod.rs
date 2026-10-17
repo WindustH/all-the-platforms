@@ -5,12 +5,14 @@
 //!
 //! The query is built and signed here as one string and sent exactly as
 //! signed: the signature covers its bytes. [`Api`] owns the context.
-//! Writes ([`Api::write`]) add the ticket-guard and device-trait headers
-//! and the secsdk CSRF token, and wait 2 to 6 s first.
+//! Writes (`write`) add what the web client's security SDKs add and wait
+//! 2 to 6 s first.
 
-use std::time::Duration;
+mod write;
 
-use atp_core::http::{Method, USER_AGENT};
+use std::sync::OnceLock;
+
+use atp_core::http::{Method, Resp, USER_AGENT};
 use atp_core::{Ctx, Error, ErrorCode, Http, Result, Value, ValueExt};
 
 use atp_bytedance::abogus::{self, DOUYIN};
@@ -18,7 +20,6 @@ use atp_bytedance::query::{encode, query_string};
 use atp_bytedance::visitor;
 
 use crate::sign;
-use crate::sign::guard::Guard;
 
 pub const WWW: &str = "https://www.douyin.com";
 /// Cookies of a logged-in web session.
@@ -27,16 +28,39 @@ const LOGIN_HINT: &str = "log in with `atp douyin login` (QR code), `atp douyin 
    `--browser` (a browser where you opened douyin.com) or `--cookie`";
 const WALL_HINT: &str = "Douyin refuses this to visitors or flagged clients: log in with \
    `atp douyin login --browser`, retry later, or use a residential network in mainland China";
+const CHECK_HINT: &str = "pass the check on douyin.com in your browser (do the same thing \
+   there once), then retry later; slow down with --interval";
+
+/// Writes whose answers the web client checks for an identity check.
+const DECISION_PATHS: &[&str] = &[
+  "/aweme/v1/web/commit/item/digg/",
+  "/aweme/v1/web/commit/follow/user/",
+  "/aweme/v1/web/comment/publish",
+  "/aweme/v1/web/aweme/collect/",
+  "/aweme/v1/web/series/collect/",
+  "/aweme/v1/web/mix/collect/",
+  "/aweme/v1/web/music/collect/",
+  "/aweme/v1/web/collects/maintain/",
+];
+
+/// `version_code` / `version_name` the web client's request interceptor
+/// sends on these paths instead of the common ones.
+const VERSIONS: &[(&str, &str, &str)] = &[("/aweme/v1/web/collects/maintain/", "230000", "23.0.0")];
 
 /// The transport: the context with Douyin's referer.
 pub struct Api {
   pub ctx: Ctx,
+  /// The logged-in account's uid, once looked up.
+  pub me: OnceLock<String>,
 }
 
 impl Api {
   pub fn new(mut ctx: Ctx) -> Self {
     configure(&mut ctx.http);
-    Self { ctx }
+    Self {
+      ctx,
+      me: OnceLock::new(),
+    }
   }
 
   pub fn get(&self, path: &str) -> Call<'_> {
@@ -52,46 +76,6 @@ impl Api {
   pub fn require_login(&self) -> Result<()> {
     self.ctx.require_login(LOGIN_COOKIES)
   }
-
-  /// A write as a form POST to `path`, after a pause of 2 to 6 s. `signed`
-  /// writes (comments) carry a ticket-guard signature over the path, the
-  /// others only name the key. `uid` is the MD5 of the account's uid,
-  /// which the web client appends unsigned.
-  pub async fn write(&self, path: &str, signed: bool, uid: &str) -> Result<Call<'_>> {
-    self.require_login()?;
-    let guard = Guard::load(&self.ctx)?;
-    let mut call = self.post(path).tail("uid", uid);
-    for (name, value) in guard.headers(path, signed)? {
-      call = call.header(name, value);
-    }
-    call = call.header("x-tt-session-dtrait", sign::dtrait::header(path)?);
-    let (min, max) = (Duration::from_secs(2), Duration::from_secs(6));
-    self.ctx.http.pause(min, max).await;
-    if let Some(token) = self.csrf_token().await {
-      call = call.header("x-secsdk-csrf-token", token);
-    }
-    Ok(call)
-  }
-
-  /// The secsdk CSRF token, asked for with a `HEAD` request
-  /// (`x-ware-csrf-token: 0,<token>,…`).
-  async fn csrf_token(&self) -> Option<String> {
-    let resp = self
-      .ctx
-      .http
-      .request(Method::HEAD, format!("{WWW}/service/2/abtest_config/"))
-      .header("x-secsdk-csrf-request", "1")
-      .header("x-secsdk-csrf-version", "1.2.22")
-      .send()
-      .await
-      .ok()?;
-    let header = resp.header("x-ware-csrf-token")?;
-    header
-      .split(',')
-      .nth(1)
-      .filter(|t| !t.is_empty())
-      .map(str::to_owned)
-  }
 }
 
 fn configure(http: &mut Http) {
@@ -99,8 +83,13 @@ fn configure(http: &mut Http) {
 }
 
 /// Parameters the web client sends with every call (Chrome on macOS,
-/// 1536×864, as `a_bogus` reports it).
-fn common(chrome: &str) -> Vec<(&'static str, String)> {
+/// 1536×864, as `a_bogus` reports it), with the version it names for
+/// `path`.
+fn common(chrome: &str, path: &str) -> Vec<(&'static str, String)> {
+  let (code, name) = VERSIONS
+    .iter()
+    .find(|(p, _, _)| *p == path)
+    .map_or(("290100", "29.1.0"), |(_, code, name)| (*code, *name));
   [
     ("device_platform", "webapp"),
     ("aid", "6383"),
@@ -110,8 +99,8 @@ fn common(chrome: &str) -> Vec<(&'static str, String)> {
     ("pc_libra_divert", "Mac"),
     ("support_h265", "1"),
     ("support_dash", "1"),
-    ("version_code", "290100"),
-    ("version_name", "29.1.0"),
+    ("version_code", code),
+    ("version_name", name),
     ("cookie_enabled", "true"),
     ("screen_width", "1536"),
     ("screen_height", "864"),
@@ -142,6 +131,8 @@ pub struct Call<'a> {
   method: Method,
   query: Vec<(String, String)>,
   form: Vec<(String, String)>,
+  /// A body sent as it is instead of the form (JSON text).
+  body: Option<String>,
   /// Parameters after the signature (not signed).
   tail: Vec<(String, String)>,
   headers: Vec<(&'static str, String)>,
@@ -156,6 +147,7 @@ impl<'a> Call<'a> {
       method,
       query: Vec::new(),
       form: Vec::new(),
+      body: None,
       tail: Vec::new(),
       headers: Vec::new(),
       bare: false,
@@ -184,9 +176,25 @@ impl<'a> Call<'a> {
     self
   }
 
+  /// A query parameter given once per value (`item_ids=1&item_ids=2`),
+  /// as the web client sends lists.
+  pub fn args<T: ToString>(mut self, key: &str, values: impl IntoIterator<Item = T>) -> Self {
+    for value in values {
+      self.query.push((key.to_owned(), value.to_string()));
+    }
+    self
+  }
+
   /// Form field of a POST body.
   pub fn field(mut self, key: &str, value: impl ToString) -> Self {
     self.form.push((key.to_owned(), value.to_string()));
+    self
+  }
+
+  /// A JSON body instead of the form. The web client sends it as text
+  /// under the form's content type, and so does this.
+  pub fn json(mut self, value: &Value) -> Self {
+    self.body = Some(value.to_string());
     self
   }
 
@@ -204,13 +212,16 @@ impl<'a> Call<'a> {
     let mut pairs: Vec<(String, String)> = if self.bare {
       Vec::new()
     } else {
-      common(&chrome)
+      common(&chrome, &self.path)
         .into_iter()
         .map(|(k, v)| (k.to_owned(), v))
         .collect()
     };
+    // The call's parameters replace common ones of the same name; its own
+    // repeated keys all stay.
+    let common_len = pairs.len();
     for (k, v) in &self.query {
-      match pairs.iter_mut().find(|(pk, _)| pk == k) {
+      match pairs[..common_len].iter_mut().find(|(pk, _)| pk == k) {
         Some(slot) => slot.1 = v.clone(),
         None => pairs.push((k.clone(), v.clone())),
       }
@@ -252,7 +263,10 @@ impl<'a> Call<'a> {
     let ctx = &api.ctx;
     visitor::ensure(&api.ctx).await;
     let form = self.method == Method::POST;
-    let body = query_string(&self.form);
+    let body = match &self.body {
+      Some(body) => body.clone(),
+      None => query_string(&self.form),
+    };
     let url = format!(
       "{}{}?{}",
       host(&self.path),
@@ -279,6 +293,7 @@ impl<'a> Call<'a> {
       self.path,
       atp_core::text::truncate(&resp.text(), 300)
     );
+    checks(&resp, &self.path)?;
     if resp.body.iter().all(u8::is_ascii_whitespace) {
       return Err(Error::new(ErrorCode::VerificationRequired, "empty answer").with_hint(WALL_HINT));
     }
@@ -299,6 +314,31 @@ impl<'a> Call<'a> {
       .with_hint(WALL_HINT)
     })
   }
+}
+
+/// The human checks an answer announces in its headers, as the web
+/// client's response interceptor reads them: a captcha
+/// (`x-vc-bdturing-parameters`) on any call, an identity check
+/// (`x-tt-verify-passport-decision`) on the writes it lists
+/// ([`DECISION_PATHS`]).
+fn checks(resp: &Resp, path: &str) -> Result<()> {
+  let logid = resp.header("x-tt-logid").unwrap_or_default();
+  let decision = resp.header("x-tt-verify-passport-decision").is_some();
+  let what = if resp.header("x-vc-bdturing-parameters").is_some() {
+    "a captcha"
+  } else if decision && DECISION_PATHS.contains(&path) {
+    "an identity check (二次验证)"
+  } else {
+    return Ok(());
+  };
+  Err(
+    Error::new(
+      ErrorCode::VerificationRequired,
+      format!("Douyin wants {what} before this call (log id {logid})"),
+    )
+    .with_url(format!("{WWW}/"))
+    .with_hint(CHECK_HINT),
+  )
 }
 
 fn host(path: &str) -> &'static str {
