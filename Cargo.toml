@@ -1,6 +1,6 @@
 [package]
 name = "atp"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 description = "ATP (all-the-platforms): one command for all the platforms — social, video, music, podcasts, feeds, chat, shopping, travel and drives"
@@ -14,7 +14,7 @@ members = [".", "crates/*"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 

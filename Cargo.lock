@@ -373,7 +373,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "atp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-amap",
  "atp-baidumap",
@@ -447,7 +447,7 @@ dependencies = [
 
 [[package]]
 name = "atp-alibaba"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -461,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "atp-amap"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "atp-baidumap"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -483,7 +483,7 @@ dependencies = [
 
 [[package]]
 name = "atp-baidupan"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -497,7 +497,7 @@ dependencies = [
 
 [[package]]
 name = "atp-bangumi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -508,7 +508,7 @@ dependencies = [
 
 [[package]]
 name = "atp-bilibili"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "atp-bluesky"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "atp-bytedance"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "atp-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anstyle-query",
  "clap",
@@ -595,7 +595,7 @@ dependencies = [
 
 [[package]]
 name = "atp-ctrip"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "atp-dewu"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -621,7 +621,7 @@ dependencies = [
 
 [[package]]
 name = "atp-dianping"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "atp-mtsec",
@@ -632,7 +632,7 @@ dependencies = [
 
 [[package]]
 name = "atp-dingtalk"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "atp-discord"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -666,7 +666,7 @@ dependencies = [
 
 [[package]]
 name = "atp-discourse"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -679,7 +679,7 @@ dependencies = [
 
 [[package]]
 name = "atp-douban"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "atp-douyin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes 0.8.4",
  "atp-bytedance",
@@ -715,7 +715,7 @@ dependencies = [
 
 [[package]]
 name = "atp-facebook"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "atp-meta",
@@ -729,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "atp-feishu"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "atp-googlemaps"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -752,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "atp-hackernews"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "atp-instagram"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "atp-meta",
@@ -779,7 +779,7 @@ dependencies = [
 
 [[package]]
 name = "atp-jd"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes 0.8.4",
  "atp-core",
@@ -798,7 +798,7 @@ dependencies = [
 
 [[package]]
 name = "atp-jike"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "atp-juejin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-bytedance",
  "atp-core",
@@ -823,7 +823,7 @@ dependencies = [
 
 [[package]]
 name = "atp-kook"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -834,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "atp-kuaishou"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes 0.8.4",
  "atp-core",
@@ -856,7 +856,7 @@ dependencies = [
 
 [[package]]
 name = "atp-lemmy"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -867,7 +867,7 @@ dependencies = [
 
 [[package]]
 name = "atp-line"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -880,7 +880,7 @@ dependencies = [
 
 [[package]]
 name = "atp-lobsters"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -891,7 +891,7 @@ dependencies = [
 
 [[package]]
 name = "atp-mastodon"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -902,7 +902,7 @@ dependencies = [
 
 [[package]]
 name = "atp-matrix"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -917,7 +917,7 @@ dependencies = [
 
 [[package]]
 name = "atp-mattermost"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -931,7 +931,7 @@ dependencies = [
 
 [[package]]
 name = "atp-meituan"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "atp-mtsec",
@@ -945,7 +945,7 @@ dependencies = [
 
 [[package]]
 name = "atp-meta"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "atp-misskey"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "atp-mp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "atp-mtsec"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -999,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "atp-netease"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes 0.8.4",
  "atp-core",
@@ -1017,7 +1017,7 @@ dependencies = [
 
 [[package]]
 name = "atp-onebot"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1033,7 +1033,7 @@ dependencies = [
 
 [[package]]
 name = "atp-pinduoduo"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1049,7 +1049,7 @@ dependencies = [
 
 [[package]]
 name = "atp-podcast"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1061,7 +1061,7 @@ dependencies = [
 
 [[package]]
 name = "atp-qq"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1073,7 +1073,7 @@ dependencies = [
 
 [[package]]
 name = "atp-qqmusic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1087,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "atp-quark"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1103,7 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "atp-reddit"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1118,7 +1118,7 @@ dependencies = [
 
 [[package]]
 name = "atp-rocketchat"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1132,7 +1132,7 @@ dependencies = [
 
 [[package]]
 name = "atp-rss"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1145,7 +1145,7 @@ dependencies = [
 
 [[package]]
 name = "atp-satori"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1161,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "atp-slack"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1176,7 +1176,7 @@ dependencies = [
 
 [[package]]
 name = "atp-spotify"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1189,7 +1189,7 @@ dependencies = [
 
 [[package]]
 name = "atp-stackexchange"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1201,7 +1201,7 @@ dependencies = [
 
 [[package]]
 name = "atp-taobao"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-alibaba",
  "atp-core",
@@ -1214,7 +1214,7 @@ dependencies = [
 
 [[package]]
 name = "atp-telegram"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1234,7 +1234,7 @@ dependencies = [
 
 [[package]]
 name = "atp-tencentmap"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1244,7 +1244,7 @@ dependencies = [
 
 [[package]]
 name = "atp-threads"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "atp-meta",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "atp-tieba"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1273,7 +1273,7 @@ dependencies = [
 
 [[package]]
 name = "atp-tiktok"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-bytedance",
  "atp-core",
@@ -1292,7 +1292,7 @@ dependencies = [
 
 [[package]]
 name = "atp-toutiao"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-bytedance",
  "atp-core",
@@ -1307,7 +1307,7 @@ dependencies = [
 
 [[package]]
 name = "atp-twitter"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1324,7 +1324,7 @@ dependencies = [
 
 [[package]]
 name = "atp-v2ex"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1336,7 +1336,7 @@ dependencies = [
 
 [[package]]
 name = "atp-vocechat"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1349,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "atp-wechat"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes 0.8.4",
  "atp-core",
@@ -1367,7 +1367,7 @@ dependencies = [
 
 [[package]]
 name = "atp-wecom"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1382,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "atp-weibo"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1395,7 +1395,7 @@ dependencies = [
 
 [[package]]
 name = "atp-weread"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "clap",
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "atp-whatsapp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1428,7 +1428,7 @@ dependencies = [
 
 [[package]]
 name = "atp-xhs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes 0.8.4",
  "atp-core",
@@ -1448,7 +1448,7 @@ dependencies = [
 
 [[package]]
 name = "atp-xianyu"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-alibaba",
  "atp-core",
@@ -1463,7 +1463,7 @@ dependencies = [
 
 [[package]]
 name = "atp-xiaoyuzhou"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "jiff",
@@ -1472,7 +1472,7 @@ dependencies = [
 
 [[package]]
 name = "atp-youtube"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
@@ -1490,7 +1490,7 @@ dependencies = [
 
 [[package]]
 name = "atp-zhihu"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "atp-core",
  "base64 0.22.1",
