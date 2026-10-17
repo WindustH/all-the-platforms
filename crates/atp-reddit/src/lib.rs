@@ -36,9 +36,9 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Error, Insights, Media, Message,
-  Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply, Result,
-  User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Error, Insights, Media,
+  Message, Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, Query, Reply,
+  Result, User,
 };
 
 use crate::api::Api;
@@ -158,8 +158,8 @@ impl Platform for Reddit {
     posts::feed(&self.api, kind, page).await
   }
 
-  async fn edit(&self, post: &str, text: &str) -> Result<Action> {
-    write::edit(&self.api, post, text).await
+  async fn edit_post(&self, post: &str, edit: &Edit) -> Result<Action> {
+    write::edit(&self.api, post, edit).await
   }
 
   async fn chats(&self, parent: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {

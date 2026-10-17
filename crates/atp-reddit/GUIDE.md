@@ -151,7 +151,21 @@ Crossposts and image posts take no text.
 
 ### edit
 
-`edit THING "text"` replaces the text of your own post or comment.
+`edit THING TEXT` replaces the text (Markdown) of your own post or
+comment: a post id or link, or a comment's `t1_` id or permalink. It
+loads it first, prints the change (the text as old → new) and asks (`-y`
+in scripts).
+
+- Titles cannot change on Reddit, so `--title` is refused; the summary
+  shows a post's title as it stays.
+- The post's flair, NSFW and spoiler marks stay; change them with
+  `flair` and `flag`.
+- Reddit marks the post or comment as edited.
+
+```
+atp reddit edit https://www.reddit.com/r/rust/comments/1abcde/my_post/ 'Updated: fixed in 0.3'
+atp reddit edit t1_k9xyz12 'Thanks, corrected.' -y
+```
 
 ### notifications, unread
 

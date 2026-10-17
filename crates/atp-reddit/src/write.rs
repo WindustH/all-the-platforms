@@ -2,7 +2,8 @@
 //! link, crosspost; images in [`crate::uploads`]). Every write goes through
 //! [`Api::post`], which checks the login, pauses and adds the CSRF token.
 
-use atp_core::{Action, Draft, Error, Result, Value, ValueExt};
+use atp_core::cli::Change;
+use atp_core::{Action, Draft, Edit, Error, ErrorCode, Result, Value, ValueExt};
 
 use crate::api::{Api, WWW};
 use crate::{refs, uploads};
@@ -69,9 +70,36 @@ pub async fn comment(api: &Api, post: &str, text: &str, reply_to: Option<&str>) 
   Ok(written(&v, "comment", &parent))
 }
 
-/// Replace the text of your own post or comment.
-pub async fn edit(api: &Api, arg: &str, text: &str) -> Result<Action> {
+/// Replace the text (Markdown) of your own post or comment, after showing
+/// the change; titles cannot change on Reddit.
+pub async fn edit(api: &Api, arg: &str, edit: &Edit) -> Result<Action> {
+  api.require_login()?;
+  let Some(text) = edit.text.as_deref() else {
+    return Err(Error::input("give the new text"));
+  };
   let id = refs::thing(&api.ctx, arg).await?;
+  let info = api.get("/api/info", &[("id", id.clone())]).await?;
+  let Some(thing) = info.list("data.children").first().map(|c| c.at("data")) else {
+    return Err(Error::not_found(format!("Reddit has no {id}")));
+  };
+  let author = thing.str("author").unwrap_or_default();
+  if !author.eq_ignore_ascii_case(&api.username().await?) {
+    return Err(Error::new(
+      ErrorCode::PermissionDenied,
+      format!("{id} is u/{author}'s; Reddit edits only your own"),
+    ));
+  }
+  let (what, old) = if id.starts_with("t1_") {
+    ("comment", thing.str("body"))
+  } else {
+    ("post", thing.str("selftext"))
+  };
+  let mut change = Change::new(format!("Reddit {what} {id}:"));
+  if let Some(title) = thing.str("title") {
+    change.row("title", &format!("{title} (cannot change)"));
+  }
+  change.field("text", &old.unwrap_or_default(), text);
+  change.confirm(edit.yes, &format!("change this {what} on Reddit"))?;
   let form = vec![("thing_id", id.clone()), ("text", text.to_owned())];
   let v = api.post("/api/editusertext", form).await?;
   Ok(written(&v, "edit", &id))
