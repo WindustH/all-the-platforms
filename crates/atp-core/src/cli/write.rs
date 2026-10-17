@@ -8,7 +8,7 @@ use super::follows;
 use super::input::{check_files, check_images, confirm, read_text};
 use crate::error::{Error, Result};
 use crate::model::Data;
-use crate::platform::{Cap, Draft, Edit, Platform, PlatformInfo, Reply};
+use crate::platform::{Cap, Draft, Edit, Platform, PlatformInfo, PlatformKind, Reply};
 
 #[derive(Debug, clap::Args)]
 pub struct PublishArgs {
@@ -260,15 +260,6 @@ const EDIT_OPTIONS: &[(&str, &[Cap])] = &[
   ("no_topics", &[Cap::EditTopics]),
   ("cover", &[Cap::EditCover]),
   ("visibility", &[Cap::EditVisibility]),
-  (
-    "yes",
-    &[
-      Cap::EditTitle,
-      Cap::EditTopics,
-      Cap::EditCover,
-      Cap::EditVisibility,
-    ],
-  ),
 ];
 
 /// `post` without the options the platform does not offer.
@@ -282,15 +273,22 @@ pub(super) fn post_options(cmd: clap::Command, info: &PlatformInfo) -> clap::Com
   })
 }
 
-/// `edit` without the options the platform does not offer.
+/// `edit` without the options the platform does not offer. `-y` shows
+/// where posts are edited (every platform but the chat ones): those edits
+/// print the change and ask.
 pub(super) fn edit_options(cmd: clap::Command, info: &PlatformInfo) -> clap::Command {
-  EDIT_OPTIONS.iter().fold(cmd, |c, (arg, caps)| {
+  let cmd = EDIT_OPTIONS.iter().fold(cmd, |c, (arg, caps)| {
     if caps.iter().any(|cap| info.supports(*cap)) {
       c
     } else {
       c.mut_arg(*arg, |a| a.hide(true))
     }
-  })
+  });
+  if info.kind == PlatformKind::Chat {
+    cmd.mut_arg("yes", |a| a.hide(true))
+  } else {
+    cmd
+  }
 }
 
 pub(super) async fn run<P: Platform>(p: &P, cmd: WriteCommand) -> Result<Data> {
