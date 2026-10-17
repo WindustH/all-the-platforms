@@ -145,34 +145,40 @@ impl EditArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum WriteCommand {
-  /// Like a post
+  /// Like posts
+  #[command(after_long_help = EX_LIKE)]
   Like {
-    /// Post: an id, a link, or #N from the last list
-    post: String,
-    /// Remove the like instead
+    /// Posts: ids, links, or #N from the last list
+    #[arg(required = true, value_name = "POST")]
+    posts: Vec<String>,
+    /// Remove the likes instead
     #[arg(long)]
     undo: bool,
   },
-  /// Remove a like
+  /// Remove likes
   Unlike {
-    /// Post: an id, a link, or #N from the last list
-    post: String,
+    /// Posts: ids, links, or #N from the last list
+    #[arg(required = true, value_name = "POST")]
+    posts: Vec<String>,
   },
-  /// Save a post to favorites / bookmarks
+  /// Save posts to favorites / bookmarks
+  #[command(after_long_help = EX_FAVORITE)]
   Favorite {
-    /// Post: an id, a link, or #N from the last list
-    post: String,
+    /// Posts: ids, links, or #N from the last list
+    #[arg(required = true, value_name = "POST")]
+    posts: Vec<String>,
     /// Folder / collection id
     #[arg(long)]
     folder: Option<String>,
-    /// Remove it instead
+    /// Remove them instead
     #[arg(long)]
     undo: bool,
   },
-  /// Remove a post from favorites / bookmarks
+  /// Remove posts from favorites / bookmarks
   Unfavorite {
-    /// Post: an id, a link, or #N from the last list
-    post: String,
+    /// Posts: ids, links, or #N from the last list
+    #[arg(required = true, value_name = "POST")]
+    posts: Vec<String>,
     /// Folder / collection id
     #[arg(long)]
     folder: Option<String>,
@@ -290,17 +296,15 @@ pub(super) fn edit_options(cmd: clap::Command, info: &PlatformInfo) -> clap::Com
 pub(super) async fn run<P: Platform>(p: &P, cmd: WriteCommand) -> Result<Data> {
   let ctx = p.ctx();
   let action = match cmd {
-    WriteCommand::Like { post, undo } => p.like(&ctx.post_ref(&post)?, undo).await?,
-    WriteCommand::Unlike { post } => p.like(&ctx.post_ref(&post)?, true).await?,
-    WriteCommand::Favorite { post, folder, undo } => {
-      let folder = folder.map(|f| ctx.collection_ref(&f)).transpose()?;
-      p.favorite(&ctx.post_ref(&post)?, folder.as_deref(), undo)
-        .await?
-    }
-    WriteCommand::Unfavorite { post, folder } => {
-      let folder = folder.map(|f| ctx.collection_ref(&f)).transpose()?;
-      p.favorite(&ctx.post_ref(&post)?, folder.as_deref(), true)
-        .await?
+    WriteCommand::Like { posts, undo } => return like(p, &posts, undo).await,
+    WriteCommand::Unlike { posts } => return like(p, &posts, true).await,
+    WriteCommand::Favorite {
+      posts,
+      folder,
+      undo,
+    } => return favorite(p, &posts, folder, undo).await,
+    WriteCommand::Unfavorite { posts, folder } => {
+      return favorite(p, &posts, folder, true).await;
     }
     WriteCommand::Comment {
       post,
@@ -323,6 +327,39 @@ pub(super) async fn run<P: Platform>(p: &P, cmd: WriteCommand) -> Result<Data> {
     WriteCommand::Edit(args) => edit(p, *args).await?,
   };
   Ok(Data::Action(action))
+}
+
+/// `like` / `unlike`: one post exactly as before, several through the
+/// platform's batch hook.
+async fn like<P: Platform>(p: &P, posts: &[String], undo: bool) -> Result<Data> {
+  let posts = post_refs(p, posts)?;
+  if let [post] = posts.as_slice() {
+    return Ok(Data::Action(p.like(post, undo).await?));
+  }
+  Ok(Data::Actions(p.like_posts(&posts, undo).await?))
+}
+
+/// `favorite` / `unfavorite`, as [`like`].
+async fn favorite<P: Platform>(
+  p: &P,
+  posts: &[String],
+  folder: Option<String>,
+  undo: bool,
+) -> Result<Data> {
+  let folder = folder.map(|f| p.ctx().collection_ref(&f)).transpose()?;
+  let posts = post_refs(p, posts)?;
+  if let [post] = posts.as_slice() {
+    return Ok(Data::Action(
+      p.favorite(post, folder.as_deref(), undo).await?,
+    ));
+  }
+  Ok(Data::Actions(
+    p.favorite_posts(&posts, folder.as_deref(), undo).await?,
+  ))
+}
+
+fn post_refs<P: Platform>(p: &P, list: &[String]) -> Result<Vec<String>> {
+  list.iter().map(|post| p.ctx().post_ref(post)).collect()
 }
 
 async fn comment<P: Platform>(
@@ -427,6 +464,25 @@ Examples:
   atp x comment '#1' 'Numbers for this week' -i chart.png
 
 `atp platforms` lists where --image works (comment-images).";
+
+const EX_LIKE: &str = "\
+Examples:
+  atp bili like BV1xx411c7mD
+  atp douyin likes -n 30
+  atp douyin unlike '#1' '#4' '#9'
+
+Several posts give one result each; a failed one does not stop the rest,
+unless the platform asks for a login, a check or a pause.
+More: atp guide <platform> like";
+
+const EX_FAVORITE: &str = "\
+Examples:
+  atp bili favorite '#1' --folder 1052622027
+  atp douyin favorites -n 50
+  atp douyin unfavorite '#2' '#3' '#7'
+
+Several posts give one result each, as with `like`.
+More: atp guide <platform> favorite";
 
 const EX_FOLLOW: &str = "\
 Examples:

@@ -111,14 +111,15 @@ A platform crate exports one type implementing `atp_core::Platform`:
   the `FollowQuery` (`--sort`, `--search` behind `Cap::FollowingSearch`,
   `--mutual` behind `Cap::FollowingMutual`) and falls back to
   `following` when it is empty.
-- Managing follows and folders: `follow_users` (several users; by
-  default `follow` one by one, platforms with a batch call override it),
-  `remove_followers`, `block`, `blocked`, the follow groups
-  (`follow_groups`, `follow_group`, `follow_group_create` / `rename` /
-  `delete` / `add` / `remove`) and the favorites folders
-  (`folder_create` / `edit` with a `FolderSpec`, `folder_delete`,
-  `folder_add`, `folder_remove`, `folder_move`, by default add then
-  remove). Methods on several users, posts or folders return one Action
+- Several posts or users at once: `like_posts`, `favorite_posts` and
+  `follow_users` (by default `like`, `favorite` or `follow` one by one;
+  platforms with a batch call override them).
+- Managing follows and folders: `remove_followers`, `block`, `blocked`,
+  the follow groups (`follow_groups`, `follow_group`,
+  `follow_group_create` / `rename` / `delete` / `add` / `remove`) and the
+  favorites folders (`folder_create` / `edit` with a `FolderSpec`,
+  `folder_delete`, `folder_add`, `folder_remove`, `folder_move`, by
+  default add then remove). Methods on several users, posts or folders return one Action
   per item (`Data::Actions`; one item prints a single Action). Each
   command has its `Cap`; `FolderDescription`, `FolderPrivacy` and
   `FolderCover` show the options of `folder-create` / `folder-edit`.

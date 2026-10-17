@@ -2,8 +2,8 @@
 
 All of these need a login and act as your account.
 
-    atp <platform> like POST [--undo]          # unlike: `unlike POST`
-    atp <platform> favorite POST [--folder F] [--undo]
+    atp <platform> like POST... [--undo]       # unlike: `unlike POST...`
+    atp <platform> favorite POST... [--folder F] [--undo]
     atp <platform> comment POST "text" [--reply-to COMMENT] [-i IMAGE ...]
     atp <platform> delete-comment POST COMMENT [-y]
     atp <platform> follow USER... [--undo]     # unfollow: `unfollow USER...`
@@ -28,8 +28,8 @@ All of these need a login and act as your account.
   WhatsApp and Matrix chats), or from whichever came last where it takes
   both (Reddit users or subreddits, Spotify users or playlists).
 - The result is an Action with the id and link of anything created.
-  `follow` / `unfollow` and the commands below take several users, posts
-  or folders and print an Action for each.
+  `like`, `favorite`, `follow` (and their undoing) and the commands below
+  take several users, posts or folders and print an Action for each.
 - Writes pause a moment first on platforms that flag bursts.
 
 Organizing what you follow and save, where the platform offers it:

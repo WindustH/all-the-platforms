@@ -226,6 +226,30 @@ pub trait Platform: Sized {
     unsupported!("favorite")
   }
 
+  /// `like` / `unlike` of several posts: one by one through
+  /// [`like`](Self::like) by default; platforms with a batch call
+  /// override it. One Action per post, in order (see
+  /// [`bulk`](crate::bulk)).
+  async fn like_posts(&self, posts: &[String], undo: bool) -> Result<Vec<Action>> {
+    let action = if undo { "unlike" } else { "like" };
+    crate::bulk::each(action, posts, async |post| self.like(post, undo).await).await
+  }
+
+  /// `favorite` / `unfavorite` of several posts, as
+  /// [`like_posts`](Self::like_posts) through [`favorite`](Self::favorite).
+  async fn favorite_posts(
+    &self,
+    posts: &[String],
+    folder: Option<&str>,
+    undo: bool,
+  ) -> Result<Vec<Action>> {
+    let action = if undo { "unfavorite" } else { "favorite" };
+    crate::bulk::each(action, posts, async |post| {
+      self.favorite(post, folder, undo).await
+    })
+    .await
+  }
+
   /// Comment on a post, or reply to one of its comments.
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
     unsupported!("comment")
