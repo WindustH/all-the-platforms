@@ -1,10 +1,12 @@
-//! Douyin-only commands.
+//! Douyin-only commands; those on your library are in [`library`].
+
+mod library;
 
 use atp_core::cli::PageArgs;
 use atp_core::{Data, Result};
 
 use crate::api::Api;
-use crate::{library, login, posts, rooms};
+use crate::{login, posts, rooms};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -53,6 +55,8 @@ pub enum Command {
     #[command(flatten)]
     page: PageArgs,
   },
+  #[command(flatten)]
+  Library(library::LibraryCommand),
 }
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
@@ -60,12 +64,12 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
     Command::LoginSms { phone } => Data::User(Box::new(login::sms(api, phone).await?)),
     Command::Mix { mix, page } => Data::Posts(
       page
-        .collect(async |r| library::mix(api, &mix, &r).await)
+        .collect(async |r| crate::library::mix(api, &mix, &r).await)
         .await?,
     ),
     Command::Music { music, page } => Data::Posts(
       page
-        .collect_dated(async |r| library::music(api, &music, &r).await)
+        .collect_dated(async |r| crate::library::music(api, &music, &r).await)
         .await?,
     ),
     Command::Related { post, page } => {
@@ -79,14 +83,15 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
     Command::Live { room } => Data::Post(Box::new(rooms::room(api, &room).await?)),
     Command::Mixes { page } => Data::Collections(
       page
-        .collect(async |r| library::mixes(api, &r).await)
+        .collect(async |r| crate::library::mixes(api, &r).await)
         .await?,
     ),
     Command::Musics { category, page } => Data::Collections(
       page
-        .collect(async |r| library::musics(api, category.as_deref(), &r).await)
+        .collect(async |r| crate::library::musics(api, category.as_deref(), &r).await)
         .await?,
     ),
+    Command::Library(c) => library::run(api, c).await?,
   })
 }
 

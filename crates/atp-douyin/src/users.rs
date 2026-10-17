@@ -1,5 +1,6 @@
 //! Users: profiles, the logged-in account, their posts and liked posts,
-//! followers and following; following and unfollowing.
+//! followers and following (your own in three orders); following and
+//! unfollowing.
 
 use atp_core::{Action, Error, Page, PageReq, Post, Query, Result, User, Value, ValueExt};
 use md5::{Digest, Md5};
@@ -136,61 +137,137 @@ pub async fn likes(api: &Api, user: Option<&str>, page: &PageReq) -> Result<Page
   awemes(api, LIKES, &sec, page, user.is_none()).await
 }
 
-/// Followers or followings, paged by `max_time` (seconds; the first page
-/// asks with the current time, `0` would return an empty list).
+/// The orders of a following list (`source_type`), `following --sort`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Order {
+  /// Latest follow first, paged by `max_time` (1).
+  Recent,
+  /// Earliest follow first, paged by `min_time` (3).
+  Oldest,
+  /// Douyin's own mix (综合排序), paged by `offset` (4).
+  Smart,
+}
+
+/// The values of `following --sort`, the plain order first.
+pub const SORTS: &[&str] = &["recent", "oldest", "smart"];
+
+impl Order {
+  pub fn parse(sort: Option<&str>) -> Result<Self> {
+    match sort {
+      None | Some("recent") => Ok(Order::Recent),
+      Some("oldest") => Ok(Order::Oldest),
+      Some("smart") => Ok(Order::Smart),
+      Some(other) => Err(Error::input(format!(
+        "unknown --sort {other} (recent, oldest or smart)"
+      ))),
+    }
+  }
+
+  fn source_type(self) -> &'static str {
+    match self {
+      Order::Recent => "1",
+      Order::Oldest => "3",
+      Order::Smart => "4",
+    }
+  }
+
+  /// `max_time`, `min_time` and `offset` of the page at `cursor`. The
+  /// first page asks with the current time as `max_time` (`0` returned an
+  /// empty list).
+  fn window(self, cursor: Option<&str>) -> [String; 3] {
+    let now = jiff::Timestamp::now().as_second().to_string();
+    let at = |first: &str| cursor.unwrap_or(first).to_owned();
+    match self {
+      Order::Recent => [at(&now), "0".into(), "0".into()],
+      Order::Oldest => [now, at("0"), "0".into()],
+      Order::Smart => [now, "0".into(), at("0")],
+    }
+  }
+
+  /// The answer's field the next page starts from.
+  fn next_key(self) -> &'static str {
+    match self {
+      Order::Recent => "min_time",
+      Order::Oldest => "max_time",
+      Order::Smart => "offset",
+    }
+  }
+}
+
+/// Followers or followings in `order`, each row with what it tells about
+/// the relation to you (`parse::relation`).
 async fn relations(
   api: &Api,
   arg: &str,
   path: &str,
   key: &str,
+  order: Order,
   page: &PageReq,
 ) -> Result<Page<User>> {
-  let sec = sec_uid(api, arg).await?;
-  let uid = profile_raw(api, &sec)
-    .await?
-    .str("uid")
-    .ok_or_else(|| Error::upstream("profile without uid"))?;
-  let now = jiff::Timestamp::now().as_second().to_string();
-  let max_time = page.cursor.clone().unwrap_or(now);
+  let (sec, uid) = uid_of(api, arg).await?;
+  let [max_time, min_time, offset] = order.window(page.cursor.as_deref());
   let mut call = api
     .get(path)
     .arg("user_id", &uid)
     .arg("sec_user_id", &sec)
-    .arg("offset", "0")
-    .arg("min_time", "0")
-    .arg("max_time", &max_time)
+    .arg("offset", offset)
+    .arg("min_time", min_time)
+    .arg("max_time", max_time)
     .arg("count", page.size_within(20))
-    .arg("source_type", "1")
+    .arg("source_type", order.source_type())
     .arg("gps_access", "0")
     .arg("address_book_access", "0");
   if path == FOLLOWING {
     call = call.arg("is_top", "1");
   }
   let v = call.send().await?;
-  let items: Vec<User> = v.list(key).iter().filter_map(parse::user).collect();
+  let items: Vec<User> = v.list(key).iter().filter_map(parse::relation).collect();
   let next = (v.i64("has_more") == Some(1) && !items.is_empty())
-    .then(|| v.str("min_time"))
+    .then(|| v.str(order.next_key()))
     .flatten()
-    .filter(|t| *t != max_time && t != "0");
+    .filter(|c| Some(c.as_str()) != page.cursor.as_deref() && c != "0");
   Ok(Page::new(items, next))
 }
 
 pub async fn followers(api: &Api, arg: &str, page: &PageReq) -> Result<Page<User>> {
-  relations(api, arg, FOLLOWERS, "followers", page).await
+  relations(api, arg, FOLLOWERS, "followers", Order::Recent, page).await
 }
 
-pub async fn following(api: &Api, arg: &str, page: &PageReq) -> Result<Page<User>> {
-  relations(api, arg, FOLLOWING, "followings", page).await
+/// Whom a user follows; orders other than the latest first only for your
+/// own list, as the profile page offers them.
+pub async fn following(api: &Api, arg: &str, order: Order, page: &PageReq) -> Result<Page<User>> {
+  relations(api, arg, FOLLOWING, "followings", order, page).await
 }
 
-/// The logged-in account's uid.
+/// Whether a user reference is the logged-in account.
+pub async fn is_me(api: &Api, arg: &str) -> Result<bool> {
+  let sec = sec_uid(api, arg).await?;
+  Ok(whoami(api).await?.id == sec)
+}
+
+/// The `sec_uid` and numeric uid of a user reference, from the profile.
+pub async fn uid_of(api: &Api, arg: &str) -> Result<(String, String)> {
+  let sec = sec_uid(api, arg).await?;
+  let uid = profile_raw(api, &sec)
+    .await?
+    .str("uid")
+    .ok_or_else(|| Error::upstream("profile without uid"))?;
+  Ok((sec, uid))
+}
+
+/// The logged-in account's uid, looked up once per command.
 pub async fn uid(api: &Api) -> Result<String> {
+  if let Some(uid) = api.me.get() {
+    return Ok(uid.clone());
+  }
   let me = whoami(api).await?;
-  me.extra
+  let uid = me
+    .extra
     .get("uid")
     .and_then(Value::as_str)
     .map(str::to_owned)
-    .ok_or_else(|| Error::upstream("Douyin returned the account without its uid"))
+    .ok_or_else(|| Error::upstream("Douyin returned the account without its uid"))?;
+  Ok(api.me.get_or_init(|| uid).clone())
 }
 
 /// The MD5 of the logged-in account's uid, which the web client appends
@@ -207,11 +284,7 @@ pub async fn uid_hash(api: &Api) -> Result<String> {
 
 /// Follow a user, or with `undo` unfollow.
 pub async fn follow(api: &Api, arg: &str, undo: bool) -> Result<Action> {
-  let sec = sec_uid(api, arg).await?;
-  let uid = profile_raw(api, &sec)
-    .await?
-    .str("uid")
-    .ok_or_else(|| Error::upstream("profile without uid"))?;
+  let (sec, uid) = uid_of(api, arg).await?;
   let me = uid_hash(api).await?;
   api
     .write(FOLLOW, false, &me)

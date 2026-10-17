@@ -1,18 +1,26 @@
-//! One post: detail, downloadable media, related posts, likes.
+//! One post: detail, downloadable media, related posts, likes (several
+//! taken back at once).
 //!
 //! The detail comes from `/aweme/v1/web/aweme/detail/`. Visitors without a
 //! browser `UIFID` are refused there; the share page's own API
 //! (`iesdouyin.com/web/api/v2/aweme/iteminfo/`) answers them instead.
 
-use atp_core::{Action, Error, ErrorCode, Media, Page, PageReq, Post, Result, Value, ValueExt};
+use atp_core::bulk;
+use atp_core::http::Method;
+use atp_core::{
+  Action, Error, ErrorCode, Media, Page, PageReq, Post, Result, Value, ValueExt, json,
+};
 
 use crate::api::{Api, WWW};
 use crate::{parse, refs, users};
 
 const DETAIL: &str = "/aweme/v1/web/aweme/detail/";
 const DIGG: &str = "/aweme/v1/web/commit/item/digg/";
+const UNDIGG_MULTI: &str = "/aweme/v1/web/cancel/item/digg/multi/";
 const RELATED: &str = "/aweme/v1/web/aweme/related/";
 const ITEMINFO: &str = "/web/api/v2/aweme/iteminfo/";
+/// Likes one `cancel/item/digg/multi` call takes back.
+const BATCH: usize = 50;
 
 /// The raw aweme of a post reference.
 pub async fn detail(api: &Api, arg: &str) -> Result<Value> {
@@ -134,4 +142,32 @@ pub async fn like(api: &Api, arg: &str, undo: bool) -> Result<Action> {
     .await?;
   let name = if undo { "unlike" } else { "like" };
   Ok(Action::done(name, &id).with_url(refs::video_url(&id)))
+}
+
+/// Like several posts one by one, or take several likes back 50 per call
+/// as the likes tab's 取消喜欢 does; the ones it names in `fatal_ids`
+/// failed.
+pub async fn like_posts(api: &Api, posts: &[String], undo: bool) -> Result<Vec<Action>> {
+  if !undo {
+    return bulk::each("like", posts, async |post| like(api, post, false).await).await;
+  }
+  let ids = refs::awemes(api, posts).await?;
+  let me = users::uid_hash(api).await?;
+  bulk::batches("unlike", &ids, BATCH, String::clone, async |chunk| {
+    // Ordinary posts are type 0 (西瓜 videos would be 1).
+    let types: serde_json::Map<String, Value> =
+      chunk.iter().map(|id| (id.clone(), json!(0))).collect();
+    let v = api
+      .write_as(Method::POST, UNDIGG_MULTI, &me)
+      .await?
+      .header("referer", format!("{WWW}/user/self?showTab=like"))
+      .field("aweme_ids", chunk.join(","))
+      .field("item_type_map", Value::Object(types))
+      .send()
+      .await?;
+    Ok(parse::cancelled(&v, "unlike", chunk, |id| {
+      Some(refs::video_url(id))
+    }))
+  })
+  .await
 }

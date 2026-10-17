@@ -2,9 +2,11 @@
 //!
 //! Posts are awemes: videos (`douyin.com/video/<id>`) and image posts
 //! (`/note/<id>`); users are `sec_uid`s. Every web API call is signed with
-//! `a_bogus` (see [`sign`]). Writes carry ticket-guard headers signed with
-//! the key ATP registers when it logs in (QR code or texted code), so a
-//! session copied from a browser reads but does not write. `listen` follows
+//! `a_bogus` (see [`sign`]). The writes the web client guards carry
+//! ticket-guard headers signed with the key ATP registers when it logs in
+//! (QR code or texted code), so a session copied from a browser reads and
+//! makes only the other writes (removing followers, blocks, watch later
+//! ...). `listen` follows
 //! live rooms over the webcast websocket. Publishing, editing and deleting
 //! go through the creator platform ([`creator`]), as its web pages do.
 
@@ -13,6 +15,8 @@ mod comments;
 mod creator;
 mod discover;
 mod extra;
+mod folders;
+mod history;
 mod items;
 mod library;
 mod live;
@@ -21,7 +25,9 @@ mod notifications;
 mod parse;
 mod posts;
 mod refs;
+mod relations;
 mod rooms;
+mod saves;
 mod sign;
 mod uploads;
 mod users;
@@ -34,9 +40,9 @@ use std::time::Duration;
 
 use atp_core::output::Stream;
 use atp_core::{
-  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, Media, Notification, Page,
-  PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus, QrTicket, Query, Reply, Result,
-  User,
+  Action, Cap, Choices, Collection, Comment, Ctx, Data, Draft, Edit, FolderSpec, FollowQuery,
+  Media, Notification, Page, PageReq, Platform, PlatformInfo, PlatformKind, Post, QrStatus,
+  QrTicket, Query, Reply, Result, User,
 };
 
 use crate::api::Api;
@@ -50,7 +56,7 @@ impl Platform for Douyin {
     id: "douyin",
     name: "Douyin",
     aliases: &["dy"],
-    about: "Douyin (抖音): videos, image posts, comments, users, hot boards, live danmaku and publishing",
+    about: "Douyin (抖音): videos, image posts, comments, users, favorites folders, hot boards, live danmaku and publishing",
     home: "https://www.douyin.com",
     cookie_domains: &["douyin.com"],
     required_cookies: api::LOGIN_COOKIES,
@@ -93,6 +99,17 @@ impl Platform for Douyin {
       Cap::EditVisibility,
       Cap::Listen,
       Cap::Download,
+      Cap::FollowingSearch,
+      Cap::FollowingMutual,
+      Cap::RemoveFollower,
+      Cap::Block,
+      Cap::FolderCreate,
+      Cap::FolderEdit,
+      Cap::FolderPrivacy,
+      Cap::FolderDelete,
+      Cap::FolderAdd,
+      Cap::FolderRemove,
+      Cap::FolderMove,
     ],
     choices: Choices {
       search_sort: discover::SEARCH_SORTS,
@@ -109,6 +126,8 @@ impl Platform for Douyin {
     guest: "hot, user, read, download (via the share page), listen",
     guide: include_str!("../GUIDE.md"),
   };
+
+  const FOLLOWING_SORT: &'static [&'static str] = users::SORTS;
 
   type Extra = Command;
 
@@ -183,7 +202,16 @@ impl Platform for Douyin {
   }
 
   async fn following(&self, user: &str, page: &PageReq) -> Result<Page<User>> {
-    users::following(&self.api, user, page).await
+    users::following(&self.api, user, users::Order::Recent, page).await
+  }
+
+  async fn following_with(
+    &self,
+    user: &str,
+    query: &FollowQuery,
+    page: &PageReq,
+  ) -> Result<Page<User>> {
+    relations::following(&self.api, user, query, page).await
   }
 
   async fn collections(&self, user: Option<&str>, page: &PageReq) -> Result<Page<Collection>> {
@@ -210,7 +238,7 @@ impl Platform for Douyin {
   }
 
   async fn history(&self, page: &PageReq) -> Result<Page<Post>> {
-    library::history(&self.api, page).await
+    history::list(&self.api, page).await
   }
 
   async fn notifications(&self, kind: Option<&str>, page: &PageReq) -> Result<Page<Notification>> {
@@ -225,6 +253,21 @@ impl Platform for Douyin {
     library::favorite(&self.api, post, folder, undo).await
   }
 
+  /// Taking several likes back: `cancel/item/digg/multi`, 50 per call.
+  async fn like_posts(&self, posts: &[String], undo: bool) -> Result<Vec<Action>> {
+    posts::like_posts(&self.api, posts, undo).await
+  }
+
+  /// Unsaving several: `aweme/cancel/collect/multi`, 50 per call.
+  async fn favorite_posts(
+    &self,
+    posts: &[String],
+    folder: Option<&str>,
+    undo: bool,
+  ) -> Result<Vec<Action>> {
+    saves::favorite_posts(&self.api, posts, folder, undo).await
+  }
+
   async fn comment(&self, post: &str, reply: &Reply) -> Result<Action> {
     comments::send(&self.api, post, reply).await
   }
@@ -235,6 +278,34 @@ impl Platform for Douyin {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     users::follow(&self.api, user, undo).await
+  }
+
+  async fn remove_followers(&self, users: &[String]) -> Result<Vec<Action>> {
+    relations::remove_followers(&self.api, users).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    relations::block(&self.api, users, undo).await
+  }
+
+  async fn folder_create(&self, folder: &FolderSpec) -> Result<Action> {
+    folders::create(&self.api, folder).await
+  }
+
+  async fn folder_edit(&self, folder: &str, change: &FolderSpec) -> Result<Action> {
+    folders::edit(&self.api, folder, change).await
+  }
+
+  async fn folder_delete(&self, folders: &[String]) -> Result<Vec<Action>> {
+    folders::delete(&self.api, folders).await
+  }
+
+  async fn folder_add(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    folders::add(&self.api, folder, posts).await
+  }
+
+  async fn folder_remove(&self, folder: &str, posts: &[String]) -> Result<Vec<Action>> {
+    folders::remove(&self.api, folder, posts).await
   }
 
   async fn publish(&self, draft: &Draft) -> Result<Action> {

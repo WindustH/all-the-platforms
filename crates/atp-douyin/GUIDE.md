@@ -24,10 +24,20 @@ only printed). It needs a terminal; ATP never reads texts itself.
 Before either login ATP creates a key pair and hands the public key to the
 passport, as the browser does (Douyin's "ticket guard"); the passport
 answers the login with a ticket for that key, which ATP keeps with the
-session. Likes, favorites, comments, follows, publishing and deleting are
-signed with it, so they work only on sessions made by these two logins. Whether the passport
-issues that ticket to ATP's logins has not been confirmed; without it,
-writes fail with `not_authenticated` ("this session cannot sign writes").
+session. The writes the web client guards with it need that key, so they
+work only on sessions made by these two logins: likes and taking several
+likes back, saving a post and unsaving one, comments, follows, approving
+follow requests, creating, changing and deleting folders and moving posts
+in and out of them, saving mixes, short dramas and music, publishing,
+editing and deleting. Whether the passport issues that ticket to ATP's
+logins has not been confirmed; without it, these writes fail with
+`not_authenticated` ("this session cannot sign writes").
+
+The web client sends the other writes without the key, and so does ATP:
+`remove-follower`, `block` / `unblock`, `unfavorite` and `save --undo` /
+`save-drama --undo` with several at once, watch later (`later-add`,
+`later-remove`, `later-clear`) and `history-clear`. They need a logged-in
+session of any kind, `--browser` and `--cookie` included.
 
 ### Browser or cookie
 
@@ -40,8 +50,8 @@ Log in on douyin.com in a browser, then:
 - `ATP_DOUYIN_COOKIE='...'` passes such a header for one run; it is never
   saved.
 
-Such sessions read everything a login allows but cannot write: the browser
-keeps its write key to itself.
+Such sessions read everything a login allows but cannot make the writes
+guarded by the write key (above): the browser keeps its key to itself.
 
 There are no other environment variables and no tokens.
 
@@ -76,12 +86,19 @@ log in again.
   later; log in with `--browser`, or use a residential network in mainland
   China. On a terminal ATP opens douyin.com in a browser for the check (see
   `atp guide login`). ATP keeps at least 800 ms between requests.
-- Writes also carry device traits (`x-tt-session-dtrait`, from a captured
-  Chrome profile) and the secsdk CSRF token, and ATP waits a random 2 to
-  6 s before each. They are untested against the live site: another client
+- Likes, follows, saves and comments also carry device traits
+  (`x-tt-session-dtrait`, from a captured Chrome profile); writes sent as
+  POST carry the secsdk CSRF token, and ATP waits a random 2 to 6 s
+  before each write. They are untested against the live site: another client
   that reproduces them reports likes sent without device traits answered
   with HTTP 403 and the session logged out. Try them on an account you can
   afford to log in again.
+- When an answer asks for a captcha (`x-vc-bdturing-parameters`) or, on a
+  write, an identity check (`x-tt-verify-passport-decision`), the command
+  stops with `verification_required`; on a terminal ATP opens douyin.com
+  in your browser. Whether passing a check there clears ATP's next call
+  is not known: if it does not, do the same thing once on douyin.com and
+  retry later.
 - Publishing and deleting go to creator.douyin.com like its web uploader:
   `a_bogus` with the creator page's ids, the secsdk CSRF token, and the
   ticket-guard signature its consumer SDK makes (an HMAC under a key
@@ -125,6 +142,33 @@ walled, the open billboard (words and heat only) stands in for `all`.
 `--type recommend` (default), `following` or `friends`; the last two need a
 login.
 
+### following
+
+`following [USER]` lists whom a user follows, latest follow first. Rows
+carry `extra.mutual` (you follow each other), `extra.remark` (the name you
+gave them) and `extra.special` (a special follow, 特别关注) where Douyin
+tells them. On your own list:
+
+- `--sort recent|oldest|smart`: latest follow first (the default),
+  earliest first, or Douyin's own mix (综合排序), as the following page
+  offers them.
+- `--search WORDS` finds the accounts you follow by name or Douyin id
+  through the page's search box (Douyin's suggestions, at most 100).
+- `--mutual` lists your mutual follows (互相关注), from the relations the
+  share panel loads.
+
+`--sort`, `--search` and `--mutual` go one at a time.
+
+### remove-follower, block, unblock
+
+One user per call. Douyin's web has no list of the accounts you block,
+so there is no `blocked`.
+
+### approve-follower
+
+`approve-follower USER…` lets people who asked to follow your private
+account (关注请求) follow it, one per call. Needs ATP's own login.
+
 ### likes
 
 `likes [USER]`: posts a user liked (public likes only); yours when USER is
@@ -132,12 +176,52 @@ omitted.
 
 ### collections, favorites
 
-Your own account only. `collections` lists your folders of saved posts;
-`favorites [--folder ID]` your saved posts, all or those of one folder.
+Your own account only. `collections` lists your folders of saved posts
+(收藏夹); `favorites [--folder ID]` your saved posts, all or those of one
+folder.
 
-### history
+### folder-create, folder-edit, folder-delete
 
-What you watched on this account.
+`folder-create NAME [--private]` and `folder-edit FOLDER [--name NAME]
+[--private | --public]` work like the 收藏夹 tab: names of 15 characters
+at most; folders have no description or cover. `folder-edit` without
+`--private` / `--public` keeps the folder's privacy (read from
+`collections`). `folder-delete` takes one folder per call; what becomes
+of the posts in it is not known. FOLDER is an id or `#N` after
+`collections`. Needs ATP's own login.
+
+### folder-add, folder-remove, folder-move
+
+`folder-add FOLDER POST…` puts posts into a folder and `folder-remove`
+takes them out, 100 per call. `folder-move FROM TO POST…` adds to TO,
+then removes from FROM (`--copy` keeps them in FROM). Whether a post must
+be saved first, whether `folder-remove` also unsaves it, and whether
+adding to one folder takes a post out of another (the call is named
+`collects/video/move`) are not known. Needs ATP's own login.
+
+### saved-mixes, saved-dramas, saved-music, save, save-drama, save-music
+
+The other tabs of 收藏: `saved-mixes` lists the mixes (合集) you saved,
+`saved-dramas` the short dramas (短剧) and `saved-music` the music.
+`save MIX…`, `save-drama DRAMA…` and `save-music MUSIC…` save them and
+with `--undo` unsave them; several mixes or dramas unsaved together go 50
+per call (no write key needed), the rest one by one. MIX is an id, a
+douyin.com/collection/… link or `#N`; DRAMA an id or `#N` after
+`saved-dramas`; MUSIC an id, a douyin.com/music/… link or `#N` after
+`saved-music`.
+
+### history, history-clear
+
+`history` is what you watched on this account. `history-clear` erases
+all of it after asking (`-y` in scripts); the web offers no way to remove
+single posts.
+
+### watch-later, later-add, later-remove, later-clear
+
+Your watch-later list (稍后再看): `watch-later` lists it, `later-add
+POST…` adds posts (one call each), `later-remove POST…` takes them out
+(50 per call), `later-clear` empties it after asking (`-y` in scripts)
+and `later-clear --watched` drops only what you watched.
 
 ### notifications
 
@@ -146,9 +230,14 @@ The notice center (互动消息) of your account:
 
 ### like, unlike, favorite, unfavorite
 
-Like a post or save it to your favorites (收藏), or undo either. Saving
-into a folder (`--folder`) is not offered. Needs ATP's own login (see
-Logging in).
+Like posts or save them to your favorites (收藏), or undo either. Several
+posts go one by one, except that `unlike` with several takes them back 50
+per call (`cancel/item/digg/multi`, as the likes tab does) and
+`unfavorite` with several unsaves them 50 per call
+(`aweme/cancel/collect/multi`, as the 收藏 tab does); posts Douyin names
+as not done there fail. Saving into a folder (`--folder`) is not
+offered: save the post, then `folder-add`. Needs ATP's own login (see
+Logging in), except `unfavorite` with several posts.
 
 ### comment, delete-comment
 
@@ -159,8 +248,8 @@ ATP's own login; comments are signed with its key.
 
 ### follow, unfollow
 
-Follow or unfollow a user (a `sec_uid`, a profile link or `@douyin_id`).
-Needs ATP's own login.
+Follow or unfollow users (a `sec_uid`, a profile link or `@douyin_id`),
+one by one. Needs ATP's own login.
 
 ### live
 
@@ -303,5 +392,12 @@ post (with live-photo clips) and its music; `--audio-only` saves the music.
   hot topics, co-creators, paid content, choosing a video's music (Douyin
   picks it), editing a cover in the page's editor, and pictures inside
   articles.
-- Writes are untested against the live site (see Risk control).
+- Writes are untested against the live site (see Risk control), and so
+  are the following orders, `--search` and `--mutual` (built from the web
+  client's page bundles): how `oldest` and `smart` page on, and whether
+  the share panel's relations hold all your mutual follows, are not
+  confirmed.
+- The web offers no follow groups, list of blocked accounts, way to set
+  remarks or special follows, or folder covers, descriptions and order,
+  so ATP has none of them either.
 - No creator analytics yet.

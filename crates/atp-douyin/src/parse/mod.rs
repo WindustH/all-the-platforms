@@ -6,11 +6,17 @@
 
 use atp_core::text::from_secs;
 use atp_core::{
-  Comment, Extra, Media, MediaKind, Metrics, Notification, Post, User, UserStats, Value, ValueExt,
-  json,
+  Comment, Extra, Media, MediaKind, Metrics, Notification, Page, Post, User, UserStats, Value,
+  ValueExt, json,
 };
 
 use crate::refs::{note_url, user_url, video_url};
+
+mod collections;
+mod relations;
+
+pub use self::collections::*;
+pub use self::relations::*;
 
 fn first_url(v: &Value, path: &str) -> Option<String> {
   v.str(&format!("{path}.url_list.0"))
@@ -20,6 +26,18 @@ fn put(extra: &mut Extra, key: &str, value: Option<Value>) {
   if let Some(v) = value.filter(|v| !v.is_null() && v != &json!("")) {
     extra.insert(key.into(), v);
   }
+}
+
+/// A `cursor` listing of awemes: the posts under `list_key`, `has_more`
+/// (`1` or `true`), and the next page's cursor under `cursor_key`.
+pub fn awemes(v: &Value, list_key: &str, cursor_key: &str) -> Page<Post> {
+  let items: Vec<Post> = v.list(list_key).iter().filter_map(aweme).collect();
+  let more = v.i64("has_more") == Some(1) || v.bool("has_more") == Some(true);
+  let next = (more && !items.is_empty())
+    .then(|| v.str(cursor_key))
+    .flatten()
+    .filter(|c| c != "0");
+  Page::new(items, next)
 }
 
 pub fn is_images(v: &Value) -> bool {

@@ -60,6 +60,16 @@ pub async fn aweme(api: &Api, arg: &str) -> Result<String> {
   )))
 }
 
+/// Every post reference as an aweme id; the first that is not one fails
+/// the command before anything changes.
+pub async fn awemes(api: &Api, posts: &[String]) -> Result<Vec<String>> {
+  let mut ids = Vec::with_capacity(posts.len());
+  for post in posts {
+    ids.push(aweme(api, post).await?);
+  }
+  Ok(ids)
+}
+
 /// A user reference as given: a `sec_uid`, or `@unique_id` / a search term
 /// to resolve by search.
 pub enum UserArg {
@@ -93,6 +103,12 @@ pub async fn user(api: &Api, arg: &str) -> Result<UserArg> {
 pub fn mix(arg: &str) -> Result<String> {
   id_after(arg, &["/collection/", "/mix/", "mix_id="])
     .ok_or_else(|| Error::input(format!("not a Douyin mix: {arg}")))
+}
+
+/// A short drama (短剧) id from an id or a link carrying `series_id=`.
+pub fn series(arg: &str) -> Result<String> {
+  id_after(arg, &["series_id=", "/series/"])
+    .ok_or_else(|| Error::input(format!("not a Douyin short drama: {arg}")))
 }
 
 /// A music id from an id or `douyin.com/music/<id>` link.

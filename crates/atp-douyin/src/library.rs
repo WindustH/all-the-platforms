@@ -1,7 +1,7 @@
 //! The logged-in account's saved posts (收藏) and folders, saving and
-//! unsaving, viewing history, and the post lists of a mix (合集) or a music;
-//! on the creator platform, the account's own mixes and the music library
-//! image posts and articles pick from.
+//! unsaving, and the post lists of a mix (合集) or a music; on the creator
+//! platform, the account's own mixes and the music library image posts
+//! and articles pick from.
 
 use atp_core::{Action, Collection, Error, Page, PageReq, Post, Result, Value, ValueExt};
 
@@ -10,11 +10,13 @@ use crate::creator::Creator;
 use crate::{parse, refs, users};
 
 const COLLECT: &str = "/aweme/v1/web/aweme/collect/";
+/// Where `favorite --folder` points.
+pub const FOLDER_HINT: &str =
+  "save the post with `favorite`, then put it into a folder with `folder-add`";
 
 const SAVED: &str = "/aweme/v1/web/aweme/listcollection/";
 const FOLDERS: &str = "/aweme/v1/web/collects/list/";
 const FOLDER: &str = "/aweme/v1/web/collects/video/list/";
-const HISTORY: &str = "/aweme/v1/web/history/read/";
 const MIX: &str = "/aweme/v1/web/mix/aweme/";
 const MUSIC: &str = "/aweme/v1/web/music/aweme/";
 const MIXES: &str = "/web/api/mix/list/";
@@ -22,20 +24,6 @@ const MUSIC_CATEGORIES: &str = "/web/api/media/music/category";
 const MUSIC_LIST: &str = "/web/api/media/music/list";
 /// Pages of mixes `--collection` looks through.
 const MIX_PAGES: usize = 10;
-
-/// A `cursor` listing of awemes.
-fn awemes(v: &Value, cursor_key: &str) -> Page<Post> {
-  let items: Vec<Post> = v
-    .list("aweme_list")
-    .iter()
-    .filter_map(parse::aweme)
-    .collect();
-  let next = (v.i64("has_more") == Some(1) && !items.is_empty())
-    .then(|| v.str(cursor_key))
-    .flatten()
-    .filter(|c| c != "0");
-  Page::new(items, next)
-}
 
 /// Saved posts, all or those of one folder.
 pub async fn favorites(api: &Api, folder: Option<&str>, page: &PageReq) -> Result<Page<Post>> {
@@ -66,7 +54,7 @@ pub async fn favorites(api: &Api, folder: Option<&str>, page: &PageReq) -> Resul
         .await?
     }
   };
-  Ok(awemes(&v, "cursor"))
+  Ok(parse::awemes(&v, "aweme_list", "cursor"))
 }
 
 /// Folders of saved posts.
@@ -100,17 +88,6 @@ pub async fn folders(api: &Api, page: &PageReq) -> Result<Page<Collection>> {
   Ok(Page::new(items, next))
 }
 
-pub async fn history(api: &Api, page: &PageReq) -> Result<Page<Post>> {
-  api.require_login()?;
-  let v = api
-    .get(HISTORY)
-    .arg("max_cursor", page.number_or(0))
-    .arg("count", page.size_within(20))
-    .send()
-    .await?;
-  Ok(awemes(&v, "max_cursor"))
-}
-
 pub async fn mix(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
   let id = refs::mix(arg)?;
   let v = api
@@ -125,7 +102,7 @@ pub async fn mix(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
   if v.list("aweme_list").is_empty() && page.cursor.is_none() {
     return Err(Error::not_found(format!("no Douyin mix {id}")));
   }
-  Ok(awemes(&v, "cursor"))
+  Ok(parse::awemes(&v, "aweme_list", "cursor"))
 }
 
 pub async fn music(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
@@ -137,13 +114,13 @@ pub async fn music(api: &Api, arg: &str, page: &PageReq) -> Result<Page<Post>> {
     .arg("count", page.size_within(20))
     .send()
     .await?;
-  Ok(awemes(&v, "cursor"))
+  Ok(parse::awemes(&v, "aweme_list", "cursor"))
 }
 
 /// Save a post to the account's favorites, or with `undo` remove it.
 pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) -> Result<Action> {
   if folder.is_some() {
-    return Err(Error::unsupported("favorite --folder"));
+    return Err(Error::unsupported("favorite --folder").with_hint(FOLDER_HINT));
   }
   let id = refs::aweme(api, arg).await?;
   let uid = users::uid_hash(api).await?;
@@ -165,7 +142,7 @@ pub async fn favorite(api: &Api, arg: &str, folder: Option<&str>, undo: bool) ->
 pub async fn mixes(api: &Api, page: &PageReq) -> Result<Page<Collection>> {
   let creator = Creator::open(api).await?;
   let v = mix_page(&creator, page.number_or(0)).await?;
-  let items: Vec<Collection> = v.list("mix_list").iter().filter_map(mix_entry).collect();
+  let items: Vec<Collection> = v.list("mix_list").iter().filter_map(parse::mix).collect();
   let next = (v.bool("has_more") == Some(true) && !items.is_empty())
     .then(|| v.str("cursor"))
     .flatten();
@@ -182,19 +159,6 @@ async fn mix_page(creator: &Creator<'_>, cursor: u64) -> Result<Value> {
     .await
 }
 
-fn mix_entry(m: &Value) -> Option<Collection> {
-  let id = m.first_str(&["mix_id_str", "mix_id"])?;
-  Some(Collection {
-    url: Some(format!("{WWW}/collection/{id}")),
-    kind: "mix".into(),
-    name: m.str("mix_name").unwrap_or_default(),
-    items: m.count("statis.updated_to_episode"),
-    raw: Some(m.clone()),
-    id,
-    ..Collection::default()
-  })
-}
-
 /// The mix a new post joins (by id or exact name) and the episode index
 /// it takes there: the episodes so far, as the publish form counts.
 pub async fn mix_slot(creator: &Creator<'_>, arg: &str) -> Result<(String, i64)> {
@@ -205,7 +169,7 @@ pub async fn mix_slot(creator: &Creator<'_>, arg: &str) -> Result<(String, i64)>
     let found = v
       .list("mix_list")
       .iter()
-      .filter_map(mix_entry)
+      .filter_map(parse::mix)
       .find(|m| m.id == arg || m.name == arg);
     if let Some(mix) = found {
       return Ok((mix.id, mix.items.unwrap_or(0) as i64));
