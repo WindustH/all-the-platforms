@@ -6,7 +6,7 @@ use atp_meta::Graph;
 use atp_meta::graph::FACEBOOK;
 
 use crate::api::Api;
-use crate::{stories, topics};
+use crate::{relations, stories, topics};
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
@@ -46,6 +46,24 @@ pub enum Command {
     /// Highlight: id or `highlight:ID` from `highlights`, or #N after it
     highlight: String,
   },
+  /// Accounts asking to follow your private account
+  #[command(after_long_help = EX_FOLLOW_REQUESTS)]
+  FollowRequests {
+    #[command(flatten)]
+    page: PageArgs,
+  },
+  /// Accept follow requests: let the users follow you
+  AcceptFollower {
+    /// Users: names, @names, profile links, numeric ids, or #N from the last user list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
+  },
+  /// Decline follow requests
+  DenyFollower {
+    /// Users: names, @names, profile links, numeric ids, or #N from the last user list
+    #[arg(required = true, value_name = "USER")]
+    users: Vec<String>,
+  },
   /// Marketing API: ad accounts, campaigns, ad sets, ads, insights reports
   #[command(subcommand)]
   Ads(atp_meta::ads::Command),
@@ -57,6 +75,14 @@ Examples:
   atp instagram highlight '#2'
 
 More: atp guide instagram highlights";
+
+const EX_FOLLOW_REQUESTS: &str = "\
+Examples:
+  atp instagram follow-requests
+  atp instagram accept-follower '#1' '#3'
+  atp instagram deny-follower someone
+
+More: atp guide instagram follow-requests";
 
 pub async fn run(api: &Api, command: Command) -> Result<Data> {
   Ok(match command {
@@ -87,8 +113,24 @@ pub async fn run(api: &Api, command: Command) -> Result<Data> {
       let highlight = api.ctx.collection_ref(&highlight)?;
       Data::Posts(stories::highlight(api, &highlight).await?)
     }
+    Command::FollowRequests { page } => Data::Users(
+      page
+        .collect(async |req| relations::requests(api, &req).await)
+        .await?,
+    ),
+    Command::AcceptFollower { users } => {
+      Data::actions(relations::answer(api, &user_refs(api, &users)?, true).await?)
+    }
+    Command::DenyFollower { users } => {
+      Data::actions(relations::answer(api, &user_refs(api, &users)?, false).await?)
+    }
     Command::Ads(command) => atp_meta::ads::run(&api.ctx, &ads_graph(api)?, command).await?,
   })
+}
+
+/// User arguments with `#N` resolved.
+fn user_refs(api: &Api, users: &[String]) -> Result<Vec<String>> {
+  users.iter().map(|u| api.ctx.user_ref(u)).collect()
 }
 
 /// The Marketing API: always graph.facebook.com.

@@ -24,8 +24,8 @@ With the session: `user-posts` (all), `comments` (all) and `replies`,
 (hashtags and places), `tag`, `location`, `stories`, `highlights`,
 `highlight`, `favorites` (saved posts, `--folder` a collection),
 `collections`, `likes`, `notifications`, `like`, `favorite`, `comment` /
-`--reply-to`, `delete-comment`, `follow`, `delete` (your post), and direct
-messages: `chats`, `messages`, `send`, `react`, `listen`. A command that
+`--reply-to`, `delete-comment`, `follow`, `remove-follower`, `block`,
+`follow-requests`, `delete` (your post), and direct messages: `chats`, `messages`, `send`, `react`, `listen`. A command that
 needs it fails with `not_authenticated` and the hint to run
 `atp instagram login --browser`.
 
@@ -86,6 +86,18 @@ highlights, `highlight ID` the stories inside one.
 Your own only: saved posts (`--folder` a collection from `collections`)
 and liked posts.
 
+### remove-follower, block, unblock
+
+`remove-follower USER… [-y]` (asks first) and `block USER…` / `unblock
+USER…` go one call per user, each user looked up by name first unless
+given by numeric id. There is no list of the accounts you block.
+
+### follow-requests, accept-follower, deny-follower
+
+For a private account: `follow-requests` lists who asks to follow you,
+`accept-follower USER…` lets them and `deny-follower USER…` declines, one
+call per user.
+
 ### comment
 
 `--reply-to` answers a comment; `comment --image` is not supported.
@@ -138,4 +150,5 @@ audiences, pixels, insights reports and `raw`.
 ## Limits
 
 Uploading posts is not supported, nor are pictures in comments and
-attachments in direct messages.
+attachments in direct messages. Saved collections are read only here:
+they cannot be created, renamed or filled.

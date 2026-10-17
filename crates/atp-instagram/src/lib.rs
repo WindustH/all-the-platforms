@@ -18,6 +18,7 @@ mod notifications;
 mod parse;
 mod posts;
 mod refs;
+mod relations;
 mod search;
 mod stories;
 mod topics;
@@ -72,6 +73,8 @@ impl Platform for Instagram {
       Cap::Comment,
       Cap::DeleteComment,
       Cap::Follow,
+      Cap::RemoveFollower,
+      Cap::Block,
       Cap::Delete,
       Cap::Edit,
       Cap::Download,
@@ -221,6 +224,13 @@ impl Platform for Instagram {
 
   async fn follow(&self, user: &str, undo: bool) -> Result<Action> {
     users::follow(&self.api, user, undo).await
+  }
+  async fn remove_followers(&self, users: &[String]) -> Result<Vec<Action>> {
+    relations::remove_followers(&self.api, users).await
+  }
+
+  async fn block(&self, users: &[String], undo: bool) -> Result<Vec<Action>> {
+    relations::block(&self.api, users, undo).await
   }
 
   async fn delete(&self, post: &str) -> Result<Action> {
